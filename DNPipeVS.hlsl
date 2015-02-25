@@ -38,6 +38,9 @@ VS_OUTPUT main(in VS_INPUT In)
 	Out.envcolor = float4(0.0, 0.0, 0.0, 0.0);
 	Out.speccolor = float4(0.0, 0.0, 0.0, 0.0);
 
+	Out.color.rgb = (In.DayColor*(1.0-shaderVars[1]) + In.NightColor*shaderVars[1]).rgb;
+	Out.color.a = In.NightColor.a;
+
 	Out.texcoord0.xy = In.TexCoord;
 	if(shaderVars[2] == 1.0){		// PS2 style
 		float4 camNormal;
@@ -45,16 +48,16 @@ VS_OUTPUT main(in VS_INPUT In)
 		camNormal.w = 0.0;
 		Out.texcoord1.xy = camNormal.xy;// - envXform.xy;
 		Out.texcoord1.xy *= -envXform.zw;
-	}else if(shaderVars[2] == 2.0){		// PC style
+		Out.envcolor = float4(192.0, 192.0, 192.0, 0.0)/128.0*reflData.x*reflData.y;
+	}else if(shaderVars[2] == 2.0){		// fixed PC style
 		Out.texcoord1.xy = mul((float3x3)view, mul((float3x3)world, In.Normal)).xy;
-		Out.envcolor = float4(1.0, 1.0, 1.0, 1.0);
+		Out.envcolor = float4(1.0, 1.0, 1.0, 0.0)*reflData.x;
+	}else if(shaderVars[2] == 3.0){		// bugged PC style
+		Out.texcoord1.xy = mul((float3x3)view, mul((float3x3)world, In.Normal)).xy;
+		Out.envcolor = Out.color;
 	}
-	Out.envcolor = float4(192.0, 192.0, 192.0, 0.0)/128.0*reflData.x*reflData.y;
 
-	float4 color;
-	color.rgb = (In.DayColor*(1.0-shaderVars[1]) + In.NightColor*shaderVars[1]).rgb;
-	color.a = In.NightColor.a;
-	Out.color = color * materialColor / shaderVars[0];
+	Out.color *= materialColor / shaderVars[0];
 	Out.color.rgb += ambientLight*surfaceProps.x;
 	Out.color = saturate(Out.color)*shaderVars[0];
 

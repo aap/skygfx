@@ -3,7 +3,7 @@
 HMODULE dllModule;
 
 Config *config, configs[2];
-bool usePCTimecyc, disableHQShadows;
+bool usePCTimecyc, disableHQShadows, disableClouds;
 int original_bRadiosity = 0;
 
 void *grassPixelShader;
@@ -104,6 +104,7 @@ readIni(void)
 	config->oneGrassModel = GetPrivateProfileInt("SkyGfx", "oneGrassModel", TRUE, modulePath) != FALSE;
 	config->backfaceCull = GetPrivateProfileInt("SkyGfx", "backfaceCull", FALSE, modulePath) != FALSE;
 	config->vehiclePipe = GetPrivateProfileInt("SkyGfx", "vehiclePipe", 0, modulePath) % 3;
+	config->worldPipe = GetPrivateProfileInt("SkyGfx", "worldPipe", 0, modulePath) % 3;
 	config->colorFilter = GetPrivateProfileInt("SkyGfx", "colorFilter", 0, modulePath) % 3;
 	usePCTimecyc = GetPrivateProfileInt("SkyGfx", "usePCTimecyc", FALSE, modulePath) != FALSE;
 
@@ -123,7 +124,7 @@ readIni(void)
 	GetPrivateProfileString("SkyGfx", "radiosityIntensity", "2.0", tmp, sizeof(tmp), modulePath);
 	config->radiosityIntensity = atof(tmp);
 	disableHQShadows = GetPrivateProfileInt("SkyGfx", "disableHQShadows", FALSE, modulePath) != FALSE;
-
+	disableClouds = GetPrivateProfileInt("SkyGfx", "disableClouds", FALSE, modulePath) != FALSE;
 
 	GetPrivateProfileString("SkyGfx", "farDist", "60.0", tmp, sizeof(tmp), modulePath);
 	config->farDist = atof(tmp);
@@ -359,8 +360,10 @@ InjectDelayedPatches()
 			MemoryVP::Nop(0x70C75A, 6);
 		}
 
-		// disables clouds (and stars :( )
-		//MemoryVP::Nop(0x53DFA0, 5);
+		if(disableClouds){
+			// jump over cloud loop
+			MemoryVP::InjectHook(0x714145, 0x71422A, PATCH_JUMP);
+		}
 		return FALSE;
 	}
 	return TRUE;
@@ -376,6 +379,7 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 			return FALSE;
 		dllModule = hInst;
 /*
+		// only with /MD
 		AllocConsole();
 		freopen("CONIN$", "r", stdin);
 		freopen("CONOUT$", "w", stdout);

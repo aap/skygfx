@@ -21,7 +21,7 @@ struct Config {
 	RwBool grassAddAmbient, fixGrassPlacement, oneGrassModel;	// fixGrassPlacement has to stay at that offset, see inline assembly below
 	RwBool backfaceCull;
 	RwBool dualPassWorld, dualPassGrass, dualPassVehicle;
-	int vehiclePipe;
+	int vehiclePipe, worldPipe;
 	int colorFilter;
 	RwBool scaleOffsets;
 	RwBool doRadiosity;

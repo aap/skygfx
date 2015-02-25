@@ -78,7 +78,7 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 			RwV3d transVec;
 
 			envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
-			dnShaderVars.reflSwitch = 1;
+			dnShaderVars.reflSwitch = 1 + config->worldPipe;
 			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
 			RwD3D9SetTexture(envData->texture, 1);
 			reflData.shininess = envData->shininess/255.0f;
