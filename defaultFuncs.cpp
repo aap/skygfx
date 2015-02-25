@@ -77,7 +77,7 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB(RwResEntry *repEntry, void *object
 	CustomEnvMapPipeMaterialData *envData;
 
 	RwD3D9GetRenderState(D3DRS_LIGHTING, &lighting);
-	if(lighting || flags & 8){
+	if(lighting || flags & rpGEOMETRYPRELIT){
 		notLit = 0;
 	}else{
 		notLit = 1;
@@ -101,14 +101,16 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB(RwResEntry *repEntry, void *object
 		RwD3D9SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_DISABLE);
 		RwD3D9SetTextureStageState(2, D3DTSS_COLOROP, D3DTOP_DISABLE);
 		if(*(int*)&material->surfaceProps.specular & 1){
+			static D3DMATRIX texMat;	// actually unused
 			RwInt32 tfactor;
 
-			envData = *(CustomEnvMapPipeMaterialData **)((char *)&material->texture + CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
 			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
-			flt_C02C28 = envData->scaleX * 0.125;
-			flt_C02C3C = envData->scaleY * 0.125;
-			dword_C02C64 = 1.0f;
-			dword_C02C50 = 1.0f;
+			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
+			// remnants of a texture matrix
+			texMat._11 = envData->scaleX * 0.125;
+			texMat._22 = envData->scaleY * 0.125;
+			texMat._33 = 1.0f;
+			texMat._44 = 1.0f;
 			RwD3D9SetTexture(envData->texture, 1);
 			tfactor = envData->shininess * 254.0/255.0;
 			if(tfactor > 255)

@@ -109,6 +109,7 @@ extern D3DLIGHT9 &gCarEnvMapLight;
 extern char &doRadiosity;
 
 extern RwTexture *&gpWhiteTexture;
+extern void *vehiclePipePS;
 
 extern void **rwengine;
 extern RwInt32 &CCustomCarEnvMapPipeline__ms_envMapPluginOffset;
@@ -118,10 +119,6 @@ extern RwReal &CCustomCarEnvMapPipeline__m_EnvMapLightingMult;
 extern RwInt32 &CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset;
 extern RwReal &CCustomBuildingDNPipeline__m_fDNBalanceParam;
 
-extern float &flt_C02C28;
-extern float &flt_C02C3C;
-extern float &dword_C02C50;
-extern float &dword_C02C64;
 extern int &dword_C02C20;
 
 // reversed

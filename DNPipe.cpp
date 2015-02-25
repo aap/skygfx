@@ -2,13 +2,17 @@
 
 static void *DNPipeVS;
 
-static void *vertexShader;
-static void *pixelShader;
-struct DNShaderVars {
-	float colorScale;
-	float balance;
-	float reflSwitch;
-} dnShaderVars;
+enum {
+	LOC_World = 0,
+	LOC_View = 4,
+	LOC_Proj = 8,
+	LOC_materialColor = 12,
+	LOC_surfaceProps = 13,
+	LOC_ambientLight = 14,
+	LOC_shaderVars = 15,
+	LOC_reflData = 16,
+	LOC_envXform = 17,
+};
 
 // PS2 callback
 void
@@ -19,36 +23,33 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 	RpMaterial *material;
 	RwBool lighting;
 	RwInt32	numMeshes;
-	RwBool notLit;
 	CustomEnvMapPipeMaterialData *envData;
 	D3DMATRIX worldMat, viewMat, projMat;
 	RwRGBAReal color;
+	float surfProps[4];
 	RwBool hasAlpha;
+	struct DNShaderVars {
+		float colorScale;
+		float balance;
+		float reflSwitch;
+	} dnShaderVars;
+	struct {
+		float shininess;
+		float intensity;
+	} reflData;
+	RwV4d envXform;
 
-//	if(GetAsyncKeyState(VK_F10) & 0x8000)
-//		return;
-
-	RwD3D9SetPixelShader(NULL);
+	RwD3D9SetPixelShader(vehiclePipePS);
 	RwD3D9SetVertexShader(DNPipeVS);
 	RwD3D9GetTransform(D3DTS_WORLD, &worldMat);
 	RwD3D9GetTransform(D3DTS_VIEW, &viewMat);
 	RwD3D9GetTransform(D3DTS_PROJECTION, &projMat);
-	RwD3D9SetVertexShaderConstant(0,(void*)&worldMat,4);
-	RwD3D9SetVertexShaderConstant(4,(void*)&viewMat,4);
-	RwD3D9SetVertexShaderConstant(8,(void*)&projMat,4);
+	RwD3D9SetVertexShaderConstant(LOC_World,(void*)&worldMat,4);
+	RwD3D9SetVertexShaderConstant(LOC_View,(void*)&viewMat,4);
+	RwD3D9SetVertexShaderConstant(LOC_Proj,(void*)&projMat,4);
+	// TODO: maybe upload normal matrix?
 
 	RwD3D9GetRenderState(D3DRS_LIGHTING, &lighting);
-	if(lighting || flags & 8){
-		notLit = 0;
-	}else{
-		notLit = 1;
-		RwD3D9SetTexture(0, 0);
-		RwD3D9SetRenderState(D3DRS_TEXTUREFACTOR, 0xFF000000u);
-		RwD3D9SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG2);
-		RwD3D9SetTextureStageState(0, D3DTSS_COLORARG2, D3DTA_TFACTOR);
-		RwD3D9SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG2);
-		RwD3D9SetTextureStageState(0, D3DTSS_ALPHAARG2, D3DTA_TFACTOR);
-	}
 	resEntryHeader = (RxD3D9ResEntryHeader*)(repEntry + 1);
 	instancedData = (RxD3D9InstanceData*)(resEntryHeader + 1);;
 	if(resEntryHeader->indexBuffer)
@@ -63,67 +64,46 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 	numMeshes = resEntryHeader->numMeshes;
 	while(numMeshes--){
 		material = instancedData->material;
-		RwD3D9SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_DISABLE);
-		RwD3D9SetTextureStageState(2, D3DTSS_COLOROP, D3DTOP_DISABLE);
-		// TODO
-		dnShaderVars.reflSwitch = 0.0f;
-		if(*(int*)&material->surfaceProps.specular & 1){
-			RwInt32 tfactor;
 
-			envData = *(CustomEnvMapPipeMaterialData **)((char *)&material->texture + CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
+		dnShaderVars.colorScale = 1.0f;
+		if(flags & (rxGEOMETRY_TEXTURED2 | rxGEOMETRY_TEXTURED)){
+			dnShaderVars.colorScale = config->ps2ModulateWorld ? 255.0f/128.0f : 1.0f;
+			RwD3D9SetTexture(material->texture, 0);
+		}else
+			RwD3D9SetTexture(gpWhiteTexture, 0);
+
+		reflData.shininess = reflData.intensity = 0.0f;
+		dnShaderVars.reflSwitch = 0;
+		if(*(int*)&material->surfaceProps.specular & 1){
+			RwV3d transVec;
+
+			envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
+			dnShaderVars.reflSwitch = 1;
 			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
-			flt_C02C28 = envData->scaleX * 0.125;
-			flt_C02C3C = envData->scaleY * 0.125;
-			dword_C02C64 = 1.0f;
-			dword_C02C50 = 1.0f;
 			RwD3D9SetTexture(envData->texture, 1);
-			tfactor = envData->shininess * 254.0/255.0;
-			if(tfactor > 255)
-				tfactor = 255;
-			dnShaderVars.reflSwitch = 1.0f;
-			RwD3D9SetRenderState(D3DRS_TEXTUREFACTOR, D3DCOLOR_XRGB(tfactor,tfactor,tfactor));
-			RwD3D9SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_MULTIPLYADD);
-			RwD3D9SetTextureStageState(1, D3DTSS_COLORARG0, D3DTA_CURRENT);
-			RwD3D9SetTextureStageState(1, D3DTSS_COLORARG1, D3DTA_TEXTURE);
-			RwD3D9SetTextureStageState(1, D3DTSS_COLORARG2, D3DTA_DIFFUSE);
-			RwD3D9SetTextureStageState(1, D3DTSS_ALPHAOP, D3DTOP_SELECTARG2);
-			RwD3D9SetTextureStageState(1, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
-			RwD3D9SetTextureStageState(1, D3DTSS_ALPHAARG2, D3DTA_CURRENT);
-			RwD3D9SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, D3DTSS_TCI_CAMERASPACENORMAL | 1);
-			RwD3D9SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_DISABLE);
-			RwD3D9SetTextureStageState(2, D3DTSS_COLOROP, D3DTOP_DISABLE);
+			reflData.shininess = envData->shininess/255.0f;
+			reflData.intensity = pDirect->color.red*(256.0f/255.0f);
+
+			// is this correct? taken from vehicle pipeline
+			D3D9GetTransScaleVector(envData, (RpAtomic*)object, &transVec);
+			envXform.x = transVec.x;
+			envXform.y = transVec.y;
+			envXform.z = envData->scaleX / 8.0f;
+			envXform.w = envData->scaleY / 8.0f;
+			RwD3D9SetVertexShaderConstant(LOC_envXform, (void*)&envXform, 1);
 		}
+		RwD3D9SetVertexShaderConstant(LOC_reflData, (void*)&reflData, 1);
+
 		hasAlpha = instancedData->vertexAlpha || instancedData->material->color.alpha != 255;
 		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)hasAlpha);
 
 		RwRGBARealFromRwRGBA(&color, &material->color);
-		RwD3D9SetVertexShaderConstant(12, (void*)&color, 1);
-		color = { 0.0f, 0.0f, 0.0f, 0.0f };
-		RwD3D9SetVertexShaderConstant(14, (void*)&color, 1);
-		dnShaderVars.colorScale = 1.0f;
-		if(!notLit){
-			if(lighting){
-				RwD3D9SetVertexShaderConstant(13, (void*)&material->surfaceProps, 1);
-				RwD3D9SetVertexShaderConstant(14, (void*)&pAmbient->color, 1);
-			}
-			if(flags & (rxGEOMETRY_TEXTURED2 | rxGEOMETRY_TEXTURED)){
-				dnShaderVars.colorScale = config->ps2ModulateWorld ? 255.0f/128.0f : 1.0f;
-				RwD3D9SetTexture(material->texture, 0);
-				RwD3D9SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE);
-				RwD3D9SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
-				RwD3D9SetTextureStageState(0, D3DTSS_COLORARG2, D3DTA_DIFFUSE);
-				RwD3D9SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_MODULATE);
-				RwD3D9SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
-				RwD3D9SetTextureStageState(0, D3DTSS_ALPHAARG2, D3DTA_DIFFUSE);
-			}else{
-				RwD3D9SetTexture(NULL, 0);
-				RwD3D9SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG2);
-				RwD3D9SetTextureStageState(0, D3DTSS_COLORARG2, D3DTA_DIFFUSE);
-				RwD3D9SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG2);
-				RwD3D9SetTextureStageState(0, D3DTSS_ALPHAARG2, D3DTA_DIFFUSE);
-			}
-		}
-		RwD3D9SetVertexShaderConstant(15, (void*)&dnShaderVars, 1);
+		RwD3D9SetVertexShaderConstant(LOC_materialColor, (void*)&color, 1);
+		RwD3D9SetVertexShaderConstant(LOC_ambientLight, (void*)&pAmbient->color, 1);
+		surfProps[0] = lighting ? material->surfaceProps.ambient : 0.0f;
+		RwD3D9SetVertexShaderConstant(LOC_surfaceProps, &surfProps, 1);
+
+		RwD3D9SetVertexShaderConstant(LOC_shaderVars, (void*)&dnShaderVars, 1);
 		// this takes the texture into account, somehow....
 		RwD3D9GetRenderState(D3DRS_ALPHABLENDENABLE, &hasAlpha);
 		if(hasAlpha && config->dualPassWorld){
@@ -140,10 +120,6 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 			D3D9Render(resEntryHeader, instancedData);
 		instancedData++;
 	}
-	RwD3D9SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_DISABLE);
-	RwD3D9SetTextureStageState(1, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
-	RwD3D9SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, 1);
-	RwD3D9SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_DISABLE);
 }
 
 static RwBool
@@ -336,6 +312,13 @@ CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2(void)
 	RwUInt32 *shader = (RwUInt32*)LoadResource(dllModule, resource);
 	RwD3D9CreateVertexShader(shader, &DNPipeVS);
 	FreeResource(shader);
+
+	if(vehiclePipePS == NULL){
+		resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_VEHICLEPS), RT_RCDATA);
+		shader = (RwUInt32*)LoadResource(dllModule, resource);
+		RwD3D9CreatePixelShader(shader, &vehiclePipePS);
+		FreeResource(shader);
+	}
 
 	pipeline->pluginId = 0x53F20098;
 	pipeline->pluginData = 0x53F20098;

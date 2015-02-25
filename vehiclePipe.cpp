@@ -1,6 +1,8 @@
 #include "skygfx.h"
 
-static void *vehiclePipeVS, *vehiclePipePS;
+static void *vehiclePipeVS;
+void *vehiclePipePS;
+
 enum {
 	LOC_World = 0,
 	LOC_View = 4,
@@ -48,7 +50,6 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 		float shininess;
 		float specularity;
 		float intensity;
-		float d;
 	} reflData;
 	RwV4d envXform;
 	float envSwitch;
@@ -249,10 +250,12 @@ setVehiclePipeCB(RxPipelineNode *node, RxD3D9AllInOneRenderCallBack callback)
 	RwD3D9CreateVertexShader(shader, &vehiclePipeVS);
 	FreeResource(shader);
 
-	resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_VEHICLEPS), RT_RCDATA);
-	shader = (RwUInt32*)LoadResource(dllModule, resource);
-	RwD3D9CreatePixelShader(shader, &vehiclePipePS);
-	FreeResource(shader);
+	if(vehiclePipePS == NULL){
+		resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_VEHICLEPS), RT_RCDATA);
+		shader = (RwUInt32*)LoadResource(dllModule, resource);
+		RwD3D9CreatePixelShader(shader, &vehiclePipePS);
+		FreeResource(shader);
+	}
 
 	RxD3D9AllInOneSetRenderCallBack(node, CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2);
 }

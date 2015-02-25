@@ -19,10 +19,6 @@ RwInt32 &CCustomCarEnvMapPipeline__ms_specularMapPluginOffset = *(RwInt32*)0x8D1
 RwReal &CCustomCarEnvMapPipeline__m_EnvMapLightingMult = *(RwReal*)0x8D12D0;
 RwInt32 &CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset = *(RwInt32*)0x8D12BC;
 RwReal &CCustomBuildingDNPipeline__m_fDNBalanceParam = *(float*)0x8D12C0;
-float &flt_C02C28 = *(float*)0xC02C28;
-float &flt_C02C3C = *(float*)0xC02C3C;
-float &dword_C02C50 = *(float*)0xC02C50;
-float &dword_C02C64 = *(float*)0xC02C64;
 int &dword_C02C20 = *(int*)0xC02C20;
 
 WRAPPER RwMatrix *RwFrameGetLTM(RwFrame * frame) { EAXJMP(0x7F0990); }
