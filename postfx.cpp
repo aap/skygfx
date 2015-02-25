@@ -21,6 +21,22 @@ static RwImVertexIndex* quadIndices = (RwImVertexIndex*)0x8D5174;
 RwRaster *&CPostEffects__pRasterFrontBuffer = *(RwRaster**)0xC402D8;
 RwCamera *&Camera = *(RwCamera**)0xC1703C;
 
+WRAPPER void SpeedFX(float) { EAXJMP(0x7030A0); }
+
+void
+SpeedFX_Fix(float fStrength)
+{
+	// So we don't do useless work if no colour postfx was performed
+	if(config->colorFilter < 2){
+		RwCameraEndUpdate(Camera);
+		RwRasterPushContext(CPostEffects__pRasterFrontBuffer);
+		RwRasterRenderFast(RwCameraGetRaster(Camera), 0, 0);
+		RwRasterPopContext();
+		RwCameraBeginUpdate(Camera);
+	}
+	SpeedFX(fStrength);
+}
+
 void
 CPostEffects__Radiosity_PS2(int col1, int nSubdivs, int unknown, int col2)
 {

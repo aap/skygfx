@@ -88,12 +88,16 @@ struct RsGlobalType
 
 RxPipeline *CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2(void);
 void setVehiclePipeCB(RxPipelineNode *node, RxD3D9AllInOneRenderCallBack callback);
+void SpeedFX_Fix(float fStrength);
 void CPostEffects__Radiosity_PS2(int col1, int nSubdivs, int unknown, int col2);
 void CPostEffects__ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2);
 void CPostEffects__Init(void);
 void readIni(void);
 void SetCloseFarAlphaDist(float close, float far);
+void D3D9Render(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData);
 
+#define RwEngineInstance (*rwengine)
+//void *&RwEngineInstance = *(void**)0xC97B24;
 extern RsGlobalType *RsGlobal;
 extern IDirect3DDevice9 *&d3d9device;
 extern RpLight *&pAmbient;
@@ -106,6 +110,7 @@ extern char &doRadiosity;
 
 extern RwTexture *&gpWhiteTexture;
 
+extern void **rwengine;
 extern RwInt32 &CCustomCarEnvMapPipeline__ms_envMapPluginOffset;
 extern RwInt32 &CCustomCarEnvMapPipeline__ms_envMapAtmPluginOffset;
 extern RwInt32 &CCustomCarEnvMapPipeline__ms_specularMapPluginOffset;

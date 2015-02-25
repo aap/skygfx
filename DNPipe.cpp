@@ -10,48 +10,6 @@ struct DNShaderVars {
 	float reflSwitch;
 } dnShaderVars;
 
-void
-D3D9RenderNotLit_PS2(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData)
-{
-	dnShaderVars.colorScale = 1.0f;
-	RwD3D9SetVertexShaderConstant(15, (void*)&dnShaderVars, 1);
-	RwD3D9SetPixelShader(pixelShader);
-	RwD3D9SetVertexShader(vertexShader);
-	if(resEntryHeader->indexBuffer)
-		RwD3D9DrawIndexedPrimitive(resEntryHeader->primType, instanceData->baseIndex, 0, instanceData->numVertices, instanceData->startIndex, instanceData->numPrimitives);
-	else
-		RwD3D9DrawPrimitive(resEntryHeader->primType, instanceData->baseIndex, instanceData->numPrimitives);
-}
-
-void
-D3D9RenderPreLit_PS2(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData, RwUInt8 flags, RwTexture *texture)
-{
-	if(flags & (rxGEOMETRY_TEXTURED2 | rxGEOMETRY_TEXTURED)){
-		dnShaderVars.colorScale = config->ps2ModulateWorld ? 255.0f/128.0f : 1.0f;
-		RwD3D9SetTexture(texture, 0);
-		RwD3D9SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE);
-		RwD3D9SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
-		RwD3D9SetTextureStageState(0, D3DTSS_COLORARG2, D3DTA_DIFFUSE);
-		RwD3D9SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_MODULATE);
-		RwD3D9SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
-		RwD3D9SetTextureStageState(0, D3DTSS_ALPHAARG2, D3DTA_DIFFUSE);
-	}else{
-		dnShaderVars.colorScale = 1.0f;
-		RwD3D9SetTexture(NULL, 0);
-		RwD3D9SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG2);
-		RwD3D9SetTextureStageState(0, D3DTSS_COLORARG2, D3DTA_DIFFUSE);
-		RwD3D9SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG2);
-		RwD3D9SetTextureStageState(0, D3DTSS_ALPHAARG2, D3DTA_DIFFUSE);
-	}
-	RwD3D9SetVertexShaderConstant(15, (void*)&dnShaderVars, 1);
-	RwD3D9SetPixelShader(pixelShader);
-	RwD3D9SetVertexShader(vertexShader);
-	if(resEntryHeader->indexBuffer)
-		RwD3D9DrawIndexedPrimitive(resEntryHeader->primType, instanceData->baseIndex, 0, instanceData->numVertices, instanceData->startIndex, instanceData->numPrimitives);
-	else
-		RwD3D9DrawPrimitive(resEntryHeader->primType, instanceData->baseIndex, instanceData->numPrimitives);
-}
-
 // PS2 callback
 void
 CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
@@ -65,18 +23,19 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 	CustomEnvMapPipeMaterialData *envData;
 	D3DMATRIX worldMat, viewMat, projMat;
 	RwRGBAReal color;
+	RwBool hasAlpha;
 
 //	if(GetAsyncKeyState(VK_F10) & 0x8000)
 //		return;
 
+	RwD3D9SetPixelShader(NULL);
+	RwD3D9SetVertexShader(DNPipeVS);
 	RwD3D9GetTransform(D3DTS_WORLD, &worldMat);
 	RwD3D9GetTransform(D3DTS_VIEW, &viewMat);
 	RwD3D9GetTransform(D3DTS_PROJECTION, &projMat);
 	RwD3D9SetVertexShaderConstant(0,(void*)&worldMat,4);
 	RwD3D9SetVertexShaderConstant(4,(void*)&viewMat,4);
 	RwD3D9SetVertexShaderConstant(8,(void*)&projMat,4);
-
-	vertexShader = DNPipeVS;
 
 	RwD3D9GetRenderState(D3DRS_LIGHTING, &lighting);
 	if(lighting || flags & 8){
@@ -134,21 +93,51 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 			RwD3D9SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_DISABLE);
 			RwD3D9SetTextureStageState(2, D3DTSS_COLOROP, D3DTOP_DISABLE);
 		}
-		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)(instancedData->vertexAlpha || instancedData->material->color.alpha != 255));
+		hasAlpha = instancedData->vertexAlpha || instancedData->material->color.alpha != 255;
+		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)hasAlpha);
 
 		RwRGBARealFromRwRGBA(&color, &material->color);
 		RwD3D9SetVertexShaderConstant(12, (void*)&color, 1);
 		color = { 0.0f, 0.0f, 0.0f, 0.0f };
 		RwD3D9SetVertexShaderConstant(14, (void*)&color, 1);
-		if(notLit){
-			D3D9RenderNotLit_PS2(resEntryHeader, instancedData);
-		}else{
+		dnShaderVars.colorScale = 1.0f;
+		if(!notLit){
 			if(lighting){
 				RwD3D9SetVertexShaderConstant(13, (void*)&material->surfaceProps, 1);
 				RwD3D9SetVertexShaderConstant(14, (void*)&pAmbient->color, 1);
 			}
-			D3D9RenderPreLit_PS2(resEntryHeader, instancedData, flags, material->texture);
+			if(flags & (rxGEOMETRY_TEXTURED2 | rxGEOMETRY_TEXTURED)){
+				dnShaderVars.colorScale = config->ps2ModulateWorld ? 255.0f/128.0f : 1.0f;
+				RwD3D9SetTexture(material->texture, 0);
+				RwD3D9SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE);
+				RwD3D9SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+				RwD3D9SetTextureStageState(0, D3DTSS_COLORARG2, D3DTA_DIFFUSE);
+				RwD3D9SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_MODULATE);
+				RwD3D9SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
+				RwD3D9SetTextureStageState(0, D3DTSS_ALPHAARG2, D3DTA_DIFFUSE);
+			}else{
+				RwD3D9SetTexture(NULL, 0);
+				RwD3D9SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG2);
+				RwD3D9SetTextureStageState(0, D3DTSS_COLORARG2, D3DTA_DIFFUSE);
+				RwD3D9SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG2);
+				RwD3D9SetTextureStageState(0, D3DTSS_ALPHAARG2, D3DTA_DIFFUSE);
+			}
 		}
+		RwD3D9SetVertexShaderConstant(15, (void*)&dnShaderVars, 1);
+		// this takes the texture into account, somehow....
+		RwD3D9GetRenderState(D3DRS_ALPHABLENDENABLE, &hasAlpha);
+		if(hasAlpha && config->dualPassWorld){
+			int alphafunc;
+			RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &alphafunc);
+			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONGREATEREQUAL);
+			D3D9Render(resEntryHeader, instancedData);
+			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONLESS);
+			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, FALSE);
+			D3D9Render(resEntryHeader, instancedData);
+			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphafunc);
+			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
+		}else
+			D3D9Render(resEntryHeader, instancedData);
 		instancedData++;
 	}
 	RwD3D9SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_DISABLE);

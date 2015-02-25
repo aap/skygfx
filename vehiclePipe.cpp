@@ -29,15 +29,6 @@ CustomEnvMapPipeAtomicData::operator new(size_t size)
 }
 
 void
-D3D9Render(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData)
-{
-	if(resEntryHeader->indexBuffer)
-		RwD3D9DrawIndexedPrimitive(resEntryHeader->primType, instanceData->baseIndex, 0, instanceData->numVertices, instanceData->startIndex, instanceData->numPrimitives);
-	else
-		RwD3D9DrawPrimitive(resEntryHeader->primType, instanceData->baseIndex, instanceData->numPrimitives);
-}
-
-void
 CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
 {
 	RxD3D9ResEntryHeader *resEntryHeader;
@@ -62,6 +53,10 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 	RwV4d envXform;
 	float envSwitch;
 	D3DMATRIX worldMat, worldITMat, viewMat, projMat;
+
+	// set multipass distance. i'm lazy, just do it here
+	float *mpd = (float*)0xC88044;
+	*mpd = 100000000.0f;
 
 	if(config->vehiclePipe > 1){
 		CCustomCarEnvMapPipeline__CustomPipeRenderCB(repEntry, object, type, flags);
@@ -228,6 +223,8 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 		RwRGBARealFromRwRGBA(&color, &matColor);
 		RwD3D9SetVertexShaderConstant(LOC_matCol, (void*)&color, 1);
 		RwD3D9SetVertexShaderConstant(LOC_surfProps, (void*)surfProps, 1);
+		// this takes the texture into account, somehow....
+		RwD3D9GetRenderState(D3DRS_ALPHABLENDENABLE, &hasAlpha);
 		if(hasAlpha && config->dualPassVehicle){
 			int alphafunc;
 			RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &alphafunc);

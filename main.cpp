@@ -18,6 +18,15 @@ int &colourBottomVOffset = *(int*)0x8D515C;
 float *gfLaRiotsLightMult = (float*)0x8CD060;
 float *ambientColors = (float*)0xB7C4A0;
 
+void
+D3D9Render(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData)
+{
+	if(resEntryHeader->indexBuffer)
+		RwD3D9DrawIndexedPrimitive(resEntryHeader->primType, instanceData->baseIndex, 0, instanceData->numVertices, instanceData->startIndex, instanceData->numPrimitives);
+	else
+		RwD3D9DrawPrimitive(resEntryHeader->primType, instanceData->baseIndex, instanceData->numPrimitives);
+}
+
 double
 CTimeCycle_GetAmbientRed(void)
 {
@@ -290,7 +299,6 @@ afterStreamIni(void)
 char
 CPlantMgr_Initialise(void)
 {
-	RwEngineInstance = *(void**)0xC97B24;
 	char (*oldfunc)(void) = (char (*)(void))0x5DD910;
 	char ret;
 	ret = oldfunc();
@@ -350,6 +358,9 @@ InjectDelayedPatches()
 			// enable low quality pole shadows
 			MemoryVP::Nop(0x70C75A, 6);
 		}
+
+		// disables clouds (and stars :( )
+		//MemoryVP::Nop(0x53DFA0, 5);
 		return FALSE;
 	}
 	return TRUE;
@@ -388,6 +399,7 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 
 		// DNPipeline
 		MemoryVP::InjectHook(0x5D7100, CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2);
+		MemoryVP::Patch<BYTE>(0x5D7200, 0xC3);	// disable interpolation
 
 		// VehiclePipeline
 		MemoryVP::InjectHook(0x5D9FE9, setVehiclePipeCB);
@@ -397,6 +409,8 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		MemoryVP::InjectHook(0x704D1E, CPostEffects__ColourFilter_switch);
 		MemoryVP::InjectHook(0x704D5D, CPostEffects__Radiosity_PS2);
 		MemoryVP::InjectHook(0x704FB3, CPostEffects__Radiosity_PS2);
+		// fix speedfx
+		MemoryVP::InjectHook(0x704E8A, SpeedFX_Fix);
 	}
 
 	return TRUE;

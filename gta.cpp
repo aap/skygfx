@@ -1,6 +1,5 @@
 #include "skygfx.h"
 
-void *RwEngineInstance;
 RsGlobalType *RsGlobal = (RsGlobalType*)0xC17040;
 IDirect3DDevice9 *&d3d9device = *(IDirect3DDevice9**)0xC97C28;
 RpLight *&pAmbient = *(RpLight**)0xC886E8;
@@ -13,6 +12,7 @@ char &doRadiosity = *(char*)0xC402CC;
 
 RwTexture *&gpWhiteTexture = *(RwTexture**)0xB4E3EC;
 
+void **rwengine = *(void***)0x58FFC0;
 RwInt32 &CCustomCarEnvMapPipeline__ms_envMapPluginOffset = *(RwInt32*)0x8D12C4;
 RwInt32 &CCustomCarEnvMapPipeline__ms_envMapAtmPluginOffset = *(RwInt32*)0x8D12C8;
 RwInt32 &CCustomCarEnvMapPipeline__ms_specularMapPluginOffset = *(RwInt32*)0x8D12CC;
@@ -32,6 +32,7 @@ WRAPPER RwBool RwRasterDestroy(RwRaster *raster) { EAXJMP(0x7FB020); }
 WRAPPER RwRaster *RwRasterPushContext(RwRaster *raster) { EAXJMP(0x7FB060); }
 WRAPPER RwRaster *RwRasterPopContext(void) { EAXJMP(0x7FB110); }
 WRAPPER RwRaster *RwRasterRenderScaled(RwRaster *raster, RwRect *rect) { EAXJMP(0x7FAE80); }
+WRAPPER RwRaster *RwRasterRenderFast(RwRaster *raster, RwInt32 x, RwInt32 y) { EAXJMP(0x7FAF50); }
 WRAPPER RwCamera *RwCameraBeginUpdate(RwCamera *camera) { EAXJMP(0x7EE190); }
 WRAPPER RwCamera *RwCameraEndUpdate(RwCamera *camera) { EAXJMP(0x7EE180); }
 
