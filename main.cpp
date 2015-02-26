@@ -79,6 +79,15 @@ SetCloseFarAlphaDist(float close, float far)
 	*(float*)0x8D132C = config->farDist;
 }
 
+int
+readhex(char *str)
+{
+	int n = 0;
+	if(strlen(str) > 2)
+		sscanf(str+2, "%X", &n);
+	return n;
+}
+
 void
 readIni(void)
 {
@@ -91,6 +100,13 @@ readIni(void)
 	modulePath[nLen-1] = L'i';
 	modulePath[nLen-2] = L'n';
 	modulePath[nLen-3] = L'i';
+
+	GetPrivateProfileString("SkyGfx", "keySwitch", "0x79", tmp, sizeof(tmp), modulePath);
+	config->keys[0] = readhex(tmp);
+	GetPrivateProfileString("SkyGfx", "keyReload", "0x7A", tmp, sizeof(tmp), modulePath);
+	config->keys[1] = readhex(tmp);
+	GetPrivateProfileString("SkyGfx", "keyReloadPlants", "0x7B", tmp, sizeof(tmp), modulePath);
+	config->keys[2] = readhex(tmp);
 
 	config->enableHotkeys = GetPrivateProfileInt("SkyGfx", "enableHotkeys", TRUE, modulePath) != FALSE;
 	config->ps2Ambient = GetPrivateProfileInt("SkyGfx", "ps2Ambient", TRUE, modulePath) != FALSE;
@@ -378,6 +394,7 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		   *(DWORD*)DynBaseAddress(0x8245BC) == 0x94BF)
 			return FALSE;
 		dllModule = hInst;
+
 /*
 		// only with /MD
 		AllocConsole();
@@ -385,6 +402,7 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		freopen("CONOUT$", "w", stdout);
 		freopen("CONOUT$", "w", stderr);
 */
+
 		IsAlreadyRunning = (BOOL(*)())(*(int*)(0x74872D+1) + 0x74872D + 5);
 		MemoryVP::InjectHook(0x74872D, InjectDelayedPatches);
 

@@ -100,20 +100,24 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 		RwRGBARealFromRwRGBA(&color, &material->color);
 		RwD3D9SetVertexShaderConstant(LOC_materialColor, (void*)&color, 1);
 		RwD3D9SetVertexShaderConstant(LOC_ambientLight, (void*)&pAmbient->color, 1);
-		surfProps[0] = lighting ? material->surfaceProps.ambient : 0.0f;
+		surfProps[0] = lighting || config->worldPipe == 0 ? material->surfaceProps.ambient : 0.0f;
 		RwD3D9SetVertexShaderConstant(LOC_surfaceProps, &surfProps, 1);
 
 		RwD3D9SetVertexShaderConstant(LOC_shaderVars, (void*)&dnShaderVars, 1);
 		// this takes the texture into account, somehow....
 		RwD3D9GetRenderState(D3DRS_ALPHABLENDENABLE, &hasAlpha);
 		if(hasAlpha && config->dualPassWorld){
-			int alphafunc;
+			int alphafunc, alpharef;
+			RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, &alpharef);
 			RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &alphafunc);
+			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)128);
 			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONGREATEREQUAL);
+			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
 			D3D9Render(resEntryHeader, instancedData);
 			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONLESS);
-			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, FALSE);
+			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
 			D3D9Render(resEntryHeader, instancedData);
+			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)alpharef);
 			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphafunc);
 			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
 		}else

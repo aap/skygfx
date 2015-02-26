@@ -226,13 +226,14 @@ CPostEffects__ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 {
 	if(config->enableHotkeys){
 		static bool keystate = false;
-		if(GetAsyncKeyState(VK_F10) & 0x8000){
+		if(GetAsyncKeyState(config->keys[0]) & 0x8000){
 			if(!keystate){
 				keystate = true;
 				if(config == &configs[0])
 					config++;
 				else
 					config = &configs[0];
+				SetCloseFarAlphaDist(3.0, 1234.0); // second value overriden
 			}
 		}else
 			keystate = false;
@@ -240,7 +241,7 @@ CPostEffects__ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 
 	if(config->enableHotkeys){
 		static bool keystate = false;
-		if(GetAsyncKeyState(VK_F11) & 0x8000){
+		if(GetAsyncKeyState(config->keys[1]) & 0x8000){
 			if(!keystate){
 				keystate = true;
 				if(config == &configs[0])
@@ -256,7 +257,7 @@ CPostEffects__ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 
 	if(config->enableHotkeys){
 		static bool keystate = false;
-		if(GetAsyncKeyState(VK_F12) & 0x8000){
+		if(GetAsyncKeyState(config->keys[2]) & 0x8000){
 			if(!keystate){
 				keystate = true;
 				if(config == &configs[0])

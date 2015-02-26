@@ -29,6 +29,8 @@ struct Config {
 	int offLeft, offRight, offTop, offBottom;
 
 	float farDist, fadeDist, fadeInvDist, densityMult;
+
+	int keys[3];
 };
 extern Config *config, configs[2];
 
