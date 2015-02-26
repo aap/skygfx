@@ -60,12 +60,18 @@ CPostEffects__Radiosity_PS2(int col1, int nSubdivs, int unknown, int col2)
 		smallRect.h = Camera->frameBuffer->height/4;
 	}
 
+	float texScale;
 	RwCameraEndUpdate(Camera);
 	RwRasterPushContext(smallFrontBuffer);
-	RwRasterRenderScaled(RwCameraGetRaster(Camera), &smallRect);
+	if(config->downSampleRadiosity){
+		texScale = 1.0f/4.0f;
+		RwRasterRenderScaled(RwCameraGetRaster(Camera), &smallRect);
+	}else{
+		texScale = 1.0f;
+		RwRasterRenderFast(RwCameraGetRaster(Camera), 0, 0);
+	}
 	RwRasterPopContext();
 	RwCameraBeginUpdate(Camera);
-
 	tempTexture.raster = smallFrontBuffer;
 	RwD3D9SetTexture(&tempTexture, 0);
 
@@ -76,22 +82,22 @@ CPostEffects__Radiosity_PS2(int col1, int nSubdivs, int unknown, int col2)
 	float uMax = RsGlobal->MaximumWidth / rasterWidth;
 	float vMax = RsGlobal->MaximumHeight / rasterHeight;
 	float scale = config->scaleOffsets ? RsGlobal->MaximumWidth/640.0f : 1.0f;
-	float uOff = config->radiosityOffset*scale / 16.0f / rasterWidth;
-	float vOff = config->radiosityOffset*scale / 16.0f / rasterHeight;
+	float uOff = (config->radiosityOffset/16.0f)*scale * (4.0f*texScale) / rasterWidth;
+	float vOff = (config->radiosityOffset/16.0f)*scale * (4.0f*texScale) / rasterHeight;
 
 	quadVertices[0].x = 1.0f;
 	quadVertices[0].y = -1.0f;
 	quadVertices[0].z = 0.0f;
 	quadVertices[0].rhw = 1.0f;
-	quadVertices[0].u = uMax/4.0f + halfU - uOff;
-	quadVertices[0].v = vMax/4.0f + halfV - vOff;
+	quadVertices[0].u = uMax*texScale + halfU - uOff;
+	quadVertices[0].v = vMax*texScale + halfV - vOff;
 
 	quadVertices[1].x = -1.0f;
 	quadVertices[1].y = -1.0f;
 	quadVertices[1].z = 0.0f;
 	quadVertices[1].rhw = 1.0f;
 	quadVertices[1].u = 0.0f + halfU + uOff;
-	quadVertices[1].v = vMax/4.0f + halfV - vOff;
+	quadVertices[1].v = vMax*texScale + halfV - vOff;
 
 	quadVertices[2].x = -1.0f;
 	quadVertices[2].y = 1.0f;
@@ -104,7 +110,7 @@ CPostEffects__Radiosity_PS2(int col1, int nSubdivs, int unknown, int col2)
 	quadVertices[3].y = 1.0f;
 	quadVertices[3].z = 0.0f;
 	quadVertices[3].rhw = 1.0f;
-	quadVertices[3].u = uMax/4.0f + halfU - uOff;
+	quadVertices[3].u = uMax*texScale + halfU - uOff;
 	quadVertices[3].v = 0.0f + halfV + vOff;
 
 	RwD3D9SetVertexDeclaration(quadVertexDecl);

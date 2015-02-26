@@ -25,6 +25,7 @@ struct Config {
 	int colorFilter;
 	RwBool scaleOffsets;
 	RwBool doRadiosity;
+	RwBool downSampleRadiosity;
 	float radiosityIntensity, radiosityOffset;
 	int offLeft, offRight, offTop, offBottom;
 

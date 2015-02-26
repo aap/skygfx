@@ -125,10 +125,9 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 		hasSpec = materialFlags & 4;
 
 		if(flags & (rxGEOMETRY_TEXTURED2 | rxGEOMETRY_TEXTURED))
-			RwD3D9SetTexture(material->texture, 0);
-		else{
+			RwD3D9SetTexture(material->texture ? material->texture : gpWhiteTexture, 0);
+		else
 			RwD3D9SetTexture(gpWhiteTexture, 0);
-		}
 
 		reflData.specularity = 0.0f;
 		if(hasSpec && lighting){

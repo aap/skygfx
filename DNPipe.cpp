@@ -68,7 +68,7 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 		dnShaderVars.colorScale = 1.0f;
 		if(flags & (rxGEOMETRY_TEXTURED2 | rxGEOMETRY_TEXTURED)){
 			dnShaderVars.colorScale = config->ps2ModulateWorld ? 255.0f/128.0f : 1.0f;
-			RwD3D9SetTexture(material->texture, 0);
+			RwD3D9SetTexture(material->texture ? material->texture : gpWhiteTexture, 0);
 		}else
 			RwD3D9SetTexture(gpWhiteTexture, 0);
 
