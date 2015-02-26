@@ -150,6 +150,9 @@ readIni(void)
 	GetPrivateProfileString("SkyGfx", "densityMult", "1.0", tmp, sizeof(tmp), modulePath);
 	config->densityMult = atof(tmp)*0.5;
 
+//	MemoryVP::Patch<DWORD>(0x5DC281, (DWORD)&config->densityMult);
+//	MemoryVP::Patch<DWORD>(0x5DAD98, (DWORD)&config->fadeDist);
+//	MemoryVP::Patch<DWORD>(0x5DAE05, (DWORD)&config->fadeInvDist);
 	*(float**)0x5DC281 = &config->densityMult;
 	*(float**)0x5DAD98 = &config->fadeDist;
 	*(float**)0x5DAE05 = &config->fadeInvDist;
@@ -353,15 +356,15 @@ InjectDelayedPatches()
 
 		if(config->oneGrassModel){
 			char *modelname = "grass0_1.dff";
-			*(char**)0x5DDA87 = modelname;
-			*(char**)0x5DDA8F = modelname;
-			*(char**)0x5DDA97 = modelname;
-			*(char**)0x5DDA9F = modelname;
-	
-			*(char**)0x5DDAC3 = modelname;
-			*(char**)0x5DDACB = modelname;
-			*(char**)0x5DDAD3 = modelname;
-			*(char**)0x5DDADB = modelname;
+			MemoryVP::Patch<DWORD>(0x5DDA87, (DWORD)modelname);
+			MemoryVP::Patch<DWORD>(0x5DDA8F, (DWORD)modelname);
+			MemoryVP::Patch<DWORD>(0x5DDA97, (DWORD)modelname);
+			MemoryVP::Patch<DWORD>(0x5DDA9F, (DWORD)modelname);
+
+			MemoryVP::Patch<DWORD>(0x5DDAC3, (DWORD)modelname);
+			MemoryVP::Patch<DWORD>(0x5DDACB, (DWORD)modelname);
+			MemoryVP::Patch<DWORD>(0x5DDAD3, (DWORD)modelname);
+			MemoryVP::Patch<DWORD>(0x5DDADB, (DWORD)modelname);
 		}
 
 		if(disableHQShadows){
@@ -415,7 +418,7 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		MemoryVP::InjectHook(0x560330, CTimeCycle_GetAmbientRed, PATCH_JUMP);
 		MemoryVP::InjectHook(0x560340, CTimeCycle_GetAmbientGreen, PATCH_JUMP);
 		MemoryVP::InjectHook(0x560350, CTimeCycle_GetAmbientBlue, PATCH_JUMP);
-		*(DWORD*)0x5DAEC8 = (DWORD)setTextureAndColor;
+		MemoryVP::Patch<DWORD>(0x5DAEC8, (DWORD)setTextureAndColor);
 
 		MemoryVP::InjectHook(0x5DDB47, SetCloseFarAlphaDist);
 
