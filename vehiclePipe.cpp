@@ -60,7 +60,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 	*mpd = 100000000.0f;
 
 	if(config->vehiclePipe > 1){
-		CCustomCarEnvMapPipeline__CustomPipeRenderCB(repEntry, object, type, flags);
+		CCustomCarEnvMapPipeline__CustomPipeRenderCB_exe(repEntry, object, type, flags);
 		return;
 	}
 
@@ -79,9 +79,11 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 	_rwD3D9VSGetInverseWorldMatrix((void *)&worldITMat);
 	RwD3D9SetVertexShaderConstant(LOC_WorldIT,(void*)&worldITMat,4);
 
+	noRefl = CVisibilityPlugins__GetAtomicId(atomic) & 0x6000;
 	// lights
 	activeLights = 0;
 	if(CVisibilityPlugins__GetAtomicId(atomic) & 0x4000){	// exploded
+		noRefl = 1;	// force it, probably not necessary, but be sure
 		RwRGBAReal c = { 0.0f, 0.0f, 0.0f, 0.0f };
 		RwD3D9SetVertexShaderConstant(LOC_sunDiff,(void*)&c,1);
 		c = { 0.18f, 0.18f, 0.18f, 0.0f };
@@ -100,7 +102,6 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 	}
 	IDirect3DDevice9_SetVertexShaderConstantI(d3d9device, LOC_activeLights, &activeLights, 1);
 
-	noRefl = CVisibilityPlugins__GetAtomicId(atomic) & 0x6000;
 	RwD3D9GetRenderState(D3DRS_LIGHTING, &lighting);
 
 	resEntryHeader = (RxD3D9ResEntryHeader *)(repEntry + 1);
@@ -129,15 +130,18 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 		else
 			RwD3D9SetTexture(gpWhiteTexture, 0);
 
-		reflData.specularity = 0.0f;
 		if(hasSpec && lighting){
 			specData = *RWPLUGINOFFSET(CustomSpecMapPipeMaterialData*, material,
 			                           CCustomCarEnvMapPipeline__ms_specularMapPluginOffset);
 			reflData.specularity = specData->specularity;
 			RwD3D9SetTexture(specData->texture, 2);
-		}else
+		}else{
+			reflData.specularity = 0.0f;
+			RwD3D9SetTexture(NULL, 2);
+		}
 
 		reflData.shininess = 0.0f;
+		RwD3D9SetTexture(NULL, 1);
 		envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
 		if(hasRefl){
 			static D3DMATRIX texMat;
@@ -215,9 +219,10 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 				matColor.green = 0;
 				matColor.blue = 0;
 			}
+
 			surfProps[0] = material->surfaceProps.ambient;
 			surfProps[2] = material->surfaceProps.diffuse;
-			surfProps[3] = 0.0f;
+			surfProps[3] = !!(flags & rpGEOMETRYPRELIT);
 		}
 		RwRGBAReal color;
 		RwRGBARealFromRwRGBA(&color, &matColor);
@@ -239,6 +244,24 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 			D3D9Render(resEntryHeader, instancedData);
 		instancedData++;
 	}
+	// we don't even change it, but apparently this render CB has to reset it (otherwise might still be on from MatFX)
+	RwD3D9SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_DISABLE);
+	RwD3D9SetTextureStageState(1, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
+	RwD3D9SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, 1);
+	RwD3D9SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_DISABLE);
+}
+
+RpAtomic*
+CCarFXRenderer__CustomCarPipeClumpSetup(RpAtomic *atomic, void *data)
+{
+	RpAtomic *ret;
+
+	ret = CCustomCarEnvMapPipeline__CustomPipeAtomicSetup(atomic);
+	if(strstr(GetFrameNodeName(RpAtomicGetFrame(atomic)), "wheel")){
+		ret->pipeline = NULL;
+		SetPipelineID(atomic, 0);
+	}
+	return ret;
 }
 
 void

@@ -16,11 +16,12 @@
 extern HMODULE dllModule;
 
 struct Config {
+	RwBool fixGrassPlacement, waterWriteZ;	// these two have to stay at that offset, see fixSeed and waterZwrite in main.cpp
 	RwBool enableHotkeys;
 	RwBool ps2Ambient, ps2ModulateWorld, ps2ModulateGrass;
-	RwBool grassAddAmbient, fixGrassPlacement, oneGrassModel;	// fixGrassPlacement has to stay at that offset, see inline assembly below
+	RwBool grassAddAmbient;
 	RwBool backfaceCull;
-	RwBool dualPassWorld, dualPassGrass, dualPassVehicle;
+	RwBool dualPassWorld, dualPassDefault, dualPassVehicle;
 	int vehiclePipe, worldPipe;
 	int colorFilter;
 	RwBool scaleOffsets;
@@ -98,6 +99,7 @@ void CPostEffects__Init(void);
 void readIni(void);
 void SetCloseFarAlphaDist(float close, float far);
 void D3D9Render(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData);
+RpAtomic *CCarFXRenderer__CustomCarPipeClumpSetup(RpAtomic *atomic, void *data);
 
 #define RwEngineInstance (*rwengine)
 //void *&RwEngineInstance = *(void**)0xC97B24;
@@ -122,7 +124,7 @@ extern RwReal &CCustomCarEnvMapPipeline__m_EnvMapLightingMult;
 extern RwInt32 &CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset;
 extern RwReal &CCustomBuildingDNPipeline__m_fDNBalanceParam;
 
-extern int &dword_C02C20;
+extern int &dword_C02C20, &dword_C9BC60;
 
 // reversed
 void D3D9RenderNotLit(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData);
@@ -138,3 +140,8 @@ RwBool D3D9SetRenderMaterialProperties(RwSurfaceProperties*, RwRGBA *color, RwUI
 RwBool D3D9RestoreSurfaceProperties(void);
 RwUInt16 CVisibilityPlugins__GetAtomicId(RpAtomic *atomic);
 void CPostEffects__ColourFilter(RwRGBA rgb1, RwRGBA rgb2);
+RpAtomic *CCustomCarEnvMapPipeline__CustomPipeAtomicSetup(RpAtomic *atomic);
+char *GetFrameNodeName(RwFrame *frame);
+void SetPipelineID(RpAtomic*, unsigned int it);
+RpAtomic *AtomicDefaultRenderCallBack(RpAtomic*);
+void CCustomCarEnvMapPipeline__CustomPipeRenderCB_exe(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags);

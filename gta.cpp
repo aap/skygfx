@@ -20,6 +20,7 @@ RwReal &CCustomCarEnvMapPipeline__m_EnvMapLightingMult = *(RwReal*)0x8D12D0;
 RwInt32 &CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset = *(RwInt32*)0x8D12BC;
 RwReal &CCustomBuildingDNPipeline__m_fDNBalanceParam = *(float*)0x8D12C0;
 int &dword_C02C20 = *(int*)0xC02C20;
+int &dword_C9BC60 = *(int*)0xC9BC60;
 
 WRAPPER RwMatrix *RwFrameGetLTM(RwFrame * frame) { EAXJMP(0x7F0990); }
 WRAPPER RpMaterial *RpMaterialSetTexture(RpMaterial *mat, RwTexture *tex) { EAXJMP(0x74DBC0); }
@@ -32,7 +33,6 @@ WRAPPER RwRaster *RwRasterRenderFast(RwRaster *raster, RwInt32 x, RwInt32 y) { E
 WRAPPER RwCamera *RwCameraBeginUpdate(RwCamera *camera) { EAXJMP(0x7EE190); }
 WRAPPER RwCamera *RwCameraEndUpdate(RwCamera *camera) { EAXJMP(0x7EE180); }
 
-//WRAPPER void *RwD3D9GetCurrentD3DDevice(void) { EAXJMP(0x
 WRAPPER RwBool RwD3D9CreatePixelShader(const RwUInt32 *function, void **shader) { EAXJMP(0x7FACC0); }
 WRAPPER RwBool RwD3D9CreateVertexShader(const RwUInt32 *function, void **shader) { EAXJMP(0x7FAC60); }
 WRAPPER void _rwD3D9SetPixelShaderConstant(RwUInt32 i, const void *data, RwUInt32 size) { EAXJMP(0x7FAD00); }
@@ -69,6 +69,7 @@ WRAPPER RwBool _rpD3D9VertexDeclarationInstColor(RwUInt8 *mem, const RwRGBA *col
 
 WRAPPER void _rxPipelineDestroy(RxPipeline * Pipeline) { EAXJMP(0x805820); }
 WRAPPER RxPipeline *RxPipelineCreate(void) { EAXJMP(0x8057B0); }
+WRAPPER RxPipeline *RxPipelineExecute(RxPipeline *pipeline, void *data, RwBool heapReset) { EAXJMP(0x805710); };
 WRAPPER RxLockedPipe *RxPipelineLock(RxPipeline *pipeline) { EAXJMP(0x806990); }
 WRAPPER RxPipeline *RxLockedPipeUnlock(RxLockedPipe *pipeline) { EAXJMP(0x805F40); }
 WRAPPER RxNodeDefinition *RxNodeDefinitionGetD3D9AtomicAllInOne(void) { EAXJMP(0x7582E0); }
@@ -87,3 +88,9 @@ WRAPPER RwBool D3D9SetRenderMaterialProperties(RwSurfaceProperties*, RwRGBA *col
 
 WRAPPER RwUInt16 CVisibilityPlugins__GetAtomicId(RpAtomic *atomic) { EAXJMP(0x732370); }
 WRAPPER void CPostEffects__ColourFilter(RwRGBA rgb1, RwRGBA rgb2) { EAXJMP(0x703650); }
+
+WRAPPER RpAtomic *CCustomCarEnvMapPipeline__CustomPipeAtomicSetup(RpAtomic *atomic) { EAXJMP(0x5DA610); }
+WRAPPER char *GetFrameNodeName(RwFrame *frame) { EAXJMP(0x72FB30); }
+WRAPPER void SetPipelineID(RpAtomic*, unsigned int it) { EAXJMP(0x72FC50); }
+WRAPPER RpAtomic *AtomicDefaultRenderCallBack(RpAtomic*) { EAXJMP(0x7491C0); };
+WRAPPER void CCustomCarEnvMapPipeline__CustomPipeRenderCB_exe(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags) { EAXJMP(0x5D9900) };

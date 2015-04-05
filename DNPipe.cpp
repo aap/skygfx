@@ -39,6 +39,9 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 	} reflData;
 	RwV4d envXform;
 
+//	if(GetAsyncKeyState(VK_F8) & 0x8000)
+//		return;
+
 	RwD3D9SetPixelShader(vehiclePipePS);
 	RwD3D9SetVertexShader(DNPipeVS);
 	RwD3D9GetTransform(D3DTS_WORLD, &worldMat);
@@ -131,6 +134,16 @@ reinstance(void *object, RwResEntry *resEntry, RxD3D9AllInOneInstanceCallBack in
 {
 	return (instanceCallback == NULL ||
 	        instanceCallback(object, (RxD3D9ResEntryHeader*)(resEntry + 1), true) != 0);
+}
+
+bool
+isNightColorZero(RwRGBA *rgbac, int nv)
+{
+	RwUInt32 *c = (RwUInt32*)rgbac;
+	while(nv--)
+		if(*c++)
+			return false;
+	return true;
 }
 
 RwBool
@@ -252,8 +265,10 @@ DNInstance_PS2(void *object, RxD3D9ResEntryHeader *resEntryHeader, RwBool reinst
 					;
 				for(j = 0; dcl[j].Usage != D3DDECLUSAGE_COLOR || dcl[j].UsageIndex != 1; ++j)
 					;
-				RwRGBA *night = *(RwRGBA**)((RwUInt8*)geometry + CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset);
-				RwRGBA *day = *(RwRGBA**)((RwUInt8*)geometry + CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset + 4);
+				RwRGBA *night = *RWPLUGINOFFSET(RwRGBA*, geometry, CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset);
+				RwRGBA *day = *RWPLUGINOFFSET(RwRGBA*, geometry, CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset + 4);
+				if(isNightColorZero(night, geometry->numVertices))
+					night = day;
 				numMeshes = resEntryHeader->numMeshes;
 				instData = (RxD3D9InstanceData*)(resEntryHeader+1);
 				while(numMeshes--){

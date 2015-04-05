@@ -64,15 +64,12 @@ mainVS(VS_INPUT IN)
 		float4 intex = {IN.UV2.x, IN.UV2.y, 1.0, 0.0};
 		OUT.texcoord1.xyz = mul(Texture, intex).xyz;
 	} else if (envSwitch == 2.0f) {		// PS2 style environment map
-		// assumes same as inverse transpose
 		float4 camNormal;
-//		camNormal.xyz = normalize(mul((float3x3)View, mul((float3x3)World, IN.Normal.xyz)));
 		camNormal.xyz = normalize(mul((float3x3)View, worldNormal));
 		camNormal.w = 0.0;
 		OUT.texcoord1.xy = camNormal.xy - envXform.xy;
 		OUT.texcoord1.xy *= -envXform.zw;
 	} else {				// PC style environment map
-		// assumes same as inverse transpose
 		float4 camNormal;
 		camNormal.xyz = normalize(mul((float3x3)View, worldNormal));
 		camNormal.w = 0.0;
@@ -81,8 +78,6 @@ mainVS(VS_INPUT IN)
 	}
 	OUT.texcoord1.z = 1.0;
 
-	// assumes same as inverse transpose
-//	float3 N = mul((float3x3)View, mul((float3x3)World, IN.Normal.xyz));
 	float3 N = mul((float3x3)View, worldNormal);
 	float3 V = mul((float3x3)View, sunDir);
 	float3 U = float3(V.x+1, V.y+1, V.z)*0.5;

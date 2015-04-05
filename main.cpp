@@ -3,7 +3,7 @@
 HMODULE dllModule;
 
 Config *config, configs[2];
-bool usePCTimecyc, disableHQShadows, disableClouds;
+bool oneGrassModel, usePCTimecyc, disableHQShadows, disableClouds, uglyWheelHack;
 int original_bRadiosity = 0;
 
 void *grassPixelShader;
@@ -113,14 +113,15 @@ readIni(void)
 	config->ps2ModulateWorld = GetPrivateProfileInt("SkyGfx", "ps2ModulateWorld", TRUE, modulePath) != FALSE;
 	config->ps2ModulateGrass = GetPrivateProfileInt("SkyGfx", "ps2ModulateGrass", TRUE, modulePath) != FALSE;
 	config->dualPassWorld = GetPrivateProfileInt("SkyGfx", "dualPassWorld", TRUE, modulePath) != FALSE;
-	config->dualPassGrass = GetPrivateProfileInt("SkyGfx", "dualPassGrass", TRUE, modulePath) != FALSE;
+	config->dualPassDefault = GetPrivateProfileInt("SkyGfx", "dualPassDefault", TRUE, modulePath) != FALSE;
 	config->dualPassVehicle = GetPrivateProfileInt("SkyGfx", "dualPassVehicle", TRUE, modulePath) != FALSE;
 	config->grassAddAmbient = GetPrivateProfileInt("SkyGfx", "grassAddAmbient", TRUE, modulePath) != FALSE;
 	config->fixGrassPlacement = GetPrivateProfileInt("SkyGfx", "fixGrassPlacement", TRUE, modulePath) != FALSE;
-	config->oneGrassModel = GetPrivateProfileInt("SkyGfx", "oneGrassModel", TRUE, modulePath) != FALSE;
+	oneGrassModel = GetPrivateProfileInt("SkyGfx", "oneGrassModel", TRUE, modulePath) != FALSE;
 	config->backfaceCull = GetPrivateProfileInt("SkyGfx", "backfaceCull", FALSE, modulePath) != FALSE;
 	config->vehiclePipe = GetPrivateProfileInt("SkyGfx", "vehiclePipe", 0, modulePath) % 3;
-	config->worldPipe = GetPrivateProfileInt("SkyGfx", "worldPipe", 0, modulePath) % 3;
+	tmpint = GetPrivateProfileInt("SkyGfx", "worldPipe", 0, modulePath);
+	config->worldPipe = tmpint >= 0 ? tmpint % 3 : -1;
 	config->colorFilter = GetPrivateProfileInt("SkyGfx", "colorFilter", 0, modulePath) % 3;
 	usePCTimecyc = GetPrivateProfileInt("SkyGfx", "usePCTimecyc", FALSE, modulePath) != FALSE;
 
@@ -142,6 +143,9 @@ readIni(void)
 	config->radiosityIntensity = atof(tmp);
 	disableHQShadows = GetPrivateProfileInt("SkyGfx", "disableHQShadows", FALSE, modulePath) != FALSE;
 	disableClouds = GetPrivateProfileInt("SkyGfx", "disableClouds", FALSE, modulePath) != FALSE;
+	uglyWheelHack = GetPrivateProfileInt("SkyGfx", "uglyWheelHack", FALSE, modulePath) != FALSE;
+
+	config->waterWriteZ = GetPrivateProfileInt("SkyGfx", "waterWriteZ", FALSE, modulePath) != FALSE;
 
 	GetPrivateProfileString("SkyGfx", "farDist", "60.0", tmp, sizeof(tmp), modulePath);
 	config->farDist = atof(tmp);
@@ -151,9 +155,6 @@ readIni(void)
 	GetPrivateProfileString("SkyGfx", "densityMult", "1.0", tmp, sizeof(tmp), modulePath);
 	config->densityMult = atof(tmp)*0.5;
 
-//	MemoryVP::Patch<DWORD>(0x5DC281, (DWORD)&config->densityMult);
-//	MemoryVP::Patch<DWORD>(0x5DAD98, (DWORD)&config->fadeDist);
-//	MemoryVP::Patch<DWORD>(0x5DAE05, (DWORD)&config->fadeInvDist);
 	*(float**)0x5DC281 = &config->densityMult;
 	*(float**)0x5DAD98 = &config->fadeDist;
 	*(float**)0x5DAE05 = &config->fadeInvDist;
@@ -165,7 +166,6 @@ RpAtomic *(*plantTab1)[4] = (RpAtomic *(*)[4])0xC03A00;
 RpAtomic*
 grassRenderCallback(RpAtomic *atomic)
 {
-	RpAtomic *(*oldfunc)(RpAtomic*) = (RpAtomic *(*)(RpAtomic*))0x7491C0;
 	RpAtomic *ret;
 	int cullmode;
 	RwRGBAReal color = { 0.0f, 0.0, 1.0f, 1.0f };
@@ -180,21 +180,48 @@ grassRenderCallback(RpAtomic *atomic)
 	if(!config->backfaceCull)
 		RwRenderStateSet(rwRENDERSTATECULLMODE, (void*)rwCULLMODECULLNONE);
 
-	if(config->dualPassGrass){
+	if(0 && config->dualPassDefault){
 		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)128);
 		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
 		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONGREATEREQUAL);
-		ret = oldfunc(atomic);
+		ret = AtomicDefaultRenderCallBack(atomic);
 		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
 		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONLESS);
-		ret = oldfunc(atomic);
+		ret = AtomicDefaultRenderCallBack(atomic);
 	}else
-		ret = oldfunc(atomic);
+		ret = AtomicDefaultRenderCallBack(atomic);
 
 	RwRenderStateSet(rwRENDERSTATECULLMODE, (void*)cullmode);
 	gpCurrentShaderForDefaultCallbacks = NULL;
 
 	return ret;
+}
+
+RpAtomic *myDefaultCallback(RpAtomic *atomic)
+{
+	RxPipeline *pipe;
+	int zwrite, alphatest, alpharef;
+
+	pipe = atomic->pipeline;
+	if(pipe == NULL){
+		pipe = *(RxPipeline**)(*(DWORD*)0xC97B24+0x3C+dword_C9BC60);
+		RwRenderStateGet(rwRENDERSTATEZWRITEENABLE, (void*)&zwrite);
+		if(zwrite && config->dualPassDefault){
+			RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, (void*)&alphatest);
+			RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)&alpharef);
+			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)128);
+			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONGREATEREQUAL);
+			RxPipelineExecute(pipe, atomic, 1);
+			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
+			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONLESS);
+			pipe = RxPipelineExecute(pipe, atomic, 1);
+			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
+			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphatest);
+			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)alpharef);
+			return pipe ? atomic : NULL;
+		}
+	}
+	return RxPipelineExecute(pipe, atomic, 1) ? atomic : NULL;
 }
 
 int tmpintensity;
@@ -236,7 +263,7 @@ fixSeed(void)
 	_asm{
 	// 0x5DADB7
 		mov	ecx, [config]
-		cmp	[ecx+20], 0	// fixGrassPlacement
+		cmp	[ecx], 0	// fixGrassPlacement
 		jz	dontfix
 		mov	ecx, [esp+54h]
 		mov	ebx, [ecx+eax*4]
@@ -317,6 +344,18 @@ afterStreamIni(void)
 	}
 }
 
+void __declspec(naked)
+waterZwrite(void)
+{
+	_asm{
+		mov	edx, dword ptr ds:[0xC97B24]
+		mov	ecx, [config]
+		push	[ecx+4]	// waterWriteZ
+		push	0x6EF8C0
+		retn
+	}
+}
+
 char
 CPlantMgr_Initialise(void)
 {
@@ -355,7 +394,16 @@ InjectDelayedPatches()
 			MemoryVP::Nop(0x5BBF83, 2);
 		}
 
-		if(config->oneGrassModel){
+		// DNPipeline
+		if(config->worldPipe >= 0){
+			MemoryVP::InjectHook(0x5D7100, CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2);
+			MemoryVP::Patch<BYTE>(0x5D7200, 0xC3);	// disable interpolation
+		}
+
+		if(uglyWheelHack)
+			MemoryVP::Patch<DWORD>(0x5d5b48, (DWORD)CCarFXRenderer__CustomCarPipeClumpSetup);
+
+		if(oneGrassModel){
 			char *modelname = "grass0_1.dff";
 			MemoryVP::Patch<DWORD>(0x5DDA87, (DWORD)modelname);
 			MemoryVP::Patch<DWORD>(0x5DDA8F, (DWORD)modelname);
@@ -399,8 +447,7 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 			return FALSE;
 		dllModule = hInst;
 
-/*
-		// only with /MD
+/*		// only with /MD
 		AllocConsole();
 		freopen("CONIN$", "r", stdin);
 		freopen("CONOUT$", "w", stdout);
@@ -411,6 +458,8 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		MemoryVP::InjectHook(0x74872D, InjectDelayedPatches);
 
 		MemoryVP::InjectHook(0x5BCF14, afterStreamIni, PATCH_JUMP);
+
+		MemoryVP::InjectHook(0x7491C0, myDefaultCallback, PATCH_JUMP);
 
 		MemoryVP::InjectHook(0x5BF8EA, CPlantMgr_Initialise);
 		MemoryVP::InjectHook(0x756DFE, rxD3D9DefaultRenderCallback_Hook, PATCH_JUMP);
@@ -423,10 +472,6 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 
 		MemoryVP::InjectHook(0x5DDB47, SetCloseFarAlphaDist);
 
-		// DNPipeline
-		MemoryVP::InjectHook(0x5D7100, CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2);
-		MemoryVP::Patch<BYTE>(0x5D7200, 0xC3);	// disable interpolation
-
 		// VehiclePipeline
 		MemoryVP::InjectHook(0x5D9FE9, setVehiclePipeCB);
 
@@ -437,6 +482,9 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		MemoryVP::InjectHook(0x704FB3, CPostEffects__Radiosity_PS2);
 		// fix speedfx
 		MemoryVP::InjectHook(0x704E8A, SpeedFX_Fix);
+
+//		MemoryVP::InjectHook(0x6EF8B9, waterZwrite, PATCH_JUMP);
+//		MemoryVP::Nop(0x6EF8BE, 2);
 	}
 
 	return TRUE;
