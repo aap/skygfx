@@ -21,6 +21,7 @@ RwInt32 &CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset = *(RwInt32*)
 RwReal &CCustomBuildingDNPipeline__m_fDNBalanceParam = *(float*)0x8D12C0;
 int &dword_C02C20 = *(int*)0xC02C20;
 int &dword_C9BC60 = *(int*)0xC9BC60;
+RxPipeline *&skinPipe = *(RxPipeline**)0xC978C4;
 
 WRAPPER RwMatrix *RwFrameGetLTM(RwFrame * frame) { EAXJMP(0x7F0990); }
 WRAPPER RpMaterial *RpMaterialSetTexture(RpMaterial *mat, RwTexture *tex) { EAXJMP(0x74DBC0); }

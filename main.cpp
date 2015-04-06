@@ -115,6 +115,7 @@ readIni(void)
 	config->dualPassWorld = GetPrivateProfileInt("SkyGfx", "dualPassWorld", TRUE, modulePath) != FALSE;
 	config->dualPassDefault = GetPrivateProfileInt("SkyGfx", "dualPassDefault", TRUE, modulePath) != FALSE;
 	config->dualPassVehicle = GetPrivateProfileInt("SkyGfx", "dualPassVehicle", TRUE, modulePath) != FALSE;
+	config->dualPassPed = GetPrivateProfileInt("SkyGfx", "dualPassPed", TRUE, modulePath) != FALSE;
 	config->grassAddAmbient = GetPrivateProfileInt("SkyGfx", "grassAddAmbient", TRUE, modulePath) != FALSE;
 	config->fixGrassPlacement = GetPrivateProfileInt("SkyGfx", "fixGrassPlacement", TRUE, modulePath) != FALSE;
 	oneGrassModel = GetPrivateProfileInt("SkyGfx", "oneGrassModel", TRUE, modulePath) != FALSE;
@@ -201,27 +202,33 @@ RpAtomic *myDefaultCallback(RpAtomic *atomic)
 {
 	RxPipeline *pipe;
 	int zwrite, alphatest, alpharef;
+	int dodual = 0;
 
 	pipe = atomic->pipeline;
+//	if(GetAsyncKeyState(VK_F8) & 0x8000)
+//		return atomic;
 	if(pipe == NULL){
 		pipe = *(RxPipeline**)(*(DWORD*)0xC97B24+0x3C+dword_C9BC60);
 		RwRenderStateGet(rwRENDERSTATEZWRITEENABLE, (void*)&zwrite);
-		if(zwrite && config->dualPassDefault){
-			RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, (void*)&alphatest);
-			RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)&alpharef);
-			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)128);
-			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONGREATEREQUAL);
-			RxPipelineExecute(pipe, atomic, 1);
-			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
-			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONLESS);
-			pipe = RxPipelineExecute(pipe, atomic, 1);
-			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
-			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphatest);
-			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)alpharef);
-			return pipe ? atomic : NULL;
-		}
-	}
-	return RxPipelineExecute(pipe, atomic, 1) ? atomic : NULL;
+		if(zwrite && config->dualPassDefault)
+			dodual = 1;
+	}else if(pipe == skinPipe && config->dualPassPed)
+		dodual = 1;
+	if(dodual){
+		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, (void*)&alphatest);
+		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)&alpharef);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)128);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONGREATEREQUAL);
+		RxPipelineExecute(pipe, atomic, 1);
+		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONLESS);
+		pipe = RxPipelineExecute(pipe, atomic, 1);
+		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphatest);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)alpharef);
+		return pipe ? atomic : NULL;
+	}else
+		return RxPipelineExecute(pipe, atomic, 1) ? atomic : NULL;
 }
 
 int tmpintensity;

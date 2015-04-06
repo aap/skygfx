@@ -21,7 +21,7 @@ struct Config {
 	RwBool ps2Ambient, ps2ModulateWorld, ps2ModulateGrass;
 	RwBool grassAddAmbient;
 	RwBool backfaceCull;
-	RwBool dualPassWorld, dualPassDefault, dualPassVehicle;
+	RwBool dualPassWorld, dualPassDefault, dualPassVehicle, dualPassPed;
 	int vehiclePipe, worldPipe;
 	int colorFilter;
 	RwBool scaleOffsets;
@@ -125,6 +125,7 @@ extern RwInt32 &CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset;
 extern RwReal &CCustomBuildingDNPipeline__m_fDNBalanceParam;
 
 extern int &dword_C02C20, &dword_C9BC60;
+extern RxPipeline *&skinPipe;
 
 // reversed
 void D3D9RenderNotLit(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData);

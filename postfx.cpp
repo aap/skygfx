@@ -132,6 +132,8 @@ CPostEffects__Radiosity_PS2(int col1, int nSubdivs, int unknown, int col2)
 	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
 	RwD3D9SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
 
+	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
+
 	RwD3D9DrawIndexedPrimitiveUP(D3DPT_TRIANGLELIST, 0, 6, 2, quadIndices, quadVertices, sizeof(QuadVertex));
 
 	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)blend);
