@@ -17,6 +17,19 @@ RwRect smallRect;
 static QuadVertex quadVertices[4];
 RwRaster *smallFrontBuffer = NULL;
 
+static QuadVertex vcsVertices[20];
+RwRaster *vcsBuffer1, *vcsBuffer2;
+RwRect vcsRect;
+RwImVertexIndex vcsIndices1[] = {
+	0, 1, 2, 1, 2, 3,
+		4, 5, 2, 5, 2, 3,
+	4, 5, 6, 5, 6, 7,
+		8, 9, 6, 9, 6, 7,
+	8, 9, 10, 9, 10, 11,
+		12, 13, 10, 13, 10, 11,
+	12, 13, 14, 13, 14, 15,
+};
+
 static RwImVertexIndex* quadIndices = (RwImVertexIndex*)0x8D5174;
 RwRaster *&CPostEffects__pRasterFrontBuffer = *(RwRaster**)0xC402D8;
 RwCamera *&Camera = *(RwCamera**)0xC1703C;
@@ -38,6 +51,146 @@ SpeedFX_Fix(float fStrength)
 }
 
 void
+CPostEffects__Radiosity_VCS(int col1, int nSubdivs, int unknown, int col2)
+{
+	float radiosityColors[4];
+	RwTexture tempTexture;
+	RwRaster *camraster;
+	float uOffsets[] = { -1.0f, 1.0f, 0.0f, 0.0f };
+	float vOffsets[] = { 0.0f, 0.0f, -1.0f, 1.0f };
+	float halfU = 0.5f/256.0f, halfV = 0.5f/128.0f;
+
+	vcsVertices[0].x = -1.0f;
+	vcsVertices[0].y = 1.0f;
+	vcsVertices[0].z = 0.0f;
+	vcsVertices[0].rhw = 1.0f;
+	vcsVertices[0].u = 0.0f + halfU;
+	vcsVertices[0].v = 0.0f + halfV;
+	vcsVertices[0].emissiveColor = 0xFFFFFFFF;
+
+	vcsVertices[1].x = -1.0f;
+	vcsVertices[1].y = -1.0f;
+	vcsVertices[1].z = 0.0f;
+	vcsVertices[1].rhw = 1.0f;
+	vcsVertices[1].u = 0.0f + halfU;
+	vcsVertices[1].v = 1.0f + halfV;
+	vcsVertices[1].emissiveColor = 0xFFFFFFFF;
+
+	vcsVertices[2].x = 1.0f;
+	vcsVertices[2].y = 1.0f;
+	vcsVertices[2].z = 0.0f;
+	vcsVertices[2].rhw = 1.0f;
+	vcsVertices[2].u = 1.0f + halfU;
+	vcsVertices[2].v = 0.0f + halfV;
+	vcsVertices[2].emissiveColor = 0xFFFFFFFF;
+
+	vcsVertices[3].x = 1.0f;
+	vcsVertices[3].y = -1.0f;
+	vcsVertices[3].z = 0.0f;
+	vcsVertices[3].rhw = 1.0f;
+	vcsVertices[3].u = 1.0f + halfU;
+	vcsVertices[3].v = 1.0f + halfV;
+	vcsVertices[3].emissiveColor = 0xFFFFFFFF;
+
+	for(int i = 4; i < 20; i++){
+		int idx = (i-4)/4;
+		vcsVertices[i].x = vcsVertices[i%4].x;
+		vcsVertices[i].y = vcsVertices[i%4].y;
+		vcsVertices[i].z = vcsVertices[i%4].z;
+		vcsVertices[i].rhw = 1.0f;
+		switch(i%4){
+		case 0:
+			vcsVertices[i].u = 0.0f + uOffsets[idx]/256.0f + halfU;
+			vcsVertices[i].v = 0.0f + vOffsets[idx]/128.0f + halfV;
+			break;
+		case 1:
+			vcsVertices[i].u = 0.0f + uOffsets[idx]/256.0f + halfU;
+			vcsVertices[i].v = 1.0f + vOffsets[idx]/128.0f + halfV;
+			break;
+		case 2:
+			vcsVertices[i].u = 1.0f + uOffsets[idx]/256.0f + halfU;
+			vcsVertices[i].v = 0.0f + vOffsets[idx]/128.0f + halfV;
+			break;
+		case 3:
+			vcsVertices[i].u = 1.0f + uOffsets[idx]/256.0f + halfU;
+			vcsVertices[i].v = 1.0f + vOffsets[idx]/128.0f + halfV;
+			break;
+		}
+		vcsVertices[i].emissiveColor = 0xFF262626;
+	}
+
+	// First pass - render downsampled and darkened frame to buffer2
+
+	RwCameraEndUpdate(Camera);
+	RwRasterPushContext(vcsBuffer1);
+	camraster = RwCameraGetRaster(Camera);
+	RwRasterRenderScaled(camraster, &vcsRect);
+	RwRasterPopContext();
+	RwCameraSetRaster(Camera, vcsBuffer2);
+	RwCameraBeginUpdate(Camera);
+
+	tempTexture.raster = vcsBuffer1;
+	RwD3D9SetTexture(&tempTexture, 0);
+
+	RwD3D9SetVertexDeclaration(quadVertexDecl);
+
+	RwD3D9SetVertexShader(postfxVS);
+	RwD3D9SetPixelShader(radiosityPS);
+
+	radiosityColors[0] = 0x50/255.0f;
+	radiosityColors[1] = 1.0f;
+	radiosityColors[2] = 1.0f;
+	RwD3D9SetPixelShaderConstant(0, radiosityColors, 1);
+
+	int blend, srcblend, destblend;
+	RwRenderStateGet(rwRENDERSTATEVERTEXALPHAENABLE, &blend);
+	RwRenderStateGet(rwRENDERSTATESRCBLEND, &srcblend);
+	RwRenderStateGet(rwRENDERSTATEDESTBLEND, &destblend);
+
+	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)0);
+	RwD3D9SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
+	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
+	RwD3D9DrawIndexedPrimitiveUP(D3DPT_TRIANGLELIST, 0, 6, 2, vcsIndices1, vcsVertices, sizeof(QuadVertex));
+
+	// Second pass - render brightened buffer2 to buffer1 (then swap buffers)
+
+	for(int i = 0; i < 4; i++){
+		RwCameraEndUpdate(Camera);
+		RwCameraSetRaster(Camera, vcsBuffer1);
+		RwCameraBeginUpdate(Camera);
+
+		RwD3D9SetPixelShader(radiosityPS);
+		RwD3D9SetTexture(NULL, 0);
+		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)0);
+		RwD3D9DrawIndexedPrimitiveUP(D3DPT_TRIANGLELIST, 0, 6, 2, vcsIndices1, vcsVertices, sizeof(QuadVertex));
+
+		RwD3D9SetPixelShader(NULL);
+		tempTexture.raster = vcsBuffer2;
+		RwD3D9SetTexture(&tempTexture, 0);
+		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)1);
+		RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
+		RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
+		RwD3D9DrawIndexedPrimitiveUP(D3DPT_TRIANGLELIST, 0, 6*7, 2*7, vcsIndices1, vcsVertices+4, sizeof(QuadVertex));
+		RwRaster *tmp = vcsBuffer1;
+		vcsBuffer1 = vcsBuffer2;
+		vcsBuffer2 = tmp;
+	}
+
+	RwCameraEndUpdate(Camera);
+	RwCameraSetRaster(Camera, camraster);
+	RwCameraBeginUpdate(Camera);
+
+	tempTexture.raster = vcsBuffer2;
+	RwD3D9SetTexture(&tempTexture, 0);
+	RwD3D9DrawIndexedPrimitiveUP(D3DPT_TRIANGLELIST, 0, 6, 2, vcsIndices1, vcsVertices, sizeof(QuadVertex));
+
+	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)blend);
+	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)srcblend);
+	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)destblend);
+	RwD3D9SetVertexShader(NULL);
+}
+
+void
 CPostEffects__Radiosity_PS2(int col1, int nSubdivs, int unknown, int col2)
 {
 	float radiosityColors[4];
@@ -45,6 +198,12 @@ CPostEffects__Radiosity_PS2(int col1, int nSubdivs, int unknown, int col2)
 
 	if(!config->doRadiosity)
 		return;
+
+	printf("vcsTrails: %d (%d %d)\n", config->vcsTrails, configs[0].vcsTrails, configs[1].vcsTrails);
+	if(config->vcsTrails){
+		CPostEffects__Radiosity_VCS(col1, nSubdivs, unknown, col2);
+		return;
+	}
 
 	// if size of buffer changed, create a new downsampled version
 	if(CPostEffects__pRasterFrontBuffer->width != smallFrontBuffer->width ||
@@ -322,5 +481,12 @@ CPostEffects__Init(void)
 	smallRect.y = 0;
 	smallRect.w = Camera->frameBuffer->width/4;
 	smallRect.h = Camera->frameBuffer->height/4;
+
+	vcsBuffer1 = RwRasterCreate(256, 128, CPostEffects__pRasterFrontBuffer->depth, 5);
+	vcsBuffer2 = RwRasterCreate(256, 128, CPostEffects__pRasterFrontBuffer->depth, 5);
+	vcsRect.x = 0;
+	vcsRect.y = 0;
+	vcsRect.w = 256;
+	vcsRect.h = 128;
 }
 

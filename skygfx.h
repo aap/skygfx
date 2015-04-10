@@ -29,6 +29,7 @@ struct Config {
 	RwBool downSampleRadiosity;
 	float radiosityIntensity, radiosityOffset;
 	int offLeft, offRight, offTop, offBottom;
+	RwBool vcsTrails;
 
 	float farDist, fadeDist, fadeInvDist, densityMult;
 
