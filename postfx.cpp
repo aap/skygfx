@@ -218,6 +218,11 @@ CPostEffects__Radiosity_VCS(int col1, int nSubdivs, int unknown, int col2)
 	RwD3D9DrawIndexedPrimitiveUP(D3DPT_TRIANGLELIST, 0, 6, 2, vcsIndices1, vcsVertices, sizeof(QuadVertex));
 
 	// Second pass - render brightened buffer2 to buffer1 (then swap buffers)
+	RwD3D9SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE);
+	RwD3D9SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+	RwD3D9SetTextureStageState(0, D3DTSS_COLORARG2, D3DTA_DIFFUSE);
+	RwD3D9SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_DISABLE);
+	RwD3D9SetTextureStageState(1, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
 
 	for(int i = 0; i < 4; i++){
 		RwCameraEndUpdate(Camera);
