@@ -181,16 +181,9 @@ grassRenderCallback(RpAtomic *atomic)
 	if(!config->backfaceCull)
 		RwRenderStateSet(rwRENDERSTATECULLMODE, (void*)rwCULLMODECULLNONE);
 
-	if(0 && config->dualPassDefault){
-		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)128);
+	if(config->dualPassDefault)
 		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
-		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONGREATEREQUAL);
-		ret = AtomicDefaultRenderCallBack(atomic);
-		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
-		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONLESS);
-		ret = AtomicDefaultRenderCallBack(atomic);
-	}else
-		ret = AtomicDefaultRenderCallBack(atomic);
+	ret = AtomicDefaultRenderCallBack(atomic);
 
 	RwRenderStateSet(rwRENDERSTATECULLMODE, (void*)cullmode);
 	gpCurrentShaderForDefaultCallbacks = NULL;
@@ -458,8 +451,7 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		AllocConsole();
 		freopen("CONIN$", "r", stdin);
 		freopen("CONOUT$", "w", stdout);
-		freopen("CONOUT$", "w", stderr);
-*/
+		freopen("CONOUT$", "w", stderr);*/
 
 		IsAlreadyRunning = (BOOL(*)())(*(int*)(0x74872D+1) + 0x74872D + 5);
 		MemoryVP::InjectHook(0x74872D, InjectDelayedPatches);
