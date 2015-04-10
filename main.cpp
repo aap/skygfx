@@ -143,6 +143,8 @@ readIni(void)
 	GetPrivateProfileString("SkyGfx", "radiosityIntensity", "2.0", tmp, sizeof(tmp), modulePath);
 	config->radiosityIntensity = atof(tmp);
 	config->vcsTrails = GetPrivateProfileInt("SkyGfx", "vcsTrails", FALSE, modulePath) != FALSE;
+	config->trailsLimit = GetPrivateProfileInt("SkyGfx", "trailsLimit", 80, modulePath);
+	config->trailsIntensity = GetPrivateProfileInt("SkyGfx", "trailsIntensity", 38, modulePath);
 	disableHQShadows = GetPrivateProfileInt("SkyGfx", "disableHQShadows", FALSE, modulePath) != FALSE;
 	disableClouds = GetPrivateProfileInt("SkyGfx", "disableClouds", FALSE, modulePath) != FALSE;
 	uglyWheelHack = GetPrivateProfileInt("SkyGfx", "uglyWheelHack", FALSE, modulePath) != FALSE;
@@ -452,8 +454,7 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		AllocConsole();
 		freopen("CONIN$", "r", stdin);
 		freopen("CONOUT$", "w", stdout);
-		freopen("CONOUT$", "w", stderr);
-*/
+		freopen("CONOUT$", "w", stderr); */
 
 		IsAlreadyRunning = (BOOL(*)())(*(int*)(0x74872D+1) + 0x74872D + 5);
 		MemoryVP::InjectHook(0x74872D, InjectDelayedPatches);
