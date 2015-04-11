@@ -13,7 +13,7 @@ struct QuadVertex
 
 void *postfxVS, *colorFilterPS, *radiosityPS;
 void *quadVertexDecl;
-RwRect smallRect;
+RwRect smallRect, reflRect;
 static QuadVertex quadVertices[4];
 RwRaster *target1, *target2;
 
@@ -507,6 +507,13 @@ CPostEffects__ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 			keystate = false;
 	}
 
+
+	RwCameraEndUpdate(Camera);
+	RwRasterPushContext(reflTex);
+	RwRasterRenderScaled(RwCameraGetRaster(Camera), &reflRect);
+	RwRasterPopContext();
+	RwCameraBeginUpdate(Camera);
+
 	if(config->colorFilter == 0)
 		CPostEffects__ColourFilter_PS2(rgb1, rgb2);
 	else if(config->colorFilter == 1)
@@ -553,7 +560,15 @@ CPostEffects__Init(void)
 	smallRect.w = Camera->frameBuffer->width/4;
 	smallRect.h = Camera->frameBuffer->height/4;
 
+	reflTex = RwRasterCreate(128,
+	                         128,
+	                         CPostEffects__pRasterFrontBuffer->depth, 5);
 	vcsRect.x = 0;
 	vcsRect.y = 0;
+
+	reflRect.x = 0;
+	reflRect.y = 0;
+	reflRect.w = 128;
+	reflRect.h = 128;
 }
 

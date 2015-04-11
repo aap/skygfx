@@ -117,6 +117,7 @@ extern char &doRadiosity;
 
 extern RwTexture *&gpWhiteTexture;
 extern void *vehiclePipePS;
+extern RwRaster *reflTex;
 
 extern void **rwengine;
 extern RwInt32 &CCustomCarEnvMapPipeline__ms_envMapPluginOffset;

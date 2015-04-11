@@ -120,7 +120,7 @@ readIni(void)
 	config->fixGrassPlacement = GetPrivateProfileInt("SkyGfx", "fixGrassPlacement", TRUE, modulePath) != FALSE;
 	oneGrassModel = GetPrivateProfileInt("SkyGfx", "oneGrassModel", TRUE, modulePath) != FALSE;
 	config->backfaceCull = GetPrivateProfileInt("SkyGfx", "backfaceCull", FALSE, modulePath) != FALSE;
-	config->vehiclePipe = GetPrivateProfileInt("SkyGfx", "vehiclePipe", 0, modulePath) % 3;
+	config->vehiclePipe = GetPrivateProfileInt("SkyGfx", "vehiclePipe", 0, modulePath) % 4;
 	tmpint = GetPrivateProfileInt("SkyGfx", "worldPipe", 0, modulePath);
 	config->worldPipe = tmpint >= 0 ? tmpint % 3 : -1;
 	config->colorFilter = GetPrivateProfileInt("SkyGfx", "colorFilter", 0, modulePath) % 3;
@@ -487,6 +487,8 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 
 //		MemoryVP::InjectHook(0x6EF8B9, waterZwrite, PATCH_JUMP);
 //		MemoryVP::Nop(0x6EF8BE, 2);
+
+//		MemoryVP::Nop(0x53DFDD, 5);
 	}
 
 	return TRUE;
