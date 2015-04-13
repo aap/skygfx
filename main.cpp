@@ -196,9 +196,11 @@ grassRenderCallback(RpAtomic *atomic)
 
 RpAtomic *myDefaultCallback(RpAtomic *atomic)
 {
+	static RwRect reflRect = { 0, 0, 128, 128 };
 	RxPipeline *pipe;
 	int zwrite, alphatest, alpharef;
 	int dodual = 0;
+	int detach = 0;
 
 	pipe = atomic->pipeline;
 //	if(GetAsyncKeyState(VK_F8) & 0x8000)
@@ -210,6 +212,17 @@ RpAtomic *myDefaultCallback(RpAtomic *atomic)
 			dodual = 1;
 	}else if(pipe == skinPipe && config->dualPassPed)
 		dodual = 1;
+//	if(pipe == CCustomCarEnvMapPipeline__ObjPipeline && !reflTexDone){
+	if(pipe == skinPipe && !reflTexDone){
+		if(config->vehiclePipe == 3){
+			RwCameraEndUpdate(Camera);
+			RwRasterPushContext(reflTex);
+			RwRasterRenderScaled(RwCameraGetRaster(Camera), &reflRect);
+			RwRasterPopContext();
+			RwCameraBeginUpdate(Camera);
+		}
+		reflTexDone = TRUE;
+	}
 	if(dodual){
 		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, (void*)&alphatest);
 		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)&alpharef);
@@ -222,9 +235,9 @@ RpAtomic *myDefaultCallback(RpAtomic *atomic)
 		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
 		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphatest);
 		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)alpharef);
-		return pipe ? atomic : NULL;
 	}else
-		return RxPipelineExecute(pipe, atomic, 1) ? atomic : NULL;
+		pipe = RxPipelineExecute(pipe, atomic, 1);
+	return pipe ? atomic : NULL;
 }
 
 int tmpintensity;
@@ -381,6 +394,15 @@ CPlantMgr_Initialise(void)
 	return ret;
 }
 
+WRAPPER void CRenderer__RenderEverythingBarRoads_orig(void) { EAXJMP(0x553AA0); }
+
+void CRenderer__RenderEverythingBarRoads(void)
+{
+	reflTexDone = FALSE;
+	CRenderer__RenderEverythingBarRoads_orig();
+	reflTexDone = TRUE;
+}
+
 static BOOL (*IsAlreadyRunning)();
 
 BOOL
@@ -440,6 +462,69 @@ InjectDelayedPatches()
 	return TRUE;
 }
 
+
+void __declspec(naked)
+CPointLights__AddLight_original(char type, float x, float y, float z, float x_dir, float y_dir, float z_dir, float radius, float r, float g, float b, char fogType, char generateExtraShadows, void *attachedTo)
+{
+	_asm{
+		mov	ecx, dword ptr ds:[0xB6F03C]
+		push	0x7000E6
+		retn
+	}
+}
+
+void
+CPointLights__AddLight(char type, float x, float y, float z, float x_dir, float y_dir, float z_dir, float radius, float r, float g, float b, char fogType, char generateExtraShadows, void *attachedTo)
+{
+//	CPointLights__AddLight_original(type, x, y, z, x_dir, y_dir, z_dir, radius, 255.0f, 128.0f, 0.0f, fogType, generateExtraShadows, attachedTo);
+	CPointLights__AddLight_original(type, x, y, z, x_dir, y_dir, z_dir, radius, r, g, b, fogType, generateExtraShadows, attachedTo);
+}
+
+WRAPPER void
+CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect_orig(float a1, float a2, float a3, float a4, float a5, unsigned __int8 r, unsigned __int8 g, unsigned __int8 b, __int16 a9, int a10, float a11, char a12) { EAXJMP(0x70E780); }
+
+
+void
+CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect(float a1, float a2, float a3, float a4, float a5, unsigned __int8 r, unsigned __int8 g, unsigned __int8 b, __int16 a9, int a10, float a11, char a12)
+{
+//	printf("%d %d %d - %d > %d %d %d\n", r, g, b, a9, r*a9, g*a9, b*a9);
+//	r = g = b = 255;
+	r = g = b = 14;
+	a9 = 256;
+	CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect_orig(a1, a2, a3, a4, a5, r, g, b, a9, a10, a11, a12);
+}
+
+WRAPPER void CPointLights__RenderFogEffect_orig(void) { EAXJMP(0x7002D0); }
+
+/*
+void *fogShader;
+int doOverride;
+void *overridePS;
+
+void _rwD3D9SetPixelShader_override(void *shader)
+{
+	if(doOverride);
+		_rwD3D9SetPixelShader(doOverride ? overridePS : shader);
+}
+
+void
+CPointLights__RenderFogEffect(void)
+{
+	if(fogShader == NULL){
+		HRSRC resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_FOGPS), RT_RCDATA);
+		RwUInt32 *shader = (RwUInt32*)LoadResource(dllModule, resource);
+		RwD3D9CreatePixelShader(shader, &fogShader);
+		FreeResource(shader);
+	}
+
+//	doOverride = 1;
+//	overridePS = fogShader;
+	CPointLights__RenderFogEffect_orig();
+//	doOverride = 0;
+//	RwD3D9SetPixelShader(NULL);
+}
+*/
+
 BOOL WINAPI
 DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 {
@@ -450,11 +535,11 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 			return FALSE;
 		dllModule = hInst;
 
-/*		// only with /MD
-		AllocConsole();
+/*		AllocConsole();
 		freopen("CONIN$", "r", stdin);
 		freopen("CONOUT$", "w", stdout);
-		freopen("CONOUT$", "w", stderr); */
+		freopen("CONOUT$", "w", stderr);
+*/
 
 		IsAlreadyRunning = (BOOL(*)())(*(int*)(0x74872D+1) + 0x74872D + 5);
 		MemoryVP::InjectHook(0x74872D, InjectDelayedPatches);
@@ -485,10 +570,20 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		// fix speedfx
 		MemoryVP::InjectHook(0x704E8A, SpeedFX_Fix);
 
+		MemoryVP::InjectHook(0x53DFDD, CRenderer__RenderEverythingBarRoads);
+		MemoryVP::InjectHook(0x53DD27, CRenderer__RenderEverythingBarRoads); // unused?
+
+///		MemoryVP::InjectHook(0x7000E0, CPointLights__AddLight, PATCH_JUMP);
+//		MemoryVP::InjectHook(0x53E21D, CPointLights__RenderFogEffect);
+//		MemoryVP::InjectHook(0x7FB824, _rwD3D9SetPixelShader_override);
+
+//		MemoryVP::InjectHook(0x700817, CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect);
+///		MemoryVP::InjectHook(0x700B6B, CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect);
+
 //		MemoryVP::InjectHook(0x6EF8B9, waterZwrite, PATCH_JUMP);
 //		MemoryVP::Nop(0x6EF8BE, 2);
 
-//		MemoryVP::Nop(0x53DFDD, 5);
+//		MemoryVP::Nop(0x53E21D, 5);
 	}
 
 	return TRUE;

@@ -3,7 +3,6 @@
 static void *vehiclePipeVS;
 void *vehiclePipePS;
 static void *vcsReflVS, *vcsReflPS;
-RwRaster *reflTex;
 
 enum {
 	LOC_World = 0,
@@ -304,6 +303,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_VCS(RwResEntry *repEntry, void *obj
 	_rwD3D9VSGetInverseWorldMatrix((void *)&worldITMat);
 	RwD3D9SetVertexShaderConstant(LOC_WorldIT,(void*)&worldITMat,4);
 
+	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
 	tempTexture.raster = reflTex;
 
 	noRefl = CVisibilityPlugins__GetAtomicId(atomic) & 0x6000;

@@ -104,9 +104,9 @@ void D3D9Render(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instan
 RpAtomic *CCarFXRenderer__CustomCarPipeClumpSetup(RpAtomic *atomic, void *data);
 
 #define RwEngineInstance (*rwengine)
-//void *&RwEngineInstance = *(void**)0xC97B24;
 extern RsGlobalType *RsGlobal;
 extern IDirect3DDevice9 *&d3d9device;
+extern RwCamera *&Camera;
 extern RpLight *&pAmbient;
 extern RpLight *&pDirect;
 extern RpLight **pExtraDirectionals;
@@ -117,6 +117,7 @@ extern char &doRadiosity;
 
 extern RwTexture *&gpWhiteTexture;
 extern void *vehiclePipePS;
+extern RwBool reflTexDone;
 extern RwRaster *reflTex;
 
 extern void **rwengine;
@@ -128,7 +129,7 @@ extern RwInt32 &CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset;
 extern RwReal &CCustomBuildingDNPipeline__m_fDNBalanceParam;
 
 extern int &dword_C02C20, &dword_C9BC60;
-extern RxPipeline *&skinPipe;
+extern RxPipeline *&skinPipe, *&CCustomCarEnvMapPipeline__ObjPipeline;
 
 // reversed
 void D3D9RenderNotLit(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData);

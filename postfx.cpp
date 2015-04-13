@@ -13,7 +13,7 @@ struct QuadVertex
 
 void *postfxVS, *colorFilterPS, *radiosityPS;
 void *quadVertexDecl;
-RwRect smallRect, reflRect;
+RwRect smallRect;
 static QuadVertex quadVertices[4];
 RwRaster *target1, *target2;
 
@@ -31,7 +31,6 @@ RwImVertexIndex vcsIndices1[] = {
 
 static RwImVertexIndex* quadIndices = (RwImVertexIndex*)0x8D5174;
 RwRaster *&CPostEffects__pRasterFrontBuffer = *(RwRaster**)0xC402D8;
-RwCamera *&Camera = *(RwCamera**)0xC1703C;
 
 WRAPPER void SpeedFX(float) { EAXJMP(0x7030A0); }
 
@@ -205,13 +204,15 @@ CPostEffects__Radiosity_VCS(int col1, int nSubdivs, int unknown, int col2)
 	radiosityColors[2] = 1.0f;
 	RwD3D9SetPixelShaderConstant(0, radiosityColors, 1);
 
-	int blend, srcblend, destblend, depthtest;
-	RwRenderStateGet(rwRENDERSTATEZTESTENABLE, &depthtest);
+	int blend, srcblend, destblend, ztest, zwrite;
+	RwRenderStateGet(rwRENDERSTATEZTESTENABLE, &ztest);
+	RwRenderStateGet(rwRENDERSTATEZWRITEENABLE, &zwrite);
 	RwRenderStateGet(rwRENDERSTATEVERTEXALPHAENABLE, &blend);
 	RwRenderStateGet(rwRENDERSTATESRCBLEND, &srcblend);
 	RwRenderStateGet(rwRENDERSTATEDESTBLEND, &destblend);
 
 	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)FALSE);
+	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
 	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)0);
 	RwD3D9SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
 	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
@@ -254,7 +255,8 @@ CPostEffects__Radiosity_VCS(int col1, int nSubdivs, int unknown, int col2)
 	RwD3D9SetTexture(&tempTexture, 0);
 	RwD3D9DrawIndexedPrimitiveUP(D3DPT_TRIANGLELIST, 0, 6, 2, vcsIndices1, vcsVertices+4, sizeof(QuadVertex));
 
-	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)depthtest);
+	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)ztest);
+	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)zwrite);
 	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)blend);
 	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)srcblend);
 	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)destblend);
@@ -507,13 +509,6 @@ CPostEffects__ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 			keystate = false;
 	}
 
-
-	RwCameraEndUpdate(Camera);
-	RwRasterPushContext(reflTex);
-	RwRasterRenderScaled(RwCameraGetRaster(Camera), &reflRect);
-	RwRasterPopContext();
-	RwCameraBeginUpdate(Camera);
-
 	if(config->colorFilter == 0)
 		CPostEffects__ColourFilter_PS2(rgb1, rgb2);
 	else if(config->colorFilter == 1)
@@ -565,10 +560,5 @@ CPostEffects__Init(void)
 	                         CPostEffects__pRasterFrontBuffer->depth, 5);
 	vcsRect.x = 0;
 	vcsRect.y = 0;
-
-	reflRect.x = 0;
-	reflRect.y = 0;
-	reflRect.w = 128;
-	reflRect.h = 128;
 }
 

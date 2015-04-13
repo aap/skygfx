@@ -2,6 +2,7 @@
 
 RsGlobalType *RsGlobal = (RsGlobalType*)0xC17040;
 IDirect3DDevice9 *&d3d9device = *(IDirect3DDevice9**)0xC97C28;
+RwCamera *&Camera = *(RwCamera**)0xC1703C;
 RpLight *&pAmbient = *(RpLight**)0xC886E8;
 RpLight *&pDirect = *(RpLight**)0xC886EC;
 RpLight **pExtraDirectionals = (RpLight**)0xC886F0;
@@ -11,6 +12,8 @@ D3DLIGHT9 &gCarEnvMapLight = *(D3DLIGHT9*)0xC02CB0;
 char &doRadiosity = *(char*)0xC402CC;
 
 RwTexture *&gpWhiteTexture = *(RwTexture**)0xB4E3EC;
+RwBool reflTexDone;
+RwRaster *reflTex;
 
 void **rwengine = *(void***)0x58FFC0;
 RwInt32 &CCustomCarEnvMapPipeline__ms_envMapPluginOffset = *(RwInt32*)0x8D12C4;
@@ -22,6 +25,7 @@ RwReal &CCustomBuildingDNPipeline__m_fDNBalanceParam = *(float*)0x8D12C0;
 int &dword_C02C20 = *(int*)0xC02C20;
 int &dword_C9BC60 = *(int*)0xC9BC60;
 RxPipeline *&skinPipe = *(RxPipeline**)0xC978C4;
+RxPipeline *&CCustomCarEnvMapPipeline__ObjPipeline = *(RxPipeline**)0xC02D24;
 
 WRAPPER RwMatrix *RwFrameGetLTM(RwFrame * frame) { EAXJMP(0x7F0990); }
 WRAPPER RpMaterial *RpMaterialSetTexture(RpMaterial *mat, RwTexture *tex) { EAXJMP(0x74DBC0); }
@@ -67,6 +71,7 @@ WRAPPER RwUInt32 _rpD3D9VertexDeclarationInstV3d(RwUInt32 type, RwUInt8 *mem, co
 WRAPPER RwUInt32 _rpD3D9VertexDeclarationInstV2d(RwUInt32 type, RwUInt8 *mem, const RwV2d *src,
 		RwInt32 numVerts, RwUInt32 stride) { EAXJMP(0x7544E0) };
 WRAPPER RwBool _rpD3D9VertexDeclarationInstColor(RwUInt8 *mem, const RwRGBA *color, RwInt32 numVerts, RwUInt32 stride) { EAXJMP(0x754AE0); };
+WRAPPER RwBool RwD3D9SetRenderTarget(RwUInt32 index, RwRaster *raster) { EAXJMP(0x7F9E90); };
 
 WRAPPER void _rxPipelineDestroy(RxPipeline * Pipeline) { EAXJMP(0x805820); }
 WRAPPER RxPipeline *RxPipelineCreate(void) { EAXJMP(0x8057B0); }
