@@ -79,6 +79,17 @@ SetCloseFarAlphaDist(float close, float far)
 	*(float*)0x8D132C = config->farDist;
 }
 
+void
+resetRadiosityValues(void)
+{
+	CPostEffects__m_RadiosityFilterPasses = config->radiosityFilterPasses;
+	CPostEffects__m_RadiosityRenderPasses = config->radiosityRenderPasses;
+	CPostEffects__m_RadiosityIntensityLimit = config->radiosityIntensityLimit;
+	CPostEffects__m_RadiosityIntensity = config->radiosityIntensity;
+	CPostEffects__m_RadiosityFilterUCorrection = config->radiosityFilterUCorrection;
+	CPostEffects__m_RadiosityFilterVCorrection = config->radiosityFilterVCorrection;
+}
+
 int
 readhex(char *str)
 {
@@ -140,8 +151,16 @@ readIni(void)
 	config->doRadiosity = tmpint == 4000 ? original_bRadiosity : tmpint;	// saved value from stream.ini
 	config->downSampleRadiosity = GetPrivateProfileInt("SkyGfx", "downSampleRadiosity", TRUE, modulePath) != FALSE;
 	config->radiosityOffset = GetPrivateProfileInt("SkyGfx", "radiosityOffset", 16, modulePath);
-	GetPrivateProfileString("SkyGfx", "radiosityIntensity", "2.0", tmp, sizeof(tmp), modulePath);
-	config->radiosityIntensity = atof(tmp);
+//	GetPrivateProfileString("SkyGfx", "radiosityIntensity", "2.0", tmp, sizeof(tmp), modulePath);
+//	config->radiosityIntensity = atof(tmp);
+
+	config->radiosityFilterPasses = GetPrivateProfileInt("SkyGfx", "radiosityFilterPasses", 2, modulePath);
+	config->radiosityRenderPasses = GetPrivateProfileInt("SkyGfx", "radiosityRenderPasses", 1, modulePath);
+	config->radiosityIntensityLimit = GetPrivateProfileInt("SkyGfx", "radiosityIntensityLimit", 0xDC, modulePath);
+	config->radiosityIntensity = GetPrivateProfileInt("SkyGfx", "radiosityIntensity", 0x23, modulePath);
+	config->radiosityFilterUCorrection = GetPrivateProfileInt("SkyGfx", "radiosityFilterUCorrection", 2, modulePath);
+	config->radiosityFilterVCorrection = GetPrivateProfileInt("SkyGfx", "radiosityFilterVCorrection", 2, modulePath);
+
 	config->vcsTrails = GetPrivateProfileInt("SkyGfx", "vcsTrails", FALSE, modulePath) != FALSE;
 	config->trailsLimit = GetPrivateProfileInt("SkyGfx", "trailsLimit", 80, modulePath);
 	config->trailsIntensity = GetPrivateProfileInt("SkyGfx", "trailsIntensity", 38, modulePath);
@@ -348,9 +367,10 @@ readIniAndCopy(void)
 	doRadiosity = 1;
 	readIni();
 	configs[1] = configs[0];
+	resetRadiosityValues();
 }
 
-// load asi ini again after having read stream ini as we need no know radiosity settings
+// load asi ini again after having read stream ini as we need to know radiosity settings
 void __declspec(naked)
 afterStreamIni(void)
 {
@@ -489,8 +509,8 @@ CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect(float a1, float a2, float a3, 
 {
 //	printf("%d %d %d - %d > %d %d %d\n", r, g, b, a9, r*a9, g*a9, b*a9);
 //	r = g = b = 255;
-	r = g = b = 14;
-	a9 = 256;
+///	r = g = b = 14;
+///	a9 = 256;
 	CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect_orig(a1, a2, a3, a4, a5, r, g, b, a9, a10, a11, a12);
 }
 
@@ -538,8 +558,7 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 /*		AllocConsole();
 		freopen("CONIN$", "r", stdin);
 		freopen("CONOUT$", "w", stdout);
-		freopen("CONOUT$", "w", stderr);
-*/
+		freopen("CONOUT$", "w", stderr);*/
 
 		IsAlreadyRunning = (BOOL(*)())(*(int*)(0x74872D+1) + 0x74872D + 5);
 		MemoryVP::InjectHook(0x74872D, InjectDelayedPatches);

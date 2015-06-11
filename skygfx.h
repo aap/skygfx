@@ -27,7 +27,9 @@ struct Config {
 	RwBool scaleOffsets;
 	RwBool doRadiosity;
 	RwBool downSampleRadiosity;
-	float radiosityIntensity, radiosityOffset;
+	float radiosityOffset;
+	int radiosityFilterPasses, radiosityRenderPasses, radiosityIntensityLimit;
+	int radiosityIntensity, radiosityFilterUCorrection, radiosityFilterVCorrection;
 	int offLeft, offRight, offTop, offBottom;
 	RwBool vcsTrails;
 	int trailsLimit, trailsIntensity;
@@ -100,6 +102,7 @@ void CPostEffects__ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2);
 void CPostEffects__Init(void);
 void readIni(void);
 void SetCloseFarAlphaDist(float close, float far);
+void resetRadiosityValues(void);
 void D3D9Render(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData);
 RpAtomic *CCarFXRenderer__CustomCarPipeClumpSetup(RpAtomic *atomic, void *data);
 
@@ -130,6 +133,13 @@ extern RwReal &CCustomBuildingDNPipeline__m_fDNBalanceParam;
 
 extern int &dword_C02C20, &dword_C9BC60;
 extern RxPipeline *&skinPipe, *&CCustomCarEnvMapPipeline__ObjPipeline;
+
+extern int &CPostEffects__m_RadiosityFilterPasses;
+extern int &CPostEffects__m_RadiosityRenderPasses;
+extern int &CPostEffects__m_RadiosityIntensityLimit;
+extern int &CPostEffects__m_RadiosityIntensity;
+extern int &CPostEffects__m_RadiosityFilterUCorrection;
+extern int &CPostEffects__m_RadiosityFilterVCorrection;
 
 // reversed
 void D3D9RenderNotLit(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData);

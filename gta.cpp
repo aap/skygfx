@@ -27,6 +27,13 @@ int &dword_C9BC60 = *(int*)0xC9BC60;
 RxPipeline *&skinPipe = *(RxPipeline**)0xC978C4;
 RxPipeline *&CCustomCarEnvMapPipeline__ObjPipeline = *(RxPipeline**)0xC02D24;
 
+int &CPostEffects__m_RadiosityFilterPasses = *(int*)0x8D510C;
+int &CPostEffects__m_RadiosityRenderPasses = *(int*)0x8D5110;
+int &CPostEffects__m_RadiosityIntensityLimit = *(int*)0x8D5114;
+int &CPostEffects__m_RadiosityIntensity = *(int*)0x8D5118;
+int &CPostEffects__m_RadiosityFilterUCorrection = *(int*)0x8D511C;
+int &CPostEffects__m_RadiosityFilterVCorrection = *(int*)0x8D5120;
+
 WRAPPER RwMatrix *RwFrameGetLTM(RwFrame * frame) { EAXJMP(0x7F0990); }
 WRAPPER RpMaterial *RpMaterialSetTexture(RpMaterial *mat, RwTexture *tex) { EAXJMP(0x74DBC0); }
 WRAPPER RwRaster *RwRasterCreate(RwInt32 width, RwInt32 height, RwInt32 depth, RwInt32 flags) { EAXJMP(0x7FB230); }

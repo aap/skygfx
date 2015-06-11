@@ -11,10 +11,18 @@ struct QuadVertex
 	RwReal      u1, v1;
 };
 
+struct ScreenVertex
+{
+	RwReal      x, y, z;
+	RwReal      rhw;
+	RwReal      u, v;
+};
+
 void *postfxVS, *colorFilterPS, *radiosityPS;
-void *quadVertexDecl;
+void *quadVertexDecl, *screenVertexDecl;
 RwRect smallRect;
 static QuadVertex quadVertices[4];
+static ScreenVertex screenVertices[4];
 RwRaster *target1, *target2;
 
 static QuadVertex vcsVertices[24];
@@ -27,6 +35,10 @@ RwImVertexIndex vcsIndices1[] = {
 	8, 9, 10, 9, 10, 11,
 		12, 13, 10, 13, 10, 11,
 	12, 13, 14, 13, 14, 15,
+};
+
+RwImVertexIndex radiosityIndices[] = {
+	0, 1, 2, 1, 2, 3
 };
 
 static RwImVertexIndex* quadIndices = (RwImVertexIndex*)0x8D5174;
@@ -263,99 +275,148 @@ CPostEffects__Radiosity_VCS(int col1, int nSubdivs, int unknown, int col2)
 	RwD3D9SetVertexShader(NULL);
 }
 
+WRAPPER void CPostEffects__Radiosity(int intensityLimit, signed int filterPasses, signed int renderPasses, int intensity) { EAXJMP(0x702080); }
+
 void
-CPostEffects__Radiosity_PS2(int col1, int nSubdivs, int unknown, int col2)
+CPostEffects__Radiosity_PS2(int intensityLimit, int filterPasses, int renderPasses, int intensity)
 {
 	int width, height;
+	RwRaster *buffer1, *buffer2;
+	float texScale;
 	float radiosityColors[4];
 	RwTexture tempTexture;
+
+//	*(int*)0xC40314 = RsGlobal->MaximumWidth;
+//	*(int*)0xC40318 = RsGlobal->MaximumHeight;
+//	*(char*)0x8D510B = 0;
+//	CPostEffects__Radiosity(intensityLimit, 2, 4, intensity);
+//	return;
 
 	if(!config->doRadiosity)
 		return;
 
 	if(config->vcsTrails){
-		CPostEffects__Radiosity_VCS(col1, nSubdivs, unknown, col2);
+		CPostEffects__Radiosity_VCS(intensityLimit, filterPasses, renderPasses, intensity);
 		return;
 	}
 
-	width = smallRect.w = Camera->frameBuffer->width / (config->downSampleRadiosity ? 4 : 1);
-	height = smallRect.h = Camera->frameBuffer->height / (config->downSampleRadiosity ? 4 : 1);
+	width = RsGlobal->MaximumWidth;
+	height = RsGlobal->MaximumHeight;
 
-	if(target1->width < width || target1->height < height){
+	if(target1->width < width || target2->width < width ||
+	   target1->height < height || target2->height < height || 
+	   target1->width != target2->width || target1->height != target2->height){
 		int width2 = 1, height2 = 1;
 		while(width2 < width) width2 <<= 1;
 		while(height2 < height) height2 <<= 1;
 		RwRasterDestroy(target1);
 		target1 = RwRasterCreate(width2, height2, CPostEffects__pRasterFrontBuffer->depth, 5);
+		RwRasterDestroy(target2);
+		target2 = RwRasterCreate(width2, height2, CPostEffects__pRasterFrontBuffer->depth, 5);
 	}
+	buffer1 = target1;
+	buffer2 = target2;
 
-	float texScale;
 	RwCameraEndUpdate(Camera);
-	RwRasterPushContext(target1);
-	if(config->downSampleRadiosity){
-		texScale = 1.0f/4.0f;
-		RwRasterRenderScaled(RwCameraGetRaster(Camera), &smallRect);
-	}else{
-		texScale = 1.0f;
-		RwRasterRenderFast(RwCameraGetRaster(Camera), 0, 0);
-	}
+	RwRasterPushContext(buffer1);
+	RwRasterRenderFast(RwCameraGetRaster(Camera), 0, 0);
 	RwRasterPopContext();
-	RwCameraBeginUpdate(Camera);
-	tempTexture.raster = target1;
-	RwD3D9SetTexture(&tempTexture, 0);
 
 	float rasterWidth = RwRasterGetWidth(target1);
 	float rasterHeight = RwRasterGetHeight(target1);
-	float halfU = 0.5 / rasterWidth;
-	float halfV = 0.5 / rasterHeight;
-	float uMax = RsGlobal->MaximumWidth / rasterWidth;
-	float vMax = RsGlobal->MaximumHeight / rasterHeight;
-	float scale = config->scaleOffsets ? RsGlobal->MaximumWidth/640.0f : 1.0f;
-	float uOff = (config->radiosityOffset/16.0f)*scale * (4.0f*texScale) / rasterWidth;
-	float vOff = (config->radiosityOffset/16.0f)*scale * (4.0f*texScale) / rasterHeight;
 
-	quadVertices[0].x = 1.0f;
-	quadVertices[0].y = -1.0f;
-	quadVertices[0].z = 0.0f;
-	quadVertices[0].rhw = 1.0f;
-	quadVertices[0].u = uMax*texScale + halfU - uOff;
-	quadVertices[0].v = vMax*texScale + halfV - vOff;
+	screenVertices[0].z = 0.0f;
+	screenVertices[0].rhw = 1.0f;
+	screenVertices[1].z = 0.0f;
+	screenVertices[1].rhw = 1.0f;
+	screenVertices[2].z = 0.0f;
+	screenVertices[2].rhw = 1.0f;
+	screenVertices[3].z = 0.0f;
+	screenVertices[3].rhw = 1.0f;
 
-	quadVertices[1].x = -1.0f;
-	quadVertices[1].y = -1.0f;
-	quadVertices[1].z = 0.0f;
-	quadVertices[1].rhw = 1.0f;
-	quadVertices[1].u = 0.0f + halfU + uOff;
-	quadVertices[1].v = vMax*texScale + halfV - vOff;
+	RwD3D9SetVertexDeclaration(screenVertexDecl);
 
-	quadVertices[2].x = -1.0f;
-	quadVertices[2].y = 1.0f;
-	quadVertices[2].z = 0.0f;
-	quadVertices[2].rhw = 1.0f;
-	quadVertices[2].u = 0.0f + halfU + uOff;
-	quadVertices[2].v = 0.0f + halfV + vOff;
+	RwD3D9SetVertexShader(NULL);
+	RwD3D9SetPixelShader(NULL);
 
-	quadVertices[3].x = 1.0f;
-	quadVertices[3].y = 1.0f;
-	quadVertices[3].z = 0.0f;
-	quadVertices[3].rhw = 1.0f;
-	quadVertices[3].u = uMax*texScale + halfU - uOff;
-	quadVertices[3].v = 0.0f + halfV + vOff;
-
-	RwD3D9SetVertexDeclaration(quadVertexDecl);
-
-	RwD3D9SetVertexShader(postfxVS);
-	RwD3D9SetPixelShader(radiosityPS);
-
-	radiosityColors[0] = col1/255.0f;
-	radiosityColors[1] = col2/255.0f;
-	radiosityColors[2] = config->radiosityIntensity;
-	RwD3D9SetPixelShaderConstant(0, radiosityColors, 1);
-
-	int blend, srcblend, destblend;
+	int blend, srcblend, destblend, ztest;
 	RwRenderStateGet(rwRENDERSTATEVERTEXALPHAENABLE, &blend);
 	RwRenderStateGet(rwRENDERSTATESRCBLEND, &srcblend);
 	RwRenderStateGet(rwRENDERSTATEDESTBLEND, &destblend);
+	RwRenderStateGet(rwRENDERSTATEZTESTENABLE, &ztest);
+
+	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)0);
+	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
+	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDZERO);
+	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)0);
+	RwD3D9SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
+
+	RwD3D9SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
+	RwD3D9SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+	RwD3D9SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
+	RwD3D9SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
+
+	screenVertices[0].x = 0.0f;
+	screenVertices[0].y = 0.0f;
+	screenVertices[0].u = (config->radiosityFilterUCorrection + 0.5f) / rasterWidth;
+	screenVertices[0].v = (config->radiosityFilterVCorrection + 0.5f) / rasterHeight;
+	screenVertices[2].x = screenVertices[0].x;
+	screenVertices[1].y = screenVertices[0].y;
+	screenVertices[2].u = screenVertices[0].u;
+	screenVertices[1].v = screenVertices[0].v;
+
+	for(int i = 0; i < filterPasses; i++){
+		screenVertices[3].x = width/2 + 1;
+		screenVertices[3].y = height/2 + 1;
+		screenVertices[3].u = (width + 0.5f) / rasterWidth;
+		screenVertices[3].v = (height + 0.5f) / rasterHeight;
+
+		screenVertices[1].x = screenVertices[3].x;
+		screenVertices[2].y = screenVertices[3].y;
+		screenVertices[1].u = screenVertices[3].u;
+		screenVertices[2].v = screenVertices[3].v;
+
+		width /= 2;
+		height /= 2;
+
+		RwD3D9SetRenderTarget(0, buffer2);
+		tempTexture.raster = buffer1;
+		RwD3D9SetTexture(&tempTexture, 0);
+		RwD3D9DrawIndexedPrimitiveUP(D3DPT_TRIANGLELIST, 0, 6, 2, radiosityIndices, screenVertices, sizeof(ScreenVertex));
+		RwRaster *tmp = buffer1;
+		buffer1 = buffer2;
+		buffer2 = tmp;
+	}
+
+	screenVertices[0].x = 0.0f;
+	screenVertices[0].y = 0.0f;
+	screenVertices[0].u = 0.5f / rasterWidth;
+	screenVertices[0].v = 0.5f / rasterHeight;
+
+	screenVertices[3].x = RsGlobal->MaximumWidth;
+	screenVertices[3].y = RsGlobal->MaximumHeight;
+	screenVertices[3].u = (width+0.5f) / rasterWidth;
+	screenVertices[3].v = (height+0.5f) / rasterHeight;
+
+	screenVertices[1].x = screenVertices[3].x;
+	screenVertices[2].y = screenVertices[3].y;
+	screenVertices[1].u = screenVertices[3].u;
+	screenVertices[2].v = screenVertices[3].v;
+	screenVertices[2].x = screenVertices[0].x;
+	screenVertices[1].y = screenVertices[0].y;
+	screenVertices[2].u = screenVertices[0].u;
+	screenVertices[1].v = screenVertices[0].v;
+
+	RwCameraBeginUpdate(Camera);
+	tempTexture.raster = buffer1;
+	RwD3D9SetTexture(&tempTexture, 0);
+	RwD3D9SetPixelShader(radiosityPS);
+
+	radiosityColors[0] = intensityLimit/255.0f;
+	radiosityColors[1] = (intensity/255.0f)*renderPasses;
+	radiosityColors[2] = 2.0f;
+	RwD3D9SetPixelShaderConstant(0, radiosityColors, 1);
+
 	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)1);
 	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
 	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
@@ -363,11 +424,12 @@ CPostEffects__Radiosity_PS2(int col1, int nSubdivs, int unknown, int col2)
 
 	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
 
-	RwD3D9DrawIndexedPrimitiveUP(D3DPT_TRIANGLELIST, 0, 6, 2, quadIndices, quadVertices, sizeof(QuadVertex));
+	RwD3D9DrawIndexedPrimitiveUP(D3DPT_TRIANGLELIST, 0, 6, 2, radiosityIndices, screenVertices, sizeof(ScreenVertex));
 
 	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)blend);
 	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)srcblend);
 	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)destblend);
+	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)ztest);
 
 	RwD3D9SetVertexShader(NULL);
 	RwD3D9SetPixelShader(NULL);
@@ -470,6 +532,7 @@ CPostEffects__ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 					config++;
 				else
 					config = &configs[0];
+				resetRadiosityValues();
 				SetCloseFarAlphaDist(3.0, 1234.0); // second value overriden
 			}
 		}else
@@ -486,6 +549,7 @@ CPostEffects__ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 				else
 					config = &configs[0];
 				readIni();
+				resetRadiosityValues();
 				SetCloseFarAlphaDist(3.0, 1234.0); // second value overriden
 			}
 		}else
@@ -502,6 +566,7 @@ CPostEffects__ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 				else
 					config = &configs[0];
 				readIni();
+				resetRadiosityValues();
 				ReloadPlantConfig();
 				SetCloseFarAlphaDist(3.0, 1234.0); // second value overriden
 			}
@@ -541,8 +606,15 @@ CPostEffects__Init(void)
 		{ 0, 28, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 1 },
 		D3DDECL_END()
 	};
-
 	RwD3D9CreateVertexDeclaration(vertexElements, &quadVertexDecl);
+
+	static const D3DVERTEXELEMENT9 screenVertexElements[] =
+	{
+		{ 0, 0, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITIONT, 0 },
+		{ 0, 16, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
+		D3DDECL_END()
+	};
+	RwD3D9CreateVertexDeclaration(screenVertexElements, &screenVertexDecl);
 
 	target1 = RwRasterCreate(4,
 	                         4,
