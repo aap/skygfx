@@ -61,7 +61,7 @@ SpeedFX_Fix(float fStrength)
 }
 
 void
-CPostEffects__Radiosity_VCS(int col1, int nSubdivs, int unknown, int col2)
+CPostEffects__Radiosity_VCS(int intensityLimit, int filterPasses, int renderPasses, int intensity)
 {
 	RwRaster *vcsBuffer1, *vcsBuffer2;
 	float radiosityColors[4];
@@ -71,8 +71,8 @@ CPostEffects__Radiosity_VCS(int col1, int nSubdivs, int unknown, int col2)
 	float uOffsets[] = { -1.0f, 1.0f, 0.0f, 0.0f };
 	float vOffsets[] = { 0.0f, 0.0f, -1.0f, 1.0f };
 
-	width = vcsRect.w = config->downSampleRadiosity ? RsGlobal->MaximumWidth*256/640 : RsGlobal->MaximumWidth;
-	height = vcsRect.h = config->downSampleRadiosity ? RsGlobal->MaximumHeight*128/480 : RsGlobal->MaximumHeight;
+	width = vcsRect.w = filterPasses ? RsGlobal->MaximumWidth*256/640 : RsGlobal->MaximumWidth;
+	height = vcsRect.h = filterPasses ? RsGlobal->MaximumHeight*128/480 : RsGlobal->MaximumHeight;
 
 	if(target1->width < width || target2->width < width ||
 	   target1->height < height || target2->height < height || 
@@ -98,7 +98,7 @@ CPostEffects__Radiosity_VCS(int col1, int nSubdivs, int unknown, int col2)
 	float yMax = 1.0f - 2*vMax;
 	float xOffsetScale = config->scaleOffsets ? width/256.0f : 1.0f;
 	float yOffsetScale = config->scaleOffsets ? height/128.0f : 1.0f;
-	if(config->radiosityOffset == 0.0f)
+	if(config->radiosityFilterUCorrection == 0.0f)
 		xOffsetScale = yOffsetScale = 0.0f;
 
 	vcsVertices[0].x = -1.0f;
@@ -281,8 +281,7 @@ void
 CPostEffects__Radiosity_PS2(int intensityLimit, int filterPasses, int renderPasses, int intensity)
 {
 	int width, height;
-	RwRaster *buffer1, *buffer2;
-	float texScale;
+	RwRaster *buffer1, *buffer2, *camraster;
 	float radiosityColors[4];
 	RwTexture tempTexture;
 
@@ -299,6 +298,7 @@ CPostEffects__Radiosity_PS2(int intensityLimit, int filterPasses, int renderPass
 		CPostEffects__Radiosity_VCS(intensityLimit, filterPasses, renderPasses, intensity);
 		return;
 	}
+
 
 	width = RsGlobal->MaximumWidth;
 	height = RsGlobal->MaximumHeight;
@@ -319,36 +319,41 @@ CPostEffects__Radiosity_PS2(int intensityLimit, int filterPasses, int renderPass
 
 	RwCameraEndUpdate(Camera);
 	RwRasterPushContext(buffer1);
+	camraster = RwCameraGetRaster(Camera);
 	RwRasterRenderFast(RwCameraGetRaster(Camera), 0, 0);
 	RwRasterPopContext();
+	RwCameraBeginUpdate(Camera);
 
 	float rasterWidth = RwRasterGetWidth(target1);
 	float rasterHeight = RwRasterGetHeight(target1);
+	float xOffsetScale = config->scaleOffsets ? width/640.0f : 1.0f;
+	float yOffsetScale = config->scaleOffsets ? height/480.0f : 1.0f;
 
 	screenVertices[0].z = 0.0f;
-	screenVertices[0].rhw = 1.0f;
+	screenVertices[0].rhw = 1.0f / Camera->nearPlane;
 	screenVertices[1].z = 0.0f;
-	screenVertices[1].rhw = 1.0f;
+	screenVertices[1].rhw = 1.0f / Camera->nearPlane;
 	screenVertices[2].z = 0.0f;
-	screenVertices[2].rhw = 1.0f;
+	screenVertices[2].rhw = 1.0f / Camera->nearPlane;
 	screenVertices[3].z = 0.0f;
-	screenVertices[3].rhw = 1.0f;
+	screenVertices[3].rhw = 1.0f / Camera->nearPlane;
 
 	RwD3D9SetVertexDeclaration(screenVertexDecl);
-
 	RwD3D9SetVertexShader(NULL);
 	RwD3D9SetPixelShader(NULL);
 
-	int blend, srcblend, destblend, ztest;
+	int blend, srcblend, destblend, ztest, zwrite;
 	RwRenderStateGet(rwRENDERSTATEVERTEXALPHAENABLE, &blend);
 	RwRenderStateGet(rwRENDERSTATESRCBLEND, &srcblend);
 	RwRenderStateGet(rwRENDERSTATEDESTBLEND, &destblend);
 	RwRenderStateGet(rwRENDERSTATEZTESTENABLE, &ztest);
+	RwRenderStateGet(rwRENDERSTATEZWRITEENABLE, &zwrite);
 
 	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)0);
 	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
 	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDZERO);
 	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)0);
+	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)0);
 	RwD3D9SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
 
 	RwD3D9SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
@@ -358,16 +363,16 @@ CPostEffects__Radiosity_PS2(int intensityLimit, int filterPasses, int renderPass
 
 	screenVertices[0].x = 0.0f;
 	screenVertices[0].y = 0.0f;
-	screenVertices[0].u = (config->radiosityFilterUCorrection + 0.5f) / rasterWidth;
-	screenVertices[0].v = (config->radiosityFilterVCorrection + 0.5f) / rasterHeight;
+	screenVertices[0].u = (config->radiosityFilterUCorrection*xOffsetScale + 0.5f) / rasterWidth;
+	screenVertices[0].v = (config->radiosityFilterVCorrection*yOffsetScale + 0.5f) / rasterHeight;
 	screenVertices[2].x = screenVertices[0].x;
 	screenVertices[1].y = screenVertices[0].y;
 	screenVertices[2].u = screenVertices[0].u;
 	screenVertices[1].v = screenVertices[0].v;
 
 	for(int i = 0; i < filterPasses; i++){
-		screenVertices[3].x = width/2 + 1;
-		screenVertices[3].y = height/2 + 1;
+		screenVertices[3].x = width/2 + 1*xOffsetScale;
+		screenVertices[3].y = height/2 + 1*yOffsetScale;
 		screenVertices[3].u = (width + 0.5f) / rasterWidth;
 		screenVertices[3].v = (height + 0.5f) / rasterHeight;
 
@@ -379,7 +384,11 @@ CPostEffects__Radiosity_PS2(int intensityLimit, int filterPasses, int renderPass
 		width /= 2;
 		height /= 2;
 
-		RwD3D9SetRenderTarget(0, buffer2);
+//		RwD3D9SetRenderTarget(0, buffer2);
+		RwCameraEndUpdate(Camera);
+		RwCameraSetRaster(Camera, buffer2);
+		RwCameraBeginUpdate(Camera);
+
 		tempTexture.raster = buffer1;
 		RwD3D9SetTexture(&tempTexture, 0);
 		RwD3D9DrawIndexedPrimitiveUP(D3DPT_TRIANGLELIST, 0, 6, 2, radiosityIndices, screenVertices, sizeof(ScreenVertex));
@@ -407,7 +416,10 @@ CPostEffects__Radiosity_PS2(int intensityLimit, int filterPasses, int renderPass
 	screenVertices[2].u = screenVertices[0].u;
 	screenVertices[1].v = screenVertices[0].v;
 
+	RwCameraEndUpdate(Camera);
+	RwCameraSetRaster(Camera, camraster);
 	RwCameraBeginUpdate(Camera);
+
 	tempTexture.raster = buffer1;
 	RwD3D9SetTexture(&tempTexture, 0);
 	RwD3D9SetPixelShader(radiosityPS);
@@ -420,7 +432,6 @@ CPostEffects__Radiosity_PS2(int intensityLimit, int filterPasses, int renderPass
 	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)1);
 	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
 	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
-	RwD3D9SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
 
 	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
 
@@ -430,6 +441,7 @@ CPostEffects__Radiosity_PS2(int intensityLimit, int filterPasses, int renderPass
 	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)srcblend);
 	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)destblend);
 	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)ztest);
+	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)zwrite);
 
 	RwD3D9SetVertexShader(NULL);
 	RwD3D9SetPixelShader(NULL);

@@ -149,10 +149,6 @@ readIni(void)
 	config->scaleOffsets = GetPrivateProfileInt("SkyGfx", "scaleOffsets", TRUE, modulePath) != FALSE;
 	tmpint = GetPrivateProfileInt("SkyGfx", "doRadiosity", 4000, modulePath);
 	config->doRadiosity = tmpint == 4000 ? original_bRadiosity : tmpint;	// saved value from stream.ini
-	config->downSampleRadiosity = GetPrivateProfileInt("SkyGfx", "downSampleRadiosity", TRUE, modulePath) != FALSE;
-	config->radiosityOffset = GetPrivateProfileInt("SkyGfx", "radiosityOffset", 16, modulePath);
-//	GetPrivateProfileString("SkyGfx", "radiosityIntensity", "2.0", tmp, sizeof(tmp), modulePath);
-//	config->radiosityIntensity = atof(tmp);
 
 	config->radiosityFilterPasses = GetPrivateProfileInt("SkyGfx", "radiosityFilterPasses", 2, modulePath);
 	config->radiosityRenderPasses = GetPrivateProfileInt("SkyGfx", "radiosityRenderPasses", 1, modulePath);
