@@ -209,13 +209,113 @@ grassRenderCallback(RpAtomic *atomic)
 	return ret;
 }
 
+/*
+WRAPPER RwStream *RwStreamOpen(RwStreamType, RwStreamAccessType, const void*) { EAXJMP(0x7ECEF0); }
+WRAPPER RwBool RwStreamClose(RwStream*, void*) { EAXJMP(0x7ECE20); }
+WRAPPER RwBool RwStreamFindChunk(RwStream*, RwUInt32, RwUInt32*, RwUInt32*) { EAXJMP(0x7ED2D0); }
+WRAPPER RpClump *RpClumpStreamRead(RwStream*) { EAXJMP(0x74B420); }
+WRAPPER RpClump *RpClumpStreamWrite(RpClump*, RwStream*) { EAXJMP(0x74AA10); }
+WRAPPER RwBool RpClumpDestroy(RpClump*) { EAXJMP(0x74A310); }
+WRAPPER RpClump *RpClumpClone(RpClump*) { EAXJMP(0x749F70); }
+WRAPPER RpClump *RpClumpForAllAtomics(RpClump*, RpAtomicCallBack, void*) { EAXJMP(0x749B70); }
+
+WRAPPER RwError *RwErrorGet(RwError *code) { EAXJMP(0x808880); }
+
+void __declspec(naked)
+nullsize(void)
+{
+	_asm{
+		xor	eax, eax
+		retn
+	}
+}
+
+void
+writeclump(RpClump *clump, char *path)
+{
+	RwStream *stream = RwStreamOpen(rwSTREAMFILENAME, rwSTREAMWRITE, path);
+	RpClumpStreamWrite(clump, stream);
+	RwStreamClose(stream, NULL);
+}
+
+RpClump*
+readclump(char *path)
+{
+	RwStream *stream = RwStreamOpen(rwSTREAMFILENAME, rwSTREAMREAD, path);
+	RwBool found = RwStreamFindChunk(stream, rwID_CLUMP, NULL, NULL);
+	RpClump *clump = RpClumpStreamRead(stream);
+	RwStreamClose(stream, NULL);
+	return clump;
+}
+
+WRAPPER RpAtomic *AtomicInstanceCB(RpAtomic*, void*) { EAXJMP(0x5A4380); }
+
+void
+instanceClump(RpClump *clump)
+{
+	RpClumpForAllAtomics(clump, AtomicInstanceCB, 0);
+}
+
+void
+writedffs(void)
+{
+	static int done = 0;
+	if(done)
+		return;
+
+	MemoryVP::InjectHook(0x5D6DC0, nullsize, PATCH_JUMP);
+	MemoryVP::InjectHook(0x59D0F0, nullsize, PATCH_JUMP);
+	MemoryVP::InjectHook(0x72FBC0, nullsize, PATCH_JUMP);
+
+	done++;
+	RpClump *clump = readclump("TEST\\player.dff");
+	instanceClump(clump);
+	writeclump(clump, "TEST\\player_out.dff");
+
+	RpClump *clone = RpClumpClone(clump);
+	writeclump(clone, "TEST\\clone1.dff");
+	RpClump *clone2 = RpClumpClone(clone);
+	writeclump(clone2, "TEST\\clone2.dff");
+	RpClumpDestroy(clump);
+	RpClumpDestroy(clone);
+	RpClumpDestroy(clone2);
+
+	clump = readclump("TEST\\rccam.dff");
+	instanceClump(clump);
+	writeclump(clump, "TEST\\rccam_out.dff");
+	RpClumpDestroy(clump);
+
+	clump = readclump("TEST\\cesar.dff");
+	instanceClump(clump);
+	writeclump(clump, "TEST\\cesar_out.dff");
+	RpClumpDestroy(clump);
+
+	clump = readclump("TEST\\hanger.dff");
+	instanceClump(clump);
+	writeclump(clump, "TEST\\hanger_out.dff");
+	RpClumpDestroy(clump);
+
+	clump = readclump("TEST\\bullet_.dff");
+	instanceClump(clump);
+	writeclump(clump, "TEST\\bullet_out.dff");
+	RpClumpDestroy(clump);
+
+	clump = readclump("TEST\\lae2_roads89.dff");
+	instanceClump(clump);
+	writeclump(clump, "TEST\\lae2_roads89_out.dff");
+	RpClumpDestroy(clump);
+}
+*/
+
 RpAtomic *myDefaultCallback(RpAtomic *atomic)
 {
-	static RwRect reflRect = { 0, 0, 128, 128 };
 	RxPipeline *pipe;
 	int zwrite, alphatest, alpharef;
 	int dodual = 0;
 	int detach = 0;
+
+//	if(GetAsyncKeyState(VK_F8) & 0x8000)
+//		writedffs();
 
 	pipe = atomic->pipeline;
 //	if(GetAsyncKeyState(VK_F8) & 0x8000)
@@ -232,7 +332,7 @@ RpAtomic *myDefaultCallback(RpAtomic *atomic)
 		if(config->vehiclePipe == 3){
 			RwCameraEndUpdate(Camera);
 			RwRasterPushContext(reflTex);
-			RwRasterRenderScaled(RwCameraGetRaster(Camera), &reflRect);
+			RwRasterRenderFast(RwCameraGetRaster(Camera), 0, 0);
 			RwRasterPopContext();
 			RwCameraBeginUpdate(Camera);
 		}
@@ -478,68 +578,44 @@ InjectDelayedPatches()
 	return TRUE;
 }
 
-
-void __declspec(naked)
-CPointLights__AddLight_original(char type, float x, float y, float z, float x_dir, float y_dir, float z_dir, float radius, float r, float g, float b, char fogType, char generateExtraShadows, void *attachedTo)
+struct PointLight
 {
-	_asm{
-		mov	ecx, dword ptr ds:[0xB6F03C]
-		push	0x7000E6
-		retn
-	}
-}
+	RwV3d pos;
+	RwV3d dir;
+	float radius;
+	float color[3];
+	void *attachedTo;
+	char type;
+	char fogType;
+	char generateExtraShadows;
+	char pad;
+};
 
-void
-CPointLights__AddLight(char type, float x, float y, float z, float x_dir, float y_dir, float z_dir, float radius, float r, float g, float b, char fogType, char generateExtraShadows, void *attachedTo)
-{
-//	CPointLights__AddLight_original(type, x, y, z, x_dir, y_dir, z_dir, radius, 255.0f, 128.0f, 0.0f, fogType, generateExtraShadows, attachedTo);
-	CPointLights__AddLight_original(type, x, y, z, x_dir, y_dir, z_dir, radius, r, g, b, fogType, generateExtraShadows, attachedTo);
-}
+PointLight *pointLights = (PointLight*)0xC3F0E0;
 
 WRAPPER void
-CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect_orig(float a1, float a2, float a3, float a4, float a5, unsigned __int8 r, unsigned __int8 g, unsigned __int8 b, __int16 a9, int a10, float a11, char a12) { EAXJMP(0x70E780); }
+CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect_orig(float x, float y, float z, float a4, float a5, RwUInt8 r, RwUInt8 g, RwUInt8 b, RwInt16 f, int a10, float a11, RwUInt8 alpha) { EAXJMP(0x70E780); }
 
+int currentLight;
+char *stkp;
 
 void
-CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect(float a1, float a2, float a3, float a4, float a5, unsigned __int8 r, unsigned __int8 g, unsigned __int8 b, __int16 a9, int a10, float a11, char a12)
+CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect(float x, float y, float z, float a4, float a5, RwUInt8 r, RwUInt8 g, RwUInt8 b, RwInt16 f, int a10, float a11, RwUInt8 alpha)
 {
-//	printf("%d %d %d - %d > %d %d %d\n", r, g, b, a9, r*a9, g*a9, b*a9);
-//	r = g = b = 255;
-///	r = g = b = 14;
-///	a9 = 256;
-	CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect_orig(a1, a2, a3, a4, a5, r, g, b, a9, a10, a11, a12);
+	_asm mov [currentLight], esi
+	_asm mov [stkp], ebp
+	float mult = *(float*)(stkp + 0x48);
+	currentLight /= sizeof(PointLight);
+
+	float add = pointLights[currentLight].fogType == 1 ? 0.0f : 16.0f;
+	r = mult*pointLights[currentLight].color[0]+add;
+	g = mult*pointLights[currentLight].color[1]+add;
+	b = mult*pointLights[currentLight].color[2]+add;
+	f = 0xFF;
+	CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect_orig(x, y, z, a4, a5, r, g, b, f, a10, a11, alpha);
 }
 
 WRAPPER void CPointLights__RenderFogEffect_orig(void) { EAXJMP(0x7002D0); }
-
-/*
-void *fogShader;
-int doOverride;
-void *overridePS;
-
-void _rwD3D9SetPixelShader_override(void *shader)
-{
-	if(doOverride);
-		_rwD3D9SetPixelShader(doOverride ? overridePS : shader);
-}
-
-void
-CPointLights__RenderFogEffect(void)
-{
-	if(fogShader == NULL){
-		HRSRC resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_FOGPS), RT_RCDATA);
-		RwUInt32 *shader = (RwUInt32*)LoadResource(dllModule, resource);
-		RwD3D9CreatePixelShader(shader, &fogShader);
-		FreeResource(shader);
-	}
-
-//	doOverride = 1;
-//	overridePS = fogShader;
-	CPointLights__RenderFogEffect_orig();
-//	doOverride = 0;
-//	RwD3D9SetPixelShader(NULL);
-}
-*/
 
 BOOL WINAPI
 DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
@@ -593,7 +669,7 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 //		MemoryVP::InjectHook(0x7FB824, _rwD3D9SetPixelShader_override);
 
 //		MemoryVP::InjectHook(0x700817, CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect);
-///		MemoryVP::InjectHook(0x700B6B, CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect);
+		MemoryVP::InjectHook(0x700B6B, CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect);
 
 //		MemoryVP::InjectHook(0x6EF8B9, waterZwrite, PATCH_JUMP);
 //		MemoryVP::Nop(0x6EF8BE, 2);
