@@ -540,10 +540,10 @@ CPostEffects__ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 		if(GetAsyncKeyState(config->keys[0]) & 0x8000){
 			if(!keystate){
 				keystate = true;
-				if(config == &configs[0])
-					config++;
-				else
+				if(numConfigs == 0 || config == &configs[numConfigs-1])
 					config = &configs[0];
+				else
+					config++;
 				resetRadiosityValues();
 				SetCloseFarAlphaDist(3.0, 1234.0); // second value overriden
 			}
@@ -556,11 +556,11 @@ CPostEffects__ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 		if(GetAsyncKeyState(config->keys[1]) & 0x8000){
 			if(!keystate){
 				keystate = true;
-				if(config == &configs[0])
-					config++;
+				if(numConfigs == 0)
+					readIni(0);
 				else
-					config = &configs[0];
-				readIni();
+					for(int i = 1; i <= numConfigs; i++)
+						readIni(i);
 				resetRadiosityValues();
 				SetCloseFarAlphaDist(3.0, 1234.0); // second value overriden
 			}
@@ -573,11 +573,11 @@ CPostEffects__ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 		if(GetAsyncKeyState(config->keys[2]) & 0x8000){
 			if(!keystate){
 				keystate = true;
-				if(config == &configs[0])
-					config++;
+				if(numConfigs == 0)
+					readIni(0);
 				else
-					config = &configs[0];
-				readIni();
+					for(int i = 1; i <= numConfigs; i++)
+						readIni(i);
 				resetRadiosityValues();
 				ReloadPlantConfig();
 				SetCloseFarAlphaDist(3.0, 1234.0); // second value overriden

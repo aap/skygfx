@@ -21,7 +21,7 @@ struct Config {
 	RwBool ps2Ambient, ps2ModulateWorld, ps2ModulateGrass;
 	RwBool grassAddAmbient;
 	RwBool backfaceCull;
-	RwBool dualPassWorld, dualPassDefault, dualPassVehicle, dualPassPed;
+	RwBool dualPassWorld, dualPassDefault, dualPassGrass, dualPassVehicle, dualPassPed;
 	int vehiclePipe, worldPipe;
 	int colorFilter;
 	RwBool scaleOffsets;
@@ -36,7 +36,8 @@ struct Config {
 
 	int keys[3];
 };
-extern Config *config, configs[2];
+extern int numConfigs;
+extern Config *config, configs[10];
 
 struct CustomEnvMapPipeMaterialData
 {
@@ -98,7 +99,7 @@ void SpeedFX_Fix(float fStrength);
 void CPostEffects__Radiosity_PS2(int col1, int nSubdivs, int unknown, int col2);
 void CPostEffects__ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2);
 void CPostEffects__Init(void);
-void readIni(void);
+void readIni(int n);
 void SetCloseFarAlphaDist(float close, float far);
 void resetRadiosityValues(void);
 void D3D9Render(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData);

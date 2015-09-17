@@ -91,7 +91,6 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 	// lights
 	activeLights = 0;
 	if(CVisibilityPlugins__GetAtomicId(atomic) & 0x4000){	// exploded
-		noRefl = 1;	// force it, probably not necessary, but be sure
 		RwRGBAReal c = { 0.0f, 0.0f, 0.0f, 0.0f };
 		RwD3D9SetVertexShaderConstant(LOC_sunDiff,(void*)&c,1);
 		c = { 0.18f, 0.18f, 0.18f, 0.0f };
@@ -138,7 +137,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 		else
 			RwD3D9SetTexture(gpWhiteTexture, 0);
 
-		if(hasSpec && lighting){
+		if(hasSpec && lighting && !noRefl){
 			specData = *RWPLUGINOFFSET(CustomSpecMapPipeMaterialData*, material,
 			                           CCustomCarEnvMapPipeline__ms_specularMapPluginOffset);
 			reflData.specularity = specData->specularity;

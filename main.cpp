@@ -2,7 +2,8 @@
 
 HMODULE dllModule;
 
-Config *config, configs[2];
+int numConfigs;
+Config *config, configs[10];
 bool oneGrassModel, usePCTimecyc, disableHQShadows, disableClouds, uglyWheelHack;
 int original_bRadiosity = 0;
 
@@ -99,8 +100,35 @@ readhex(char *str)
 	return n;
 }
 
+BOOL FileExists(LPCTSTR szPath)
+{
+	DWORD dwAttrib = GetFileAttributes(szPath);
+	return dwAttrib != INVALID_FILE_ATTRIBUTES && 
+	       !(dwAttrib & FILE_ATTRIBUTE_DIRECTORY);
+}
+
 void
-readIni(void)
+findInis(void)
+{
+	char modulePath[MAX_PATH];
+	GetModuleFileName(dllModule, modulePath, MAX_PATH);
+	size_t nLen = strlen(modulePath);
+	modulePath[nLen+1] = L'\0';
+	modulePath[nLen] = L'i';
+	modulePath[nLen-1] = L'n';
+	modulePath[nLen-2] = L'i';
+	modulePath[nLen-3] = L'.';
+	modulePath[nLen-4] = '1';
+
+	numConfigs = 0;
+	while(numConfigs < 9 && FileExists(modulePath)){
+		modulePath[nLen-4]++;
+		numConfigs++;
+	}
+}
+
+void
+readIni(int n)
 {
 	int tmpint;
 	char tmp[32];
@@ -108,75 +136,88 @@ readIni(void)
 
 	GetModuleFileName(dllModule, modulePath, MAX_PATH);
 	size_t nLen = strlen(modulePath);
-	modulePath[nLen-1] = L'i';
-	modulePath[nLen-2] = L'n';
-	modulePath[nLen-3] = L'i';
+	Config *c;
+	if(n > 0){
+		modulePath[nLen+1] = L'\0';
+		modulePath[nLen] = L'i';
+		modulePath[nLen-1] = L'n';
+		modulePath[nLen-2] = L'i';
+		modulePath[nLen-3] = L'.';
+		modulePath[nLen-4] = n+'0';
+		c = &configs[n-1];
+	}else{
+		modulePath[nLen-1] = L'i';
+		modulePath[nLen-2] = L'n';
+		modulePath[nLen-3] = L'i';
+		c = &configs[n];
+	}
 
 	GetPrivateProfileString("SkyGfx", "keySwitch", "0x79", tmp, sizeof(tmp), modulePath);
-	config->keys[0] = readhex(tmp);
+	c->keys[0] = readhex(tmp);
 	GetPrivateProfileString("SkyGfx", "keyReload", "0x7A", tmp, sizeof(tmp), modulePath);
-	config->keys[1] = readhex(tmp);
+	c->keys[1] = readhex(tmp);
 	GetPrivateProfileString("SkyGfx", "keyReloadPlants", "0x7B", tmp, sizeof(tmp), modulePath);
-	config->keys[2] = readhex(tmp);
+	c->keys[2] = readhex(tmp);
 
-	config->enableHotkeys = GetPrivateProfileInt("SkyGfx", "enableHotkeys", TRUE, modulePath) != FALSE;
-	config->ps2Ambient = GetPrivateProfileInt("SkyGfx", "ps2Ambient", TRUE, modulePath) != FALSE;
-	config->ps2ModulateWorld = GetPrivateProfileInt("SkyGfx", "ps2ModulateWorld", TRUE, modulePath) != FALSE;
-	config->ps2ModulateGrass = GetPrivateProfileInt("SkyGfx", "ps2ModulateGrass", TRUE, modulePath) != FALSE;
-	config->dualPassWorld = GetPrivateProfileInt("SkyGfx", "dualPassWorld", TRUE, modulePath) != FALSE;
-	config->dualPassDefault = GetPrivateProfileInt("SkyGfx", "dualPassDefault", TRUE, modulePath) != FALSE;
-	config->dualPassVehicle = GetPrivateProfileInt("SkyGfx", "dualPassVehicle", TRUE, modulePath) != FALSE;
-	config->dualPassPed = GetPrivateProfileInt("SkyGfx", "dualPassPed", TRUE, modulePath) != FALSE;
-	config->grassAddAmbient = GetPrivateProfileInt("SkyGfx", "grassAddAmbient", TRUE, modulePath) != FALSE;
-	config->fixGrassPlacement = GetPrivateProfileInt("SkyGfx", "fixGrassPlacement", TRUE, modulePath) != FALSE;
+	c->enableHotkeys = GetPrivateProfileInt("SkyGfx", "enableHotkeys", TRUE, modulePath) != FALSE;
+	c->ps2Ambient = GetPrivateProfileInt("SkyGfx", "ps2Ambient", TRUE, modulePath) != FALSE;
+	c->ps2ModulateWorld = GetPrivateProfileInt("SkyGfx", "ps2ModulateWorld", TRUE, modulePath) != FALSE;
+	c->ps2ModulateGrass = GetPrivateProfileInt("SkyGfx", "ps2ModulateGrass", TRUE, modulePath) != FALSE;
+	c->dualPassWorld = GetPrivateProfileInt("SkyGfx", "dualPassWorld", TRUE, modulePath) != FALSE;
+	c->dualPassDefault = GetPrivateProfileInt("SkyGfx", "dualPassDefault", TRUE, modulePath) != FALSE;
+	c->dualPassGrass = GetPrivateProfileInt("SkyGfx", "dualPassGrass", TRUE, modulePath) != FALSE;
+	c->dualPassVehicle = GetPrivateProfileInt("SkyGfx", "dualPassVehicle", TRUE, modulePath) != FALSE;
+	c->dualPassPed = GetPrivateProfileInt("SkyGfx", "dualPassPed", TRUE, modulePath) != FALSE;
+	c->grassAddAmbient = GetPrivateProfileInt("SkyGfx", "grassAddAmbient", TRUE, modulePath) != FALSE;
+	c->fixGrassPlacement = GetPrivateProfileInt("SkyGfx", "fixGrassPlacement", TRUE, modulePath) != FALSE;
 	oneGrassModel = GetPrivateProfileInt("SkyGfx", "oneGrassModel", TRUE, modulePath) != FALSE;
-	config->backfaceCull = GetPrivateProfileInt("SkyGfx", "backfaceCull", FALSE, modulePath) != FALSE;
-	config->vehiclePipe = GetPrivateProfileInt("SkyGfx", "vehiclePipe", 0, modulePath) % 4;
+	c->backfaceCull = GetPrivateProfileInt("SkyGfx", "backfaceCull", FALSE, modulePath) != FALSE;
+	c->vehiclePipe = GetPrivateProfileInt("SkyGfx", "vehiclePipe", 0, modulePath) % 4;
 	tmpint = GetPrivateProfileInt("SkyGfx", "worldPipe", 0, modulePath);
-	config->worldPipe = tmpint >= 0 ? tmpint % 3 : -1;
-	config->colorFilter = GetPrivateProfileInt("SkyGfx", "colorFilter", 0, modulePath) % 3;
+	c->worldPipe = tmpint >= 0 ? tmpint % 3 : -1;
+	c->colorFilter = GetPrivateProfileInt("SkyGfx", "colorFilter", 0, modulePath) % 3;
 	usePCTimecyc = GetPrivateProfileInt("SkyGfx", "usePCTimecyc", FALSE, modulePath) != FALSE;
 
 	tmpint = GetPrivateProfileInt("SkyGfx", "blurLeft", 4000, modulePath);
-	config->offLeft = tmpint == 4000 ? colourLeftVOffset : tmpint;
+	c->offLeft = tmpint == 4000 ? colourLeftVOffset : tmpint;
 	tmpint = GetPrivateProfileInt("SkyGfx", "blurTop", 4000, modulePath);
-	config->offTop = tmpint == 4000 ? colourTopVOffset : tmpint;
+	c->offTop = tmpint == 4000 ? colourTopVOffset : tmpint;
 	tmpint = GetPrivateProfileInt("SkyGfx", "blurRight", 4000, modulePath);
-	config->offRight = tmpint == 4000 ? colourRightVOffset : tmpint;
+	c->offRight = tmpint == 4000 ? colourRightVOffset : tmpint;
 	tmpint = GetPrivateProfileInt("SkyGfx", "blurBottom", 4000, modulePath);
-	config->offBottom = tmpint == 4000 ? colourBottomVOffset : tmpint;
+	c->offBottom = tmpint == 4000 ? colourBottomVOffset : tmpint;
 
-	config->scaleOffsets = GetPrivateProfileInt("SkyGfx", "scaleOffsets", TRUE, modulePath) != FALSE;
+	c->scaleOffsets = GetPrivateProfileInt("SkyGfx", "scaleOffsets", TRUE, modulePath) != FALSE;
 	tmpint = GetPrivateProfileInt("SkyGfx", "doRadiosity", 4000, modulePath);
-	config->doRadiosity = tmpint == 4000 ? original_bRadiosity : tmpint;	// saved value from stream.ini
+	c->doRadiosity = tmpint == 4000 ? original_bRadiosity : tmpint;	// saved value from stream.ini
 
-	config->radiosityFilterPasses = GetPrivateProfileInt("SkyGfx", "radiosityFilterPasses", 2, modulePath);
-	config->radiosityRenderPasses = GetPrivateProfileInt("SkyGfx", "radiosityRenderPasses", 1, modulePath);
-	config->radiosityIntensityLimit = GetPrivateProfileInt("SkyGfx", "radiosityIntensityLimit", 0xDC, modulePath);
-	config->radiosityIntensity = GetPrivateProfileInt("SkyGfx", "radiosityIntensity", 0x23, modulePath);
-	config->radiosityFilterUCorrection = GetPrivateProfileInt("SkyGfx", "radiosityFilterUCorrection", 2, modulePath);
-	config->radiosityFilterVCorrection = GetPrivateProfileInt("SkyGfx", "radiosityFilterVCorrection", 2, modulePath);
+	c->radiosityFilterPasses = GetPrivateProfileInt("SkyGfx", "radiosityFilterPasses", 2, modulePath);
+	c->radiosityRenderPasses = GetPrivateProfileInt("SkyGfx", "radiosityRenderPasses", 1, modulePath);
+	c->radiosityIntensityLimit = GetPrivateProfileInt("SkyGfx", "radiosityIntensityLimit", 0xDC, modulePath);
+	c->radiosityIntensity = GetPrivateProfileInt("SkyGfx", "radiosityIntensity", 0x23, modulePath);
+	c->radiosityFilterUCorrection = GetPrivateProfileInt("SkyGfx", "radiosityFilterUCorrection", 2, modulePath);
+	c->radiosityFilterVCorrection = GetPrivateProfileInt("SkyGfx", "radiosityFilterVCorrection", 2, modulePath);
 
-	config->vcsTrails = GetPrivateProfileInt("SkyGfx", "vcsTrails", FALSE, modulePath) != FALSE;
-	config->trailsLimit = GetPrivateProfileInt("SkyGfx", "trailsLimit", 80, modulePath);
-	config->trailsIntensity = GetPrivateProfileInt("SkyGfx", "trailsIntensity", 38, modulePath);
+	c->vcsTrails = GetPrivateProfileInt("SkyGfx", "vcsTrails", FALSE, modulePath) != FALSE;
+	c->trailsLimit = GetPrivateProfileInt("SkyGfx", "trailsLimit", 80, modulePath);
+	c->trailsIntensity = GetPrivateProfileInt("SkyGfx", "trailsIntensity", 38, modulePath);
 	disableHQShadows = GetPrivateProfileInt("SkyGfx", "disableHQShadows", FALSE, modulePath) != FALSE;
 	disableClouds = GetPrivateProfileInt("SkyGfx", "disableClouds", FALSE, modulePath) != FALSE;
 	uglyWheelHack = GetPrivateProfileInt("SkyGfx", "uglyWheelHack", FALSE, modulePath) != FALSE;
 
-	config->waterWriteZ = GetPrivateProfileInt("SkyGfx", "waterWriteZ", FALSE, modulePath) != FALSE;
+	c->waterWriteZ = GetPrivateProfileInt("SkyGfx", "waterWriteZ", FALSE, modulePath) != FALSE;
 
 	GetPrivateProfileString("SkyGfx", "farDist", "60.0", tmp, sizeof(tmp), modulePath);
-	config->farDist = atof(tmp);
+	c->farDist = atof(tmp);
 	GetPrivateProfileString("SkyGfx", "blendDist", "20.0", tmp, sizeof(tmp), modulePath);
-	config->fadeDist = atof(tmp);
-	config->fadeInvDist = 1.0f/config->fadeDist;
+	c->fadeDist = atof(tmp);
+	c->fadeInvDist = 1.0f/c->fadeDist;
 	GetPrivateProfileString("SkyGfx", "densityMult", "1.0", tmp, sizeof(tmp), modulePath);
-	config->densityMult = atof(tmp)*0.5;
+	c->densityMult = atof(tmp)*0.5;
 
-	*(float**)0x5DC281 = &config->densityMult;
-	*(float**)0x5DAD98 = &config->fadeDist;
-	*(float**)0x5DAE05 = &config->fadeInvDist;
+	*(float**)0x5DC281 = &c->densityMult;
+	*(float**)0x5DAD98 = &c->fadeDist;
+	*(float**)0x5DAE05 = &c->fadeInvDist;
 }
 
 RpAtomic *(*plantTab0)[4] = (RpAtomic *(*)[4])0xC039F0;
@@ -199,9 +240,31 @@ grassRenderCallback(RpAtomic *atomic)
 	if(!config->backfaceCull)
 		RwRenderStateSet(rwRENDERSTATECULLMODE, (void*)rwCULLMODECULLNONE);
 
-	if(config->dualPassDefault)
+
+	RxPipeline *pipe;
+	int alphatest, alpharef;
+	int dodual = 0;
+	int detach = 0;
+	pipe = atomic->pipeline;
+	if(pipe == NULL)
+		pipe = *(RxPipeline**)(*(DWORD*)0xC97B24+0x3C+dword_C9BC60);
+	if(config->dualPassGrass){
 		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
-	ret = AtomicDefaultRenderCallBack(atomic);
+		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, (void*)&alphatest);
+		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)&alpharef);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)128);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONGREATEREQUAL);
+		RxPipelineExecute(pipe, atomic, 1);
+		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONLESS);
+		pipe = RxPipelineExecute(pipe, atomic, 1);
+		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphatest);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)alpharef);
+	}else
+		pipe = RxPipelineExecute(pipe, atomic, 1);
+	ret = pipe ? atomic : NULL;
+
 
 	RwRenderStateSet(rwRENDERSTATECULLMODE, (void*)cullmode);
 	gpCurrentShaderForDefaultCallbacks = NULL;
@@ -307,7 +370,8 @@ writedffs(void)
 }
 */
 
-RpAtomic *myDefaultCallback(RpAtomic *atomic)
+RpAtomic*
+myDefaultCallback(RpAtomic *atomic)
 {
 	RxPipeline *pipe;
 	int zwrite, alphatest, alpharef;
@@ -457,12 +521,15 @@ rxD3D9DefaultRenderCallback_Hook(void)
 }
 
 void
-readIniAndCopy(void)
+readInis(void)
 {
 	original_bRadiosity = doRadiosity;
 	doRadiosity = 1;
-	readIni();
-	configs[1] = configs[0];
+	if(numConfigs == 0)
+		readIni(0);
+	else
+		for(int i = 1; i <= numConfigs; i++)
+			readIni(i);
 	resetRadiosityValues();
 }
 
@@ -471,7 +538,7 @@ void __declspec(naked)
 afterStreamIni(void)
 {
 	_asm{
-		call readIniAndCopy
+		call readInis
 		retn
 	}
 }
@@ -525,10 +592,14 @@ BOOL
 InjectDelayedPatches()
 {
 	if(!IsAlreadyRunning()){
-		// post ini stuff
+		// post init stuff
 		config = &configs[0];
-		readIni();
-		configs[1] = configs[0];
+		findInis();
+		if(numConfigs == 0)
+			readIni(0);
+		else
+			readIni(1);
+		// only load one ini for now, others are loaded later by readInis()
 
 		if(usePCTimecyc){
 			MemoryVP::Nop(0x5BBF6F, 2);
@@ -598,6 +669,14 @@ CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect_orig(float x, float y, float z
 
 int currentLight;
 char *stkp;
+
+unsigned __int64 rand_seed = 1;
+
+int ps2rand()
+{
+	rand_seed = 0x5851F42D4C957F2D * rand_seed + 1;
+	return ((rand_seed >> 32) & 0x7FFFFFFF);
+}
 
 void
 CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect(float x, float y, float z, float a4, float a5, RwUInt8 r, RwUInt8 g, RwUInt8 b, RwInt16 f, int a10, float a11, RwUInt8 alpha)
@@ -670,6 +749,11 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 
 //		MemoryVP::InjectHook(0x700817, CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect);
 		MemoryVP::InjectHook(0x700B6B, CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect);
+
+		MemoryVP::InjectHook(0x44E82E, ps2rand);
+		MemoryVP::InjectHook(0x44ECEE, ps2rand);
+		MemoryVP::InjectHook(0x42453B, ps2rand);
+		MemoryVP::InjectHook(0x42454D, ps2rand);
 
 //		MemoryVP::InjectHook(0x6EF8B9, waterZwrite, PATCH_JUMP);
 //		MemoryVP::Nop(0x6EF8BE, 2);
