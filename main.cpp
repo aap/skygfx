@@ -653,7 +653,7 @@ InjectDelayedPatches()
 			MemoryVP::InjectHook(0x714145, 0x71422A, PATCH_JUMP);
 		}
 
-		loadColorcycle();
+//		loadColorcycle();
 		return FALSE;
 	}
 	return TRUE;

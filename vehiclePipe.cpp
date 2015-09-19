@@ -238,13 +238,17 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 		// this takes the texture into account, somehow....
 		RwD3D9GetRenderState(D3DRS_ALPHABLENDENABLE, &hasAlpha);
 		if(hasAlpha && config->dualPassVehicle){
-			int alphafunc;
+			int alphafunc, alpharef;
+			RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, &alpharef);
 			RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &alphafunc);
+			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)128);
 			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONGREATEREQUAL);
+			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
 			D3D9Render(resEntryHeader, instancedData);
 			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONLESS);
-			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, FALSE);
+			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
 			D3D9Render(resEntryHeader, instancedData);
+			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)alpharef);
 			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphafunc);
 			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
 		}else
