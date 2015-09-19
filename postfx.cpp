@@ -18,7 +18,7 @@ struct ScreenVertex
 	RwReal      u, v;
 };
 
-void *postfxVS, *colorFilterPS, *radiosityPS;
+void *postfxVS, *colorFilterPS, *radiosityPS, *grainPS;
 void *quadVertexDecl, *screenVertexDecl;
 RwRect smallRect;
 static QuadVertex quadVertices[4];
@@ -530,11 +530,188 @@ CPostEffects__ColourFilter_PS2(RwRGBA rgb1, RwRGBA rgb2)
 	RwD3D9SetPixelShader(NULL);
 }
 
+void *overrideIm2dPixelShader;
+
+void
+Im2dSetPixelShader_hook(void*)
+{
+	if(overrideIm2dPixelShader)
+		RwD3D9SetPixelShader(overrideIm2dPixelShader);
+	else
+		RwD3D9SetPixelShader(NULL);
+}
+
+float &CPostEffects__m_fInfraredVisionFilterRadius = *(float*)0x8D50B8;
+WRAPPER void CPostEffects__InfraredVision(RwRGBA color1, RwRGBA color2) { EAXJMP(0x703F80); }
+
+WRAPPER void CPostEffects__ImmediateModeRenderStatesStore(void) { EAXJMP(0x700CC0); }
+WRAPPER void CPostEffects__ImmediateModeRenderStatesSet(void) { EAXJMP(0x700D70); }
+WRAPPER void CPostEffects__ImmediateModeRenderStatesReStore(void) { EAXJMP(0x700E00); }
+WRAPPER void CPostEffects__SetFilterMainColour(RwRaster *raster, RwRGBA color) { EAXJMP(0x703520); }
+WRAPPER void CPostEffects__DrawQuad(float x1, float y1, float x2, float y2, char r, char g, char b, char alpha, RwRaster *ras) { EAXJMP(0x700EC0); }
+
+RwIm2DVertex *postfxQuad = (RwIm2DVertex*)0xC401D8;
+RwRaster *&visionRaster = *(RwRaster**)0xC40158;
+RwRaster *&CPostEffects__m_pGrainRaster = *(RwRaster**)0xC402B0;
+RwRaster *grainRaster;
+
+void
+CPostEffects__InfraredVision_PS2(RwRGBA c1, RwRGBA c2)
+{
+	if(config->infraredVision != 0){
+		CPostEffects__InfraredVision(c1, c2);
+		return;
+	}
+
+	CPostEffects__ImmediateModeRenderStatesStore();
+	CPostEffects__ImmediateModeRenderStatesSet();
+
+	float r = CPostEffects__m_fInfraredVisionFilterRadius;
+	// not sure this scales correctly, but it looks ok (need better brain)
+	float ru = r * RsGlobal->MaximumWidth  / RwRasterGetWidth(visionRaster)  * 1024.0f / 640.0f;
+	float rv = r * RsGlobal->MaximumHeight / RwRasterGetHeight(visionRaster) * 512.0f  / 448.0f;
+	float uoff[4] = { -ru, ru, ru, -ru };
+	float voff[4] = { -rv, -rv, rv, rv };
+
+	float umin, vmin, umax, vmax;
+	umin = 0.0f;
+	vmin = 0.0f;
+	umax = 2.0f;
+	vmax = 2.0f;
+	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
+	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
+	for(int i = 0; i < 4; i++){
+		RwCameraEndUpdate(Camera);
+		RwRasterPushContext(visionRaster);
+		RwRasterRenderFast(RwCameraGetRaster(Camera), 0, 0);
+		RwRasterPopContext();
+		RwCameraBeginUpdate(Camera);
+
+		postfxQuad[0].u = umin + uoff[i];
+		postfxQuad[0].v = vmin + voff[i];
+		postfxQuad[3].u = umax + uoff[i];
+		postfxQuad[3].v = vmax + voff[i];
+		postfxQuad[1].u = postfxQuad[3].u;
+		postfxQuad[1].v = postfxQuad[0].v;
+		postfxQuad[2].u = postfxQuad[0].u;
+		postfxQuad[2].v = postfxQuad[3].v;
+		CPostEffects__DrawQuad(0, 0, RwRasterGetWidth(visionRaster)*2, RwRasterGetHeight(visionRaster)*2,
+		                       c1.red, c1.green, c1.blue, 0xFFu, visionRaster);
+	}
+
+	RwCameraEndUpdate(Camera);
+	RwRasterPushContext(visionRaster);
+	RwRasterRenderFast(RwCameraGetRaster(Camera), 0, 0);
+	RwRasterPopContext();
+	RwCameraBeginUpdate(Camera);
+
+	postfxQuad[0].u = 0.0f;
+	postfxQuad[0].v = 0.0f;
+	postfxQuad[1].u = 1.0f;
+	postfxQuad[1].v = 0.0f;
+	postfxQuad[2].u = 0.0f;
+	postfxQuad[2].v = 1.0f;
+	postfxQuad[3].u = 1.0f;
+	postfxQuad[3].v = 1.0f;
+	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, 0);
+
+	float colorScale = 255.0f/128.0f;
+	RwD3D9SetPixelShaderConstant(0, &colorScale, 1);
+	overrideIm2dPixelShader = simplePS;
+	CPostEffects__DrawQuad(0, 0, RwRasterGetWidth(visionRaster), RwRasterGetHeight(visionRaster),
+	                       c2.red, c2.green, c2.blue, 0xFFu, visionRaster);
+	overrideIm2dPixelShader = NULL;
+
+	CPostEffects__ImmediateModeRenderStatesReStore();
+
+	// The fuck is this? o_O
+//	if(!(GetAsyncKeyState(VK_F8) & 0x8000))
+//		return;
+//	CPostEffects__SetFilterMainColour(visionRaster, c2);
+}
+
+WRAPPER void CPostEffects__Grain(int strengh, bool generate) { EAXJMP(0x7037C0); }
+
+int seeder = 123;
+
+void
+CPostEffects__Grain_PS2(int strength, bool generate)
+{
+	if(config->infraredVision != 0){
+		CPostEffects__Grain(strength, generate);
+		return;
+	}
+
+	if(generate){
+		RwUInt8 *pixels = RwRasterLock(grainRaster, 0, 1);
+		srand(rand());
+		int j = 0;
+		for(int i = 0; i < 64*64; i++){
+			int x = rand();
+			j++;
+			if(j == 64){
+				srand(rand()+seeder);
+				seeder++;
+				j = 64;
+			}
+			*pixels++ = x;
+			*pixels++ = x;
+			*pixels++ = x;
+			*pixels++ = x & strength;
+		}
+		RwRasterUnlock(grainRaster);
+	}
+
+	CPostEffects__ImmediateModeRenderStatesStore();
+	CPostEffects__ImmediateModeRenderStatesSet();
+	RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
+	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
+	float umax = 5.0f * RsGlobal->MaximumWidth/640.0f;
+	float vmax = 7.0f * RsGlobal->MaximumHeight/448.0f;
+	postfxQuad[0].u = 0.0f;
+	postfxQuad[0].v = 0.0f;
+	postfxQuad[1].u = umax;
+	postfxQuad[1].v = 0.0f;
+	postfxQuad[2].u = 0.0f;
+	postfxQuad[2].v = vmax;
+	postfxQuad[3].u = umax;
+	postfxQuad[3].v = vmax;
+
+	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)D3DBLEND_DESTCOLOR);
+	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)D3DBLEND_SRCALPHA);
+
+	// colors unused
+	overrideIm2dPixelShader = grainPS;
+	CPostEffects__DrawQuad(0.0, 0.0, RsGlobal->MaximumWidth, RsGlobal->MaximumHeight,
+	                       0xFFu, 0xFFu, 0xFFu, 0xFF, grainRaster);
+	overrideIm2dPixelShader = NULL;
+	postfxQuad[0].u = 0.0f;
+	postfxQuad[0].v = 0.0f;
+	postfxQuad[1].u = 1.0f;
+	postfxQuad[1].v = 0.0f;
+	postfxQuad[2].u = 0.0f;
+	postfxQuad[2].v = 1.0f;
+	postfxQuad[3].u = 1.0f;
+	postfxQuad[3].v = 1.0f;
+	CPostEffects__ImmediateModeRenderStatesReStore();
+}
+
 WRAPPER char ReloadPlantConfig(void) { EAXJMP(0x5DD780); }
 
 void
 CPostEffects__ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 {
+//	if(config->enableHotkeys){
+//		static bool keystate = false;
+//		if(GetAsyncKeyState(VK_F9) & 0x8000){
+//			if(!keystate){
+//				keystate = true;
+//				CPostEffects_m_bInfraredVision = !CPostEffects_m_bInfraredVision;
+//			}
+//		}else
+//			keystate = false;
+//	}
+
 	if(config->enableHotkeys){
 		static bool keystate = false;
 		if(GetAsyncKeyState(config->keys[0]) & 0x8000){
@@ -595,6 +772,11 @@ CPostEffects__ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 void
 CPostEffects__Init(void)
 {
+	MemoryVP::InjectHook(0x7FB824, Im2dSetPixelShader_hook);
+	MemoryVP::Patch<int>(0x8D50B4, 0x18);
+
+	grainRaster = RwRasterCreate(64, 64, 32, 0x504);
+
 	HRSRC resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_POSTFXVS), RT_RCDATA);
 	RwUInt32 *shader = (RwUInt32*)LoadResource(dllModule, resource);
 	RwD3D9CreateVertexShader(shader, &postfxVS);
@@ -609,6 +791,18 @@ CPostEffects__Init(void)
 	shader = (RwUInt32*)LoadResource(dllModule, resource);
 	RwD3D9CreatePixelShader(shader, &radiosityPS);
 	FreeResource(shader);
+
+	resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_GRAINPS), RT_RCDATA);
+	shader = (RwUInt32*)LoadResource(dllModule, resource);
+	RwD3D9CreatePixelShader(shader, &grainPS);
+	FreeResource(shader);
+
+	if(simplePS == NULL){
+		resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_SIMPLEPS), RT_RCDATA);
+		shader = (RwUInt32*)LoadResource(dllModule, resource);
+		RwD3D9CreatePixelShader(shader, &simplePS);
+		FreeResource(shader);
+	}
 
 	static const D3DVERTEXELEMENT9 vertexElements[] =
 	{
@@ -646,3 +840,73 @@ CPostEffects__Init(void)
 	vcsRect.y = 0;
 }
 
+// Mobile stuff, partly taken from NTAuthority
+
+class CFileMgr
+{
+public:
+	static void* OpenFile(const char* filename, const char* mode);
+
+	static void  CloseFile(void* file);
+};
+
+class CFileLoader
+{
+public:
+	static char* LoadLine(void* file);
+};
+
+WRAPPER void* CFileMgr::OpenFile(const char* filename, const char* mode) { EAXJMP(0x538900); } //
+WRAPPER void  CFileMgr::CloseFile(void* file) { EAXJMP(0x5389D0); } //
+WRAPPER char* CFileLoader::LoadLine(void* file) { EAXJMP(0x536F80); } //
+
+struct Grade
+{
+	float r, g, b, a;
+};
+
+Grade redGrade[8][23];
+Grade greenGrade[8][23];
+Grade blueGrade[8][23];
+
+void
+loadColorcycle(void)
+{
+	void *f = CFileMgr::OpenFile("data/colorcycle.dat", "r");
+	char *line;
+	for(int i = 0; i < 23; i++){
+		for(int j = 0; j < 8; j++){
+			line = CFileLoader::LoadLine(f);
+			sscanf(line, "%f %f %f %f %f %f %f %f %f %f %f %f",
+			       &redGrade[j][i].r, &redGrade[j][i].g,
+			       &redGrade[j][i].b, &redGrade[j][i].a,
+			       &greenGrade[j][i].r, &greenGrade[j][i].g,
+			       &greenGrade[j][i].b, &greenGrade[j][i].a,
+			       &blueGrade[j][i].r, &blueGrade[j][i].g,
+			       &blueGrade[j][i].b, &blueGrade[j][i].a);
+			float sum;
+			sum = redGrade[j][i].r + redGrade[j][i].g + redGrade[j][i].b;
+			if(sum > 1.7f)
+				redGrade[j][i].a -= (sum - 1.7f)*0.13f;
+			sum = greenGrade[j][i].r + greenGrade[j][i].g + greenGrade[j][i].b;
+			if(sum > 1.7f)
+				greenGrade[j][i].a -= (sum - 1.7f)*0.13f;
+			sum = blueGrade[j][i].r + blueGrade[j][i].g + blueGrade[j][i].b;
+			if(sum > 1.7f)
+				blueGrade[j][i].a -= (sum - 1.7f)*0.13f;
+			redGrade[j][i].r *= 0.67f;
+			redGrade[j][i].g *= 0.67f;
+			redGrade[j][i].b *= 0.67f;
+			redGrade[j][i].a *= 0.67f;
+			greenGrade[j][i].r *= 0.67f;
+			greenGrade[j][i].g *= 0.67f;
+			greenGrade[j][i].b *= 0.67f;
+			greenGrade[j][i].a *= 0.67f;
+			blueGrade[j][i].r *= 0.67f;
+			blueGrade[j][i].g *= 0.67f;
+			blueGrade[j][i].b *= 0.67f;
+			blueGrade[j][i].a *= 0.67f;
+		}
+	}
+	CFileMgr::CloseFile(f);
+}

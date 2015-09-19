@@ -24,6 +24,7 @@ struct Config {
 	RwBool dualPassWorld, dualPassDefault, dualPassGrass, dualPassVehicle, dualPassPed;
 	int vehiclePipe, worldPipe;
 	int colorFilter;
+	int infraredVision;
 	RwBool scaleOffsets;
 	RwBool doRadiosity;
 	int radiosityFilterPasses, radiosityRenderPasses, radiosityIntensityLimit;
@@ -97,8 +98,11 @@ RxPipeline *CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2(void);
 void setVehiclePipeCB(RxPipelineNode *node, RxD3D9AllInOneRenderCallBack callback);
 void SpeedFX_Fix(float fStrength);
 void CPostEffects__Radiosity_PS2(int col1, int nSubdivs, int unknown, int col2);
+void CPostEffects__InfraredVision_PS2(RwRGBA c1, RwRGBA c2);
+void CPostEffects__Grain_PS2(int strength, bool generate);
 void CPostEffects__ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2);
 void CPostEffects__Init(void);
+void loadColorcycle(void);
 void readIni(int n);
 void SetCloseFarAlphaDist(float close, float far);
 void resetRadiosityValues(void);
@@ -114,11 +118,12 @@ extern RpLight *&pDirect;
 extern RpLight **pExtraDirectionals;
 extern int &NumExtraDirLightsInWorld;
 extern D3DLIGHT9 &gCarEnvMapLight;
+extern int &CPostEffects_m_bInfraredVision;
 
 extern char &doRadiosity;
 
 extern RwTexture *&gpWhiteTexture;
-extern void *vehiclePipePS;
+extern void *simplePS;
 extern RwBool reflTexDone;
 extern RwRaster *reflTex;
 

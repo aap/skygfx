@@ -8,6 +8,7 @@ RpLight *&pDirect = *(RpLight**)0xC886EC;
 RpLight **pExtraDirectionals = (RpLight**)0xC886F0;
 int &NumExtraDirLightsInWorld = *(int*)0xC88708;
 D3DLIGHT9 &gCarEnvMapLight = *(D3DLIGHT9*)0xC02CB0;
+int &CPostEffects_m_bInfraredVision = *(int*)0xC402B9;
 
 char &doRadiosity = *(char*)0xC402CC;
 
@@ -42,6 +43,8 @@ WRAPPER RwRaster *RwRasterPushContext(RwRaster *raster) { EAXJMP(0x7FB060); }
 WRAPPER RwRaster *RwRasterPopContext(void) { EAXJMP(0x7FB110); }
 WRAPPER RwRaster *RwRasterRenderScaled(RwRaster *raster, RwRect *rect) { EAXJMP(0x7FAE80); }
 WRAPPER RwRaster *RwRasterRenderFast(RwRaster *raster, RwInt32 x, RwInt32 y) { EAXJMP(0x7FAF50); }
+WRAPPER RwUInt8 *RwRasterLock(RwRaster*, RwUInt8, RwInt32) { EAXJMP(0x7FB2D0); }
+WRAPPER RwRaster *RwRasterUnlock(RwRaster*) { EAXJMP(0x7FAEC0); }
 WRAPPER RwCamera *RwCameraBeginUpdate(RwCamera *camera) { EAXJMP(0x7EE190); }
 WRAPPER RwCamera *RwCameraEndUpdate(RwCamera *camera) { EAXJMP(0x7EE180); }
 

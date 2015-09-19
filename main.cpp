@@ -8,6 +8,7 @@ bool oneGrassModel, usePCTimecyc, disableHQShadows, disableClouds, uglyWheelHack
 int original_bRadiosity = 0;
 
 void *grassPixelShader;
+void *simplePS;
 void *gpCurrentShaderForDefaultCallbacks;
 //void (*TimecycInit)(void) = (void (*)(void))0x5BBAC0;
 
@@ -36,7 +37,7 @@ CTimeCycle_GetAmbientRed(void)
 		for(int i = 0; i < 3; i++)
 			if(ambientColors[i] > c)
 				c = ambientColors[i];
-			c += ambientColors[0];
+		c += ambientColors[0];
 		if(c > 1.0f) c = 1.0f;
 	}else
 		c = ambientColors[0];
@@ -51,7 +52,7 @@ CTimeCycle_GetAmbientGreen(void)
 		for(int i = 0; i < 3; i++)
 			if(ambientColors[i] > c)
 				c = ambientColors[i];
-			c += ambientColors[1];
+		c += ambientColors[1];
 		if(c > 1.0f) c = 1.0f;
 	}else
 		c = ambientColors[1];
@@ -66,7 +67,7 @@ CTimeCycle_GetAmbientBlue(void)
 		for(int i = 0; i < 3; i++)
 			if(ambientColors[i] > c)
 				c = ambientColors[i];
-			c += ambientColors[2];
+		c += ambientColors[2];
 		if(c > 1.0f) c = 1.0f;
 	}else
 		c = ambientColors[2];
@@ -176,6 +177,7 @@ readIni(int n)
 	tmpint = GetPrivateProfileInt("SkyGfx", "worldPipe", 0, modulePath);
 	c->worldPipe = tmpint >= 0 ? tmpint % 3 : -1;
 	c->colorFilter = GetPrivateProfileInt("SkyGfx", "colorFilter", 0, modulePath) % 3;
+	c->infraredVision = GetPrivateProfileInt("SkyGfx", "infraredVision", 0, modulePath) % 2;
 	usePCTimecyc = GetPrivateProfileInt("SkyGfx", "usePCTimecyc", FALSE, modulePath) != FALSE;
 
 	tmpint = GetPrivateProfileInt("SkyGfx", "blurLeft", 4000, modulePath);
@@ -435,9 +437,15 @@ setTextureAndColor(RpMaterial *material, RwRGBA *color)
 	col[1] = color->green;
 	col[2] = color->blue;
 	if(config->grassAddAmbient){
-		col[0] += CTimeCycle_GetAmbientRed()*255;
-		col[1] += CTimeCycle_GetAmbientGreen()*255;
-		col[2] += CTimeCycle_GetAmbientBlue()*255;
+		if(CPostEffects_m_bInfraredVision){
+			col[0] += 0;
+			col[1] += 0;
+			col[2] += 255;
+		}else{
+			col[0] += CTimeCycle_GetAmbientRed()*255;
+			col[1] += CTimeCycle_GetAmbientGreen()*255;
+			col[2] += CTimeCycle_GetAmbientBlue()*255;
+		}
 		if(col[0] > 255) col[0] = 255;
 		if(col[1] > 255) col[1] = 255;
 		if(col[2] > 255) col[2] = 255;
@@ -644,6 +652,8 @@ InjectDelayedPatches()
 			// jump over cloud loop
 			MemoryVP::InjectHook(0x714145, 0x71422A, PATCH_JUMP);
 		}
+
+		loadColorcycle();
 		return FALSE;
 	}
 	return TRUE;
@@ -739,6 +749,10 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		MemoryVP::InjectHook(0x704FB3, CPostEffects__Radiosity_PS2);
 		// fix speedfx
 		MemoryVP::InjectHook(0x704E8A, SpeedFX_Fix);
+
+		// infrared vision
+		MemoryVP::InjectHook(0x704F4B, CPostEffects__InfraredVision_PS2);
+		MemoryVP::InjectHook(0x704F59, CPostEffects__Grain_PS2);
 
 		MemoryVP::InjectHook(0x53DFDD, CRenderer__RenderEverythingBarRoads);
 		MemoryVP::InjectHook(0x53DD27, CRenderer__RenderEverythingBarRoads); // unused?

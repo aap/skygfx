@@ -42,7 +42,7 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 //	if(GetAsyncKeyState(VK_F8) & 0x8000)
 //		return;
 
-	RwD3D9SetPixelShader(vehiclePipePS);
+	RwD3D9SetPixelShader(simplePS);
 	RwD3D9SetVertexShader(DNPipeVS);
 	RwD3D9GetTransform(D3DTS_WORLD, &worldMat);
 	RwD3D9GetTransform(D3DTS_VIEW, &viewMat);
@@ -68,12 +68,14 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 	while(numMeshes--){
 		material = instancedData->material;
 
-		dnShaderVars.colorScale = 1.0f;
+		float colorScalePS;
+		colorScalePS = dnShaderVars.colorScale = 1.0f;
 		if(flags & (rxGEOMETRY_TEXTURED2 | rxGEOMETRY_TEXTURED)){
-			dnShaderVars.colorScale = config->ps2ModulateWorld ? 255.0f/128.0f : 1.0f;
+			colorScalePS = dnShaderVars.colorScale = config->ps2ModulateWorld ? 255.0f/128.0f : 1.0f;
 			RwD3D9SetTexture(material->texture ? material->texture : gpWhiteTexture, 0);
 		}else
 			RwD3D9SetTexture(gpWhiteTexture, 0);
+		RwD3D9SetPixelShaderConstant(0, &colorScalePS, 1);
 
 		reflData.shininess = reflData.intensity = 0.0f;
 		dnShaderVars.reflSwitch = 0;
@@ -102,7 +104,14 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 
 		RwRGBARealFromRwRGBA(&color, &material->color);
 		RwD3D9SetVertexShaderConstant(LOC_materialColor, (void*)&color, 1);
-		RwD3D9SetVertexShaderConstant(LOC_ambientLight, (void*)&pAmbient->color, 1);
+		// yep, not always done by the game
+		if(CPostEffects_m_bInfraredVision){
+			color.red = 0.0f;
+			color.green = 0.0f;
+			color.blue = 1.0f;
+		}else
+			color = pAmbient->color;
+		RwD3D9SetVertexShaderConstant(LOC_ambientLight, (void*)&color, 1);
 		surfProps[0] = lighting || config->worldPipe == 0 ? material->surfaceProps.ambient : 0.0f;
 		RwD3D9SetVertexShaderConstant(LOC_surfaceProps, &surfProps, 1);
 
@@ -332,10 +341,10 @@ CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2(void)
 	RwD3D9CreateVertexShader(shader, &DNPipeVS);
 	FreeResource(shader);
 
-	if(vehiclePipePS == NULL){
-		resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_VEHICLEPS), RT_RCDATA);
+	if(simplePS == NULL){
+		resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_SIMPLEPS), RT_RCDATA);
 		shader = (RwUInt32*)LoadResource(dllModule, resource);
-		RwD3D9CreatePixelShader(shader, &vehiclePipePS);
+		RwD3D9CreatePixelShader(shader, &simplePS);
 		FreeResource(shader);
 	}
 

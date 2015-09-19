@@ -59,7 +59,6 @@ VS_OUTPUT main(in VS_INPUT In)
 
 	Out.color *= materialColor / shaderVars[0];
 	Out.color.rgb += ambientLight*surfaceProps.x;
-	Out.color = saturate(Out.color)*shaderVars[0];
 
 	return Out;
 }
