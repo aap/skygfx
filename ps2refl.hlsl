@@ -102,10 +102,12 @@ mainVS(VS_INPUT IN)
 	return OUT;
 }
 
+uniform float4 colorscale : register(c0);
+
 float4
 mainPS(VS_OUTPUT IN) : COLOR
 {
-	float4 result = tex2D(tex0, IN.texcoord0.xy) * IN.color;
+	float4 result = tex2D(tex0, IN.texcoord0.xy) * IN.color*colorscale.x;
 	result.xyz += (tex2D(tex1, IN.texcoord1.xy) * IN.envcolor).xyz;
 	result.xyz += (tex2D(tex2, IN.texcoord2.xy) * IN.speccolor).xyz;
 	return result;

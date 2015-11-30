@@ -8,7 +8,6 @@ RpLight *&pDirect = *(RpLight**)0xC886EC;
 RpLight **pExtraDirectionals = (RpLight**)0xC886F0;
 int &NumExtraDirLightsInWorld = *(int*)0xC88708;
 D3DLIGHT9 &gCarEnvMapLight = *(D3DLIGHT9*)0xC02CB0;
-int &CPostEffects_m_bInfraredVision = *(int*)0xC402B9;
 
 char &doRadiosity = *(char*)0xC402CC;
 
@@ -47,6 +46,10 @@ WRAPPER RwUInt8 *RwRasterLock(RwRaster*, RwUInt8, RwInt32) { EAXJMP(0x7FB2D0); }
 WRAPPER RwRaster *RwRasterUnlock(RwRaster*) { EAXJMP(0x7FAEC0); }
 WRAPPER RwCamera *RwCameraBeginUpdate(RwCamera *camera) { EAXJMP(0x7EE190); }
 WRAPPER RwCamera *RwCameraEndUpdate(RwCamera *camera) { EAXJMP(0x7EE180); }
+WRAPPER RwTexture *RwTextureCreate(RwRaster*) { EAXJMP(0x7F37C0); }
+
+WRAPPER RpMatFXMaterialFlags RpMatFXMaterialGetEffects(const RpMaterial*) { EAXJMP(0x812140); }
+WRAPPER const RpMaterial *RpMatFXMaterialGetUVTransformMatrices(const RpMaterial*, RwMatrix**, RwMatrix**) { EAXJMP(0x812A50); }
 
 WRAPPER RwBool RwD3D9CreatePixelShader(const RwUInt32 *function, void **shader) { EAXJMP(0x7FACC0); }
 WRAPPER RwBool RwD3D9CreateVertexShader(const RwUInt32 *function, void **shader) { EAXJMP(0x7FAC60); }
@@ -103,7 +106,6 @@ WRAPPER RwBool D3D9SetRenderMaterialProperties(RwSurfaceProperties*, RwRGBA *col
 		RwUInt32 flags, RwReal specularLighting, RwReal specularPower) { EAXJMP(0x5DA790); };
 
 WRAPPER RwUInt16 CVisibilityPlugins__GetAtomicId(RpAtomic *atomic) { EAXJMP(0x732370); }
-WRAPPER void CPostEffects__ColourFilter(RwRGBA rgb1, RwRGBA rgb2) { EAXJMP(0x703650); }
 
 WRAPPER RpAtomic *CCustomCarEnvMapPipeline__CustomPipeAtomicSetup(RpAtomic *atomic) { EAXJMP(0x5DA610); }
 WRAPPER char *GetFrameNodeName(RwFrame *frame) { EAXJMP(0x72FB30); }

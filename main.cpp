@@ -82,7 +82,7 @@ SetCloseFarAlphaDist(float close, float far)
 }
 
 void
-resetRadiosityValues(void)
+resetValues(void)
 {
 	CPostEffects__m_RadiosityFilterPasses = config->radiosityFilterPasses;
 	CPostEffects__m_RadiosityRenderPasses = config->radiosityRenderPasses;
@@ -90,6 +90,20 @@ resetRadiosityValues(void)
 	CPostEffects__m_RadiosityIntensity = config->radiosityIntensity;
 	CPostEffects__m_RadiosityFilterUCorrection = config->radiosityFilterUCorrection;
 	CPostEffects__m_RadiosityFilterVCorrection = config->radiosityFilterVCorrection;
+
+	if(config->grainFilter == 0){
+		CPostEffects::m_InfraredVisionGrainStrength = 0x18;
+		CPostEffects::m_NightVisionGrainStrength = 0x10;
+	}else{
+		CPostEffects::m_InfraredVisionGrainStrength = 0x40;
+		CPostEffects::m_NightVisionGrainStrength = 0x30;
+	}
+	// night vision ambient green
+	// not if this is the correct switch, maybe ps2ModulateWorld?
+	if(config->nightVision == 0)
+		MemoryVP::Patch<float>(0x735F8B, 0.4f);
+	else
+		MemoryVP::Patch<float>(0x735F8B, 1.0f);
 }
 
 int
@@ -173,11 +187,13 @@ readIni(int n)
 	c->fixGrassPlacement = GetPrivateProfileInt("SkyGfx", "fixGrassPlacement", TRUE, modulePath) != FALSE;
 	oneGrassModel = GetPrivateProfileInt("SkyGfx", "oneGrassModel", TRUE, modulePath) != FALSE;
 	c->backfaceCull = GetPrivateProfileInt("SkyGfx", "backfaceCull", FALSE, modulePath) != FALSE;
-	c->vehiclePipe = GetPrivateProfileInt("SkyGfx", "vehiclePipe", 0, modulePath) % 4;
+	c->vehiclePipe = GetPrivateProfileInt("SkyGfx", "vehiclePipe", 0, modulePath) % 5;
 	tmpint = GetPrivateProfileInt("SkyGfx", "worldPipe", 0, modulePath);
 	c->worldPipe = tmpint >= 0 ? tmpint % 3 : -1;
 	c->colorFilter = GetPrivateProfileInt("SkyGfx", "colorFilter", 0, modulePath) % 3;
 	c->infraredVision = GetPrivateProfileInt("SkyGfx", "infraredVision", 0, modulePath) % 2;
+	c->nightVision = GetPrivateProfileInt("SkyGfx", "nightVision", 0, modulePath) % 2;
+	c->grainFilter = GetPrivateProfileInt("SkyGfx", "grainFilter", 0, modulePath) % 2;
 	usePCTimecyc = GetPrivateProfileInt("SkyGfx", "usePCTimecyc", FALSE, modulePath) != FALSE;
 
 	tmpint = GetPrivateProfileInt("SkyGfx", "blurLeft", 4000, modulePath);
@@ -437,7 +453,7 @@ setTextureAndColor(RpMaterial *material, RwRGBA *color)
 	col[1] = color->green;
 	col[2] = color->blue;
 	if(config->grassAddAmbient){
-		if(CPostEffects_m_bInfraredVision){
+		if(CPostEffects::m_bInfraredVision){
 			col[0] += 0;
 			col[1] += 0;
 			col[2] += 255;
@@ -538,7 +554,7 @@ readInis(void)
 	else
 		for(int i = 1; i <= numConfigs; i++)
 			readIni(i);
-	resetRadiosityValues();
+	resetValues();
 }
 
 // load asi ini again after having read stream ini as we need to know radiosity settings
@@ -743,16 +759,21 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		MemoryVP::InjectHook(0x5D9FE9, setVehiclePipeCB);
 
 		// postfx
-		MemoryVP::InjectHook(0x74EAA6, CPostEffects__Init, PATCH_JUMP);
-		MemoryVP::InjectHook(0x704D1E, CPostEffects__ColourFilter_switch);
-		MemoryVP::InjectHook(0x704D5D, CPostEffects__Radiosity_PS2);
-		MemoryVP::InjectHook(0x704FB3, CPostEffects__Radiosity_PS2);
+		MemoryVP::InjectHook(0x74EAA6, CPostEffects::Init, PATCH_JUMP);
+		MemoryVP::InjectHook(0x704D1E, CPostEffects::ColourFilter_switch);
+		MemoryVP::InjectHook(0x704D5D, CPostEffects::Radiosity_PS2);
+		MemoryVP::InjectHook(0x704FB3, CPostEffects::Radiosity_PS2);
 		// fix speedfx
-		MemoryVP::InjectHook(0x704E8A, SpeedFX_Fix);
+		MemoryVP::InjectHook(0x704E8A, CPostEffects::SpeedFX_Fix);
 
 		// infrared vision
-		MemoryVP::InjectHook(0x704F4B, CPostEffects__InfraredVision_PS2);
-		MemoryVP::InjectHook(0x704F59, CPostEffects__Grain_PS2);
+		MemoryVP::InjectHook(0x704F4B, CPostEffects::InfraredVision_PS2);
+		MemoryVP::InjectHook(0x704F59, CPostEffects::Grain_PS2);
+		// night vision
+		MemoryVP::InjectHook(0x704EDA, CPostEffects::NightVision_PS2);
+		MemoryVP::InjectHook(0x704EE8, CPostEffects::Grain_PS2);
+		// TODO: rain grain @ 0x705078
+		MemoryVP::InjectHook(0x705091, CPostEffects::Grain_PS2);
 
 		MemoryVP::InjectHook(0x53DFDD, CRenderer__RenderEverythingBarRoads);
 		MemoryVP::InjectHook(0x53DD27, CRenderer__RenderEverythingBarRoads); // unused?
@@ -769,10 +790,14 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		MemoryVP::InjectHook(0x42453B, ps2rand);
 		MemoryVP::InjectHook(0x42454D, ps2rand);
 
-//		MemoryVP::InjectHook(0x6EF8B9, waterZwrite, PATCH_JUMP);
-//		MemoryVP::Nop(0x6EF8BE, 2);
+//		MemoryVP::Nop(0x748054, 10);
+///		MemoryVP::Nop(0x748063, 5);
+//		MemoryVP::Nop(0x747FB0, 10);
+//		MemoryVP::Nop(0x748A87, 12);
+//		MemoryVP::InjectHook(0x747F98, 0x748446, PATCH_JUMP);
 
-//		MemoryVP::Nop(0x53E21D, 5);
+//		MemoryVP::Nop(0x6EFC9B, 5);
+//		MemoryVP::Nop(0x6EFE4C, 5);
 	}
 
 	return TRUE;

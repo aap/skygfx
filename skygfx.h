@@ -4,6 +4,7 @@
 #include <rwcore.h>
 #include <rwplcore.h>
 #include <rpworld.h>
+#include <rpmatfx.h>
 #include <d3d9.h>
 #include <d3d9types.h>
 #include <stdio.h>
@@ -24,7 +25,7 @@ struct Config {
 	RwBool dualPassWorld, dualPassDefault, dualPassGrass, dualPassVehicle, dualPassPed;
 	int vehiclePipe, worldPipe;
 	int colorFilter;
-	int infraredVision;
+	int infraredVision, nightVision, grainFilter;
 	RwBool scaleOffsets;
 	RwBool doRadiosity;
 	int radiosityFilterPasses, radiosityRenderPasses, radiosityIntensityLimit;
@@ -94,18 +95,44 @@ struct RsGlobalType
 	void*			pad;
 };
 
+struct CPostEffects
+{
+	static void Radiosity_VCS(int col1, int nSubdivs, int unknown, int col2);
+	static void Radiosity_PS2(int col1, int nSubdivs, int unknown, int col2);
+	static void InfraredVision(RwRGBA c1, RwRGBA c2);
+	static void InfraredVision_PS2(RwRGBA c1, RwRGBA c2);
+	static void NightVision(RwRGBA color);
+	static void NightVision_PS2(RwRGBA color);
+	static void Grain(int strength, bool generate);
+	static void Grain_PS2(int strength, bool generate);
+	static void ColourFilter(RwRGBA rgb1, RwRGBA rgb2);
+	static void ColourFilter_PS2(RwRGBA rgb1, RwRGBA rgb2);
+	static void ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2);
+	static void SetFilterMainColour_PS2(RwRaster *raster, RwRGBA color);
+	static void Init(void);
+	static void ImmediateModeRenderStatesStore(void);
+	static void ImmediateModeRenderStatesSet(void);
+	static void ImmediateModeRenderStatesReStore(void);
+	static void SetFilterMainColour(RwRaster *raster, RwRGBA color);
+	static void DrawQuad(float x1, float y1, float x2, float y2, char r, char g, char b, char alpha, RwRaster *ras);
+	static void SpeedFX(float);
+	static void SpeedFX_Fix(float fStrength);
+
+	static RwRaster *&pRasterFrontBuffer;
+	static float &m_fInfraredVisionFilterRadius;;
+	static RwRaster *&m_pGrainRaster;
+	static int &m_InfraredVisionGrainStrength;
+	static int &m_NightVisionGrainStrength;
+	static float &m_fNightVisionSwitchOnFXCount;
+	static bool &m_bInfraredVision;
+};
+
 RxPipeline *CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2(void);
 void setVehiclePipeCB(RxPipelineNode *node, RxD3D9AllInOneRenderCallBack callback);
-void SpeedFX_Fix(float fStrength);
-void CPostEffects__Radiosity_PS2(int col1, int nSubdivs, int unknown, int col2);
-void CPostEffects__InfraredVision_PS2(RwRGBA c1, RwRGBA c2);
-void CPostEffects__Grain_PS2(int strength, bool generate);
-void CPostEffects__ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2);
-void CPostEffects__Init(void);
 void loadColorcycle(void);
 void readIni(int n);
 void SetCloseFarAlphaDist(float close, float far);
-void resetRadiosityValues(void);
+void resetValues(void);
 void D3D9Render(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData);
 RpAtomic *CCarFXRenderer__CustomCarPipeClumpSetup(RpAtomic *atomic, void *data);
 
@@ -118,12 +145,12 @@ extern RpLight *&pDirect;
 extern RpLight **pExtraDirectionals;
 extern int &NumExtraDirLightsInWorld;
 extern D3DLIGHT9 &gCarEnvMapLight;
-extern int &CPostEffects_m_bInfraredVision;
 
 extern char &doRadiosity;
 
 extern RwTexture *&gpWhiteTexture;
 extern void *simplePS;
+extern void *vehiclePipePS;
 extern RwBool reflTexDone;
 extern RwRaster *reflTex;
 
@@ -158,7 +185,6 @@ RwBool DNInstance(void *object, RxD3D9ResEntryHeader *resEntryHeader, RwBool rei
 RwBool D3D9SetRenderMaterialProperties(RwSurfaceProperties*, RwRGBA *color, RwUInt32 flags, RwReal specularLighting, RwReal specularPower);
 RwBool D3D9RestoreSurfaceProperties(void);
 RwUInt16 CVisibilityPlugins__GetAtomicId(RpAtomic *atomic);
-void CPostEffects__ColourFilter(RwRGBA rgb1, RwRGBA rgb2);
 RpAtomic *CCustomCarEnvMapPipeline__CustomPipeAtomicSetup(RpAtomic *atomic);
 char *GetFrameNodeName(RwFrame *frame);
 void SetPipelineID(RpAtomic*, unsigned int it);

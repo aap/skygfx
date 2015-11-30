@@ -1,5 +1,23 @@
 #include "skygfx.h"
 
+WRAPPER void CPostEffects::Grain(int strengh, bool generate) { EAXJMP(0x7037C0); }
+WRAPPER void CPostEffects::SpeedFX(float) { EAXJMP(0x7030A0); }
+RwRaster *&CPostEffects::pRasterFrontBuffer = *(RwRaster**)0xC402D8;
+float &CPostEffects::m_fInfraredVisionFilterRadius = *(float*)0x8D50B8;
+RwRaster *&CPostEffects::m_pGrainRaster = *(RwRaster**)0xC402B0;
+WRAPPER void CPostEffects::InfraredVision(RwRGBA color1, RwRGBA color2) { EAXJMP(0x703F80); }
+WRAPPER void CPostEffects::ImmediateModeRenderStatesStore(void) { EAXJMP(0x700CC0); }
+WRAPPER void CPostEffects::ImmediateModeRenderStatesSet(void) { EAXJMP(0x700D70); }
+WRAPPER void CPostEffects::ImmediateModeRenderStatesReStore(void) { EAXJMP(0x700E00); }
+WRAPPER void CPostEffects::SetFilterMainColour(RwRaster *raster, RwRGBA color) { EAXJMP(0x703520); }
+WRAPPER void CPostEffects::DrawQuad(float x1, float y1, float x2, float y2, char r, char g, char b, char alpha, RwRaster *ras) { EAXJMP(0x700EC0); }
+WRAPPER void CPostEffects::NightVision(RwRGBA color) { EAXJMP(0x7011C0); }
+WRAPPER void CPostEffects::ColourFilter(RwRGBA rgb1, RwRGBA rgb2) { EAXJMP(0x703650); }
+float &CPostEffects::m_fNightVisionSwitchOnFXCount = *(float*)0xC40300;
+int &CPostEffects::m_InfraredVisionGrainStrength = *(int*)0x8D50B4;
+int &CPostEffects::m_NightVisionGrainStrength = *(int*)0x8D50A8;
+bool &CPostEffects::m_bInfraredVision = *(bool*)0xC402B9;
+
 // Credits: much of the code in this file was originally written by NTAuthority
 
 struct QuadVertex
@@ -42,26 +60,23 @@ RwImVertexIndex radiosityIndices[] = {
 };
 
 static RwImVertexIndex* quadIndices = (RwImVertexIndex*)0x8D5174;
-RwRaster *&CPostEffects__pRasterFrontBuffer = *(RwRaster**)0xC402D8;
-
-WRAPPER void SpeedFX(float) { EAXJMP(0x7030A0); }
 
 void
-SpeedFX_Fix(float fStrength)
+CPostEffects::SpeedFX_Fix(float fStrength)
 {
 	// So we don't do useless work if no colour postfx was performed
 	if(config->colorFilter < 2){
 		RwCameraEndUpdate(Camera);
-		RwRasterPushContext(CPostEffects__pRasterFrontBuffer);
+		RwRasterPushContext(CPostEffects::pRasterFrontBuffer);
 		RwRasterRenderFast(RwCameraGetRaster(Camera), 0, 0);
 		RwRasterPopContext();
 		RwCameraBeginUpdate(Camera);
 	}
-	SpeedFX(fStrength);
+	CPostEffects::SpeedFX(fStrength);
 }
 
 void
-CPostEffects__Radiosity_VCS(int intensityLimit, int filterPasses, int renderPasses, int intensity)
+CPostEffects::Radiosity_VCS(int intensityLimit, int filterPasses, int renderPasses, int intensity)
 {
 	RwRaster *vcsBuffer1, *vcsBuffer2;
 	float radiosityColors[4];
@@ -81,9 +96,9 @@ CPostEffects__Radiosity_VCS(int intensityLimit, int filterPasses, int renderPass
 		while(width2 < width) width2 <<= 1;
 		while(height2 < height) height2 <<= 1;
 		RwRasterDestroy(target1);
-		target1 = RwRasterCreate(width2, height2, CPostEffects__pRasterFrontBuffer->depth, 5);
+		target1 = RwRasterCreate(width2, height2, CPostEffects::pRasterFrontBuffer->depth, 5);
 		RwRasterDestroy(target2);
-		target2 = RwRasterCreate(width2, height2, CPostEffects__pRasterFrontBuffer->depth, 5);
+		target2 = RwRasterCreate(width2, height2, CPostEffects::pRasterFrontBuffer->depth, 5);
 	}
 	vcsBuffer1 = target1;
 	vcsBuffer2 = target2;
@@ -275,27 +290,19 @@ CPostEffects__Radiosity_VCS(int intensityLimit, int filterPasses, int renderPass
 	RwD3D9SetVertexShader(NULL);
 }
 
-WRAPPER void CPostEffects__Radiosity(int intensityLimit, signed int filterPasses, signed int renderPasses, int intensity) { EAXJMP(0x702080); }
-
 void
-CPostEffects__Radiosity_PS2(int intensityLimit, int filterPasses, int renderPasses, int intensity)
+CPostEffects::Radiosity_PS2(int intensityLimit, int filterPasses, int renderPasses, int intensity)
 {
 	int width, height;
 	RwRaster *buffer1, *buffer2, *camraster;
 	float radiosityColors[4];
 	RwTexture tempTexture;
 
-//	*(int*)0xC40314 = RsGlobal->MaximumWidth;
-//	*(int*)0xC40318 = RsGlobal->MaximumHeight;
-//	*(char*)0x8D510B = 0;
-//	CPostEffects__Radiosity(intensityLimit, 2, 4, intensity);
-//	return;
-
 	if(!config->doRadiosity)
 		return;
 
 	if(config->vcsTrails){
-		CPostEffects__Radiosity_VCS(intensityLimit, filterPasses, renderPasses, intensity);
+		CPostEffects::Radiosity_VCS(intensityLimit, filterPasses, renderPasses, intensity);
 		return;
 	}
 
@@ -310,9 +317,9 @@ CPostEffects__Radiosity_PS2(int intensityLimit, int filterPasses, int renderPass
 		while(width2 < width) width2 <<= 1;
 		while(height2 < height) height2 <<= 1;
 		RwRasterDestroy(target1);
-		target1 = RwRasterCreate(width2, height2, CPostEffects__pRasterFrontBuffer->depth, 5);
+		target1 = RwRasterCreate(width2, height2, CPostEffects::pRasterFrontBuffer->depth, 5);
 		RwRasterDestroy(target2);
-		target2 = RwRasterCreate(width2, height2, CPostEffects__pRasterFrontBuffer->depth, 5);
+		target2 = RwRasterCreate(width2, height2, CPostEffects::pRasterFrontBuffer->depth, 5);
 	}
 	buffer1 = target1;
 	buffer2 = target2;
@@ -448,10 +455,10 @@ CPostEffects__Radiosity_PS2(int intensityLimit, int filterPasses, int renderPass
 }
 
 void
-CPostEffects__ColourFilter_PS2(RwRGBA rgb1, RwRGBA rgb2)
+CPostEffects::ColourFilter_PS2(RwRGBA rgb1, RwRGBA rgb2)
 {
-	float rasterWidth = RwRasterGetWidth(CPostEffects__pRasterFrontBuffer);
-	float rasterHeight = RwRasterGetHeight(CPostEffects__pRasterFrontBuffer);
+	float rasterWidth = RwRasterGetWidth(CPostEffects::pRasterFrontBuffer);
+	float rasterHeight = RwRasterGetHeight(CPostEffects::pRasterFrontBuffer);
 	float halfU = 0.5 / rasterWidth;
 	float halfV = 0.5 / rasterHeight;
 	float uMax = RsGlobal->MaximumWidth / rasterWidth;
@@ -505,7 +512,7 @@ CPostEffects__ColourFilter_PS2(RwRGBA rgb1, RwRGBA rgb2)
 	quadVertices[i].v1 = quadVertices[i].v + topOff;
 	
 	RwTexture tempTexture;
-	tempTexture.raster = CPostEffects__pRasterFrontBuffer;
+	tempTexture.raster = CPostEffects::pRasterFrontBuffer;
 	RwD3D9SetTexture(&tempTexture, 0);
 
 	RwD3D9SetVertexDeclaration(quadVertexDecl);
@@ -541,32 +548,39 @@ Im2dSetPixelShader_hook(void*)
 		RwD3D9SetPixelShader(NULL);
 }
 
-float &CPostEffects__m_fInfraredVisionFilterRadius = *(float*)0x8D50B8;
-WRAPPER void CPostEffects__InfraredVision(RwRGBA color1, RwRGBA color2) { EAXJMP(0x703F80); }
-
-WRAPPER void CPostEffects__ImmediateModeRenderStatesStore(void) { EAXJMP(0x700CC0); }
-WRAPPER void CPostEffects__ImmediateModeRenderStatesSet(void) { EAXJMP(0x700D70); }
-WRAPPER void CPostEffects__ImmediateModeRenderStatesReStore(void) { EAXJMP(0x700E00); }
-WRAPPER void CPostEffects__SetFilterMainColour(RwRaster *raster, RwRGBA color) { EAXJMP(0x703520); }
-WRAPPER void CPostEffects__DrawQuad(float x1, float y1, float x2, float y2, char r, char g, char b, char alpha, RwRaster *ras) { EAXJMP(0x700EC0); }
 
 RwIm2DVertex *postfxQuad = (RwIm2DVertex*)0xC401D8;
 RwRaster *&visionRaster = *(RwRaster**)0xC40158;
-RwRaster *&CPostEffects__m_pGrainRaster = *(RwRaster**)0xC402B0;
 RwRaster *grainRaster;
 
 void
-CPostEffects__InfraredVision_PS2(RwRGBA c1, RwRGBA c2)
+CPostEffects::SetFilterMainColour_PS2(RwRaster *raster, RwRGBA color)
+{
+	static float colorScale = 255.0f/128.0f;
+	CPostEffects::ImmediateModeRenderStatesStore();
+	CPostEffects::ImmediateModeRenderStatesSet();
+	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, 0);
+	RwD3D9SetPixelShaderConstant(0, &colorScale, 1);
+	overrideIm2dPixelShader = simplePS;
+	CPostEffects::DrawQuad(0, 0, RwRasterGetWidth(raster), RwRasterGetHeight(raster),
+	                       color.red, color.green, color.blue, color.alpha, raster);
+	overrideIm2dPixelShader = NULL;
+	CPostEffects::ImmediateModeRenderStatesReStore();
+
+}
+
+void
+CPostEffects::InfraredVision_PS2(RwRGBA c1, RwRGBA c2)
 {
 	if(config->infraredVision != 0){
-		CPostEffects__InfraredVision(c1, c2);
+		CPostEffects::InfraredVision(c1, c2);
 		return;
 	}
 
-	CPostEffects__ImmediateModeRenderStatesStore();
-	CPostEffects__ImmediateModeRenderStatesSet();
+	CPostEffects::ImmediateModeRenderStatesStore();
+	CPostEffects::ImmediateModeRenderStatesSet();
 
-	float r = CPostEffects__m_fInfraredVisionFilterRadius;
+	float r = CPostEffects::m_fInfraredVisionFilterRadius;
 	// not sure this scales correctly, but it looks ok (need better brain)
 	float ru = r * RsGlobal->MaximumWidth  / RwRasterGetWidth(visionRaster)  * 1024.0f / 640.0f;
 	float rv = r * RsGlobal->MaximumHeight / RwRasterGetHeight(visionRaster) * 512.0f  / 448.0f;
@@ -595,16 +609,9 @@ CPostEffects__InfraredVision_PS2(RwRGBA c1, RwRGBA c2)
 		postfxQuad[1].v = postfxQuad[0].v;
 		postfxQuad[2].u = postfxQuad[0].u;
 		postfxQuad[2].v = postfxQuad[3].v;
-		CPostEffects__DrawQuad(0, 0, RwRasterGetWidth(visionRaster)*2, RwRasterGetHeight(visionRaster)*2,
+		CPostEffects::DrawQuad(0, 0, RwRasterGetWidth(visionRaster)*2, RwRasterGetHeight(visionRaster)*2,
 		                       c1.red, c1.green, c1.blue, 0xFFu, visionRaster);
 	}
-
-	RwCameraEndUpdate(Camera);
-	RwRasterPushContext(visionRaster);
-	RwRasterRenderFast(RwCameraGetRaster(Camera), 0, 0);
-	RwRasterPopContext();
-	RwCameraBeginUpdate(Camera);
-
 	postfxQuad[0].u = 0.0f;
 	postfxQuad[0].v = 0.0f;
 	postfxQuad[1].u = 1.0f;
@@ -613,47 +620,64 @@ CPostEffects__InfraredVision_PS2(RwRGBA c1, RwRGBA c2)
 	postfxQuad[2].v = 1.0f;
 	postfxQuad[3].u = 1.0f;
 	postfxQuad[3].v = 1.0f;
-	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, 0);
+	CPostEffects::ImmediateModeRenderStatesReStore();
 
-	float colorScale = 255.0f/128.0f;
-	RwD3D9SetPixelShaderConstant(0, &colorScale, 1);
-	overrideIm2dPixelShader = simplePS;
-	CPostEffects__DrawQuad(0, 0, RwRasterGetWidth(visionRaster), RwRasterGetHeight(visionRaster),
-	                       c2.red, c2.green, c2.blue, 0xFFu, visionRaster);
-	overrideIm2dPixelShader = NULL;
-
-	CPostEffects__ImmediateModeRenderStatesReStore();
-
-	// The fuck is this? o_O
-//	if(!(GetAsyncKeyState(VK_F8) & 0x8000))
-//		return;
-//	CPostEffects__SetFilterMainColour(visionRaster, c2);
+	RwCameraEndUpdate(Camera);
+	RwRasterPushContext(visionRaster);
+	RwRasterRenderFast(RwCameraGetRaster(Camera), 0, 0);
+	RwRasterPopContext();
+	RwCameraBeginUpdate(Camera);
+	CPostEffects::SetFilterMainColour_PS2(visionRaster, c2);
 }
 
-WRAPPER void CPostEffects__Grain(int strengh, bool generate) { EAXJMP(0x7037C0); }
-
-int seeder = 123;
+float &CTimer__ms_fTimeStep = *(float*)0xB7CB5C;
 
 void
-CPostEffects__Grain_PS2(int strength, bool generate)
+CPostEffects::NightVision_PS2(RwRGBA color)
 {
-	if(config->infraredVision != 0){
-		CPostEffects__Grain(strength, generate);
+	if(config->nightVision != 0){
+		CPostEffects::NightVision(color);
+		return;
+	}
+
+	if(CPostEffects::m_fNightVisionSwitchOnFXCount > 0.0f){
+		CPostEffects::m_fNightVisionSwitchOnFXCount -= CTimer__ms_fTimeStep;
+		if(CPostEffects::m_fNightVisionSwitchOnFXCount <= 0.0f)
+			CPostEffects::m_fNightVisionSwitchOnFXCount = 0.0f;
+		CPostEffects::ImmediateModeRenderStatesStore();
+		CPostEffects::ImmediateModeRenderStatesSet();
+		RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
+		RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
+		int n = CPostEffects::m_fNightVisionSwitchOnFXCount;
+		while(n--){
+		        float w = RwRasterGetWidth(visionRaster);
+		        float h = RwRasterGetHeight(visionRaster);
+		        CPostEffects::DrawQuad(0.0f, 0.0f, w, h, 8, 8, 8, 0xFF, visionRaster);
+		}
+		CPostEffects::ImmediateModeRenderStatesReStore();
+	}
+
+	RwCameraEndUpdate(Camera);
+	RwRasterPushContext(visionRaster);
+	RwRasterRenderFast(RwCameraGetRaster(Camera), 0, 0);
+	RwRasterPopContext();
+	RwCameraBeginUpdate(Camera);
+	CPostEffects::SetFilterMainColour_PS2(visionRaster, color);
+}
+
+void
+CPostEffects::Grain_PS2(int strength, bool generate)
+{
+	if(config->grainFilter != 0){
+		CPostEffects::Grain(strength, generate);
 		return;
 	}
 
 	if(generate){
 		RwUInt8 *pixels = RwRasterLock(grainRaster, 0, 1);
 		srand(rand());
-		int j = 0;
 		for(int i = 0; i < 64*64; i++){
 			int x = rand();
-			j++;
-			if(j == 64){
-				srand(rand()+seeder);
-				seeder++;
-				j = 64;
-			}
 			*pixels++ = x;
 			*pixels++ = x;
 			*pixels++ = x;
@@ -662,10 +686,11 @@ CPostEffects__Grain_PS2(int strength, bool generate)
 		RwRasterUnlock(grainRaster);
 	}
 
-	CPostEffects__ImmediateModeRenderStatesStore();
-	CPostEffects__ImmediateModeRenderStatesSet();
+	CPostEffects::ImmediateModeRenderStatesStore();
+	CPostEffects::ImmediateModeRenderStatesSet();
 	RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
-	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
+//	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
+	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERNEAREST);
 	float umax = 5.0f * RsGlobal->MaximumWidth/640.0f;
 	float vmax = 7.0f * RsGlobal->MaximumHeight/448.0f;
 	postfxQuad[0].u = 0.0f;
@@ -682,7 +707,7 @@ CPostEffects__Grain_PS2(int strength, bool generate)
 
 	// colors unused
 	overrideIm2dPixelShader = grainPS;
-	CPostEffects__DrawQuad(0.0, 0.0, RsGlobal->MaximumWidth, RsGlobal->MaximumHeight,
+	CPostEffects::DrawQuad(0.0, 0.0, RsGlobal->MaximumWidth, RsGlobal->MaximumHeight,
 	                       0xFFu, 0xFFu, 0xFFu, 0xFF, grainRaster);
 	overrideIm2dPixelShader = NULL;
 	postfxQuad[0].u = 0.0f;
@@ -693,25 +718,14 @@ CPostEffects__Grain_PS2(int strength, bool generate)
 	postfxQuad[2].v = 1.0f;
 	postfxQuad[3].u = 1.0f;
 	postfxQuad[3].v = 1.0f;
-	CPostEffects__ImmediateModeRenderStatesReStore();
+	CPostEffects::ImmediateModeRenderStatesReStore();
 }
 
 WRAPPER char ReloadPlantConfig(void) { EAXJMP(0x5DD780); }
 
 void
-CPostEffects__ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
+CPostEffects::ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 {
-//	if(config->enableHotkeys){
-//		static bool keystate = false;
-//		if(GetAsyncKeyState(VK_F9) & 0x8000){
-//			if(!keystate){
-//				keystate = true;
-//				CPostEffects_m_bInfraredVision = !CPostEffects_m_bInfraredVision;
-//			}
-//		}else
-//			keystate = false;
-//	}
-
 	if(config->enableHotkeys){
 		static bool keystate = false;
 		if(GetAsyncKeyState(config->keys[0]) & 0x8000){
@@ -721,7 +735,7 @@ CPostEffects__ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 					config = &configs[0];
 				else
 					config++;
-				resetRadiosityValues();
+				resetValues();
 				SetCloseFarAlphaDist(3.0, 1234.0); // second value overriden
 			}
 		}else
@@ -738,7 +752,7 @@ CPostEffects__ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 				else
 					for(int i = 1; i <= numConfigs; i++)
 						readIni(i);
-				resetRadiosityValues();
+				resetValues();
 				SetCloseFarAlphaDist(3.0, 1234.0); // second value overriden
 			}
 		}else
@@ -755,7 +769,7 @@ CPostEffects__ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 				else
 					for(int i = 1; i <= numConfigs; i++)
 						readIni(i);
-				resetRadiosityValues();
+				resetValues();
 				ReloadPlantConfig();
 				SetCloseFarAlphaDist(3.0, 1234.0); // second value overriden
 			}
@@ -764,16 +778,15 @@ CPostEffects__ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 	}
 
 	if(config->colorFilter == 0)
-		CPostEffects__ColourFilter_PS2(rgb1, rgb2);
+		CPostEffects::ColourFilter_PS2(rgb1, rgb2);
 	else if(config->colorFilter == 1)
-		CPostEffects__ColourFilter(rgb1, rgb2);
+		CPostEffects::ColourFilter(rgb1, rgb2);
 }
 
 void
-CPostEffects__Init(void)
+CPostEffects::Init(void)
 {
 	MemoryVP::InjectHook(0x7FB824, Im2dSetPixelShader_hook);
-	MemoryVP::Patch<int>(0x8D50B4, 0x18);
 
 	grainRaster = RwRasterCreate(64, 64, 32, 0x504);
 
@@ -824,21 +837,25 @@ CPostEffects__Init(void)
 
 	target1 = RwRasterCreate(4,
 	                         4,
-	                         CPostEffects__pRasterFrontBuffer->depth, 5);
+	                         CPostEffects::pRasterFrontBuffer->depth, 5);
 	target2 = RwRasterCreate(4,
 	                         4,
-	                         CPostEffects__pRasterFrontBuffer->depth, 5);
+	                         CPostEffects::pRasterFrontBuffer->depth, 5);
 	smallRect.x = 0;
 	smallRect.y = 0;
 	smallRect.w = Camera->frameBuffer->width/4;
 	smallRect.h = Camera->frameBuffer->height/4;
 
-	reflTex = RwRasterCreate(128,
-	                         128,
-	                         CPostEffects__pRasterFrontBuffer->depth, 5);
+//	reflTex = RwRasterCreate(128, 128, 0, 5);
+	reflTex = RwRasterCreate(CPostEffects::pRasterFrontBuffer->width, CPostEffects::pRasterFrontBuffer->height, 0, 5);
 	vcsRect.x = 0;
 	vcsRect.y = 0;
 }
+
+
+
+
+
 
 // Mobile stuff, partly taken from NTAuthority
 

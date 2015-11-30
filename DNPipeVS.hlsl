@@ -26,6 +26,7 @@ float3		ambientLight : register(c14);
 float3		shaderVars : register(c15);	// colorScale, balance, reflSwitch
 float4		reflData : register(c16);	// shininess, intensity
 float4		envXform : register(c17);
+float4x4	texmat : register(c20);
 
 VS_OUTPUT main(in VS_INPUT In)
 {
@@ -41,7 +42,7 @@ VS_OUTPUT main(in VS_INPUT In)
 	Out.color.rgb = (In.DayColor*(1.0-shaderVars[1]) + In.NightColor*shaderVars[1]).rgb;
 	Out.color.a = In.NightColor.a;
 
-	Out.texcoord0.xy = In.TexCoord;
+	Out.texcoord0.xy = mul(texmat, float4(In.TexCoord, 0.0, 1.0)).xy;
 	if(shaderVars[2] == 1.0){		// PS2 style
 		float4 camNormal;
 		camNormal.xyz = normalize(mul((float3x3)view, mul((float3x3)world, In.Normal.xyz)));
