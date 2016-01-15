@@ -4,7 +4,7 @@ HMODULE dllModule;
 
 int numConfigs;
 Config *config, configs[10];
-bool oneGrassModel, usePCTimecyc, disableHQShadows, disableClouds, uglyWheelHack;
+bool oneGrassModel, usePCTimecyc, disableClouds, uglyWheelHack;
 int original_bRadiosity = 0;
 
 void *grassPixelShader;
@@ -190,7 +190,7 @@ readIni(int n)
 	c->vehiclePipe = GetPrivateProfileInt("SkyGfx", "vehiclePipe", 0, modulePath) % 5;
 	tmpint = GetPrivateProfileInt("SkyGfx", "worldPipe", 0, modulePath);
 	c->worldPipe = tmpint >= 0 ? tmpint % 3 : -1;
-	c->colorFilter = GetPrivateProfileInt("SkyGfx", "colorFilter", 0, modulePath) % 3;
+	c->colorFilter = GetPrivateProfileInt("SkyGfx", "colorFilter", 0, modulePath) % 4;
 	c->infraredVision = GetPrivateProfileInt("SkyGfx", "infraredVision", 0, modulePath) % 2;
 	c->nightVision = GetPrivateProfileInt("SkyGfx", "nightVision", 0, modulePath) % 2;
 	c->grainFilter = GetPrivateProfileInt("SkyGfx", "grainFilter", 0, modulePath) % 2;
@@ -219,7 +219,8 @@ readIni(int n)
 	c->vcsTrails = GetPrivateProfileInt("SkyGfx", "vcsTrails", FALSE, modulePath) != FALSE;
 	c->trailsLimit = GetPrivateProfileInt("SkyGfx", "trailsLimit", 80, modulePath);
 	c->trailsIntensity = GetPrivateProfileInt("SkyGfx", "trailsIntensity", 38, modulePath);
-	disableHQShadows = GetPrivateProfileInt("SkyGfx", "disableHQShadows", FALSE, modulePath) != FALSE;
+	c->pedShadows = GetPrivateProfileInt("SkyGfx", "pedShadows", 0, modulePath);
+	c->stencilShadows = GetPrivateProfileInt("SkyGfx", "stencilShadows", 0, modulePath);
 	disableClouds = GetPrivateProfileInt("SkyGfx", "disableClouds", FALSE, modulePath) != FALSE;
 	uglyWheelHack = GetPrivateProfileInt("SkyGfx", "uglyWheelHack", FALSE, modulePath) != FALSE;
 
@@ -567,18 +568,6 @@ afterStreamIni(void)
 	}
 }
 
-void __declspec(naked)
-waterZwrite(void)
-{
-	_asm{
-		mov	edx, dword ptr ds:[0xC97B24]
-		mov	ecx, [config]
-		push	[ecx+4]	// waterWriteZ
-		push	0x6EF8C0
-		retn
-	}
-}
-
 char
 CPlantMgr_Initialise(void)
 {
@@ -608,6 +597,30 @@ void CRenderer__RenderEverythingBarRoads(void)
 	reflTexDone = FALSE;
 	CRenderer__RenderEverythingBarRoads_orig();
 	reflTexDone = TRUE;
+}
+
+struct FX
+{
+	char data[0x54];
+	int fxQuality;
+	int GetFxQuality_ped(void);
+	int GetFxQuality_stencil(void);
+};
+
+int
+FX::GetFxQuality_ped(void)
+{
+	if(config->pedShadows >= 0)
+		return config->pedShadows ? 3 : 0;
+	return this->fxQuality;
+}
+
+int
+FX::GetFxQuality_stencil(void)
+{
+	if(config->stencilShadows >= 0)
+		return config->stencilShadows ? 3 : 0;
+	return this->fxQuality;
 }
 
 static BOOL (*IsAlreadyRunning)();
@@ -652,24 +665,34 @@ InjectDelayedPatches()
 			MemoryVP::Patch<DWORD>(0x5DDADB, (DWORD)modelname);
 		}
 
-		if(disableHQShadows){
+		//if(disableHQShadows){
 			// disable stencil shadows
-			MemoryVP::Patch<BYTE>(0x53E159, 0xC3);
-			MemoryVP::Nop(0x53C1AB, 5);
+			//MemoryVP::Patch<BYTE>(0x53E159, 0xC3);
+			//MemoryVP::Nop(0x53C1AB, 5);
+			// stencil???
+			MemoryVP::InjectHook(0x7113B8, &FX::GetFxQuality_stencil);
+			MemoryVP::InjectHook(0x711D95, &FX::GetFxQuality_stencil);
 			// use static ped shadows
-			MemoryVP::Patch<WORD>(0x5E6789, 0xe990);
+			//MemoryVP::Patch<WORD>(0x5E6789, 0xe990);
+			MemoryVP::InjectHook(0x5E675E, &FX::GetFxQuality_ped);
+			MemoryVP::InjectHook(0x5E676D, &FX::GetFxQuality_ped);
+			
+			MemoryVP::InjectHook(0x706BC4, &FX::GetFxQuality_ped);
+			MemoryVP::InjectHook(0x706BD3, &FX::GetFxQuality_ped);
+			// vehicle pole
+			MemoryVP::InjectHook(0x70F9B8, &FX::GetFxQuality_stencil);
 			// enable low quality car shadows
-			MemoryVP::Nop(0x70BDAB, 6);
+			//MemoryVP::Nop(0x70BDAB, 6);
 			// enable low quality pole shadows
-			MemoryVP::Nop(0x70C75A, 6);
-		}
+			//MemoryVP::Nop(0x70C75A, 6);
+		//}
 
 		if(disableClouds){
 			// jump over cloud loop
 			MemoryVP::InjectHook(0x714145, 0x71422A, PATCH_JUMP);
 		}
 
-//		loadColorcycle();
+		//loadColorcycle();
 		return FALSE;
 	}
 	return TRUE;

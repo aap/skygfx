@@ -33,6 +33,7 @@ struct Config {
 	int offLeft, offRight, offTop, offBottom;
 	RwBool vcsTrails;
 	int trailsLimit, trailsIntensity;
+	int pedShadows, stencilShadows;
 
 	float farDist, fadeDist, fadeInvDist, densityMult;
 

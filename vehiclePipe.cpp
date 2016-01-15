@@ -575,7 +575,8 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_VCS(RwResEntry *repEntry, void *obj
 		material = instancedData->material;
 		materialFlags = *(RwUInt32*)&material->surfaceProps.specular;
 
-		hasRefl = materialFlags & 4;
+		//hasRefl = materialFlags & 4;
+		hasRefl = materialFlags & 3;
 
 		if(flags & (rxGEOMETRY_TEXTURED2 | rxGEOMETRY_TEXTURED))
 			RwD3D9SetTexture(material->texture ? material->texture : gpWhiteTexture, 0);
@@ -586,6 +587,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_VCS(RwResEntry *repEntry, void *obj
 		RwD3D9SetTexture(NULL, 1);
 		envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
 		if(hasRefl && !noRefl){
+			// or maybe from matfx?
 			reflData.shininess = 0x26/255.0f;
 			// ?
 			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
@@ -625,13 +627,17 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_VCS(RwResEntry *repEntry, void *obj
 		// this takes the texture into account, somehow....
 		RwD3D9GetRenderState(D3DRS_ALPHABLENDENABLE, &hasAlpha);
 		if(hasAlpha && config->dualPassVehicle){
-			int alphafunc;
+			int alphafunc, alpharef;
+			RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, &alpharef);
 			RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &alphafunc);
+			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)128);
 			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONGREATEREQUAL);
+			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
 			D3D9Render(resEntryHeader, instancedData);
 			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONLESS);
-			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, FALSE);
+			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
 			D3D9Render(resEntryHeader, instancedData);
+			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)alpharef);
 			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphafunc);
 			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
 		}else
@@ -639,6 +645,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_VCS(RwResEntry *repEntry, void *obj
 		instancedData++;
 	}
 	// we don't even change it, but apparently this render CB has to reset it (otherwise might still be on from MatFX)
+	RwD3D9SetTexture(NULL, 1);
 	RwD3D9SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_DISABLE);
 	RwD3D9SetTextureStageState(1, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
 	RwD3D9SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, 1);

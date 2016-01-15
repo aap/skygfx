@@ -37,6 +37,7 @@ struct ScreenVertex
 };
 
 void *postfxVS, *colorFilterPS, *radiosityPS, *grainPS;
+void *rampPS;
 void *quadVertexDecl, *screenVertexDecl;
 RwRect smallRect;
 static QuadVertex quadVertices[4];
@@ -721,6 +722,89 @@ CPostEffects::Grain_PS2(int strength, bool generate)
 	CPostEffects::ImmediateModeRenderStatesReStore();
 }
 
+struct Grade
+{
+	float r, g, b, a;
+};
+void interpolateColorcycle(Grade *red, Grade *green, Grade *blue);
+int colorcycleInitialized = 0;
+
+void
+renderMobile(void)
+{
+	float rasterWidth = RwRasterGetWidth(CPostEffects::pRasterFrontBuffer);
+	float rasterHeight = RwRasterGetHeight(CPostEffects::pRasterFrontBuffer);
+	float halfU = 0.5 / rasterWidth;
+	float halfV = 0.5 / rasterHeight;
+	float uMax = RsGlobal->MaximumWidth / rasterWidth;
+	float vMax = RsGlobal->MaximumHeight / rasterHeight;
+	int i = 0;
+
+	if(!colorcycleInitialized)
+		loadColorcycle();
+
+	RwCameraEndUpdate(Camera);
+	RwRasterPushContext(CPostEffects::pRasterFrontBuffer);
+	RwRasterRenderFast(RwCameraGetRaster(Camera), 0, 0);
+	RwRasterPopContext();
+	RwCameraBeginUpdate(Camera);
+
+	quadVertices[i].x = 1.0f;
+	quadVertices[i].y = -1.0f;
+	quadVertices[i].z = 0.0f;
+	quadVertices[i].rhw = 1.0f;
+	quadVertices[i].u = uMax + halfU;
+	quadVertices[i].v = vMax + halfV;
+	i++;
+
+	quadVertices[i].x = -1.0f;
+	quadVertices[i].y = -1.0f;
+	quadVertices[i].z = 0.0f;
+	quadVertices[i].rhw = 1.0f;
+	quadVertices[i].u = 0.0f + halfU;
+	quadVertices[i].v = vMax + halfV;
+	i++;
+
+	quadVertices[i].x = -1.0f;
+	quadVertices[i].y = 1.0f;
+	quadVertices[i].z = 0.0f;
+	quadVertices[i].rhw = 1.0f;
+	quadVertices[i].u = 0.0f + halfU;
+	quadVertices[i].v = 0.0f + halfV;
+	i++;
+
+	quadVertices[i].x = 1.0f;
+	quadVertices[i].y = 1.0f;
+	quadVertices[i].z = 0.0f;
+	quadVertices[i].rhw = 1.0f;
+	quadVertices[i].u = uMax + halfU;
+	quadVertices[i].v = 0.0f + halfV;
+	
+	RwTexture tempTexture;
+	tempTexture.raster = CPostEffects::pRasterFrontBuffer;
+	RwD3D9SetTexture(&tempTexture, 0);
+
+	RwD3D9SetVertexDeclaration(quadVertexDecl);
+
+	RwD3D9SetVertexShader(postfxVS);
+	RwD3D9SetPixelShader(rampPS);
+
+	Grade red, green, blue;
+	interpolateColorcycle(&red, &green, &blue);
+	RwD3D9SetPixelShaderConstant(0, &red, 1);
+	RwD3D9SetPixelShaderConstant(1, &green, 1);
+	RwD3D9SetPixelShaderConstant(2, &blue, 1);
+
+	RwD3D9SetRenderState(D3DRS_ALPHABLENDENABLE, 0);
+	RwD3D9SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
+	RwD3D9DrawIndexedPrimitiveUP(D3DPT_TRIANGLELIST, 0, 6, 2, quadIndices, quadVertices, sizeof(QuadVertex));
+
+	RwD3D9SetRenderState(D3DRS_ALPHABLENDENABLE, 1);
+
+	RwD3D9SetVertexShader(NULL);
+	RwD3D9SetPixelShader(NULL);
+}
+
 WRAPPER char ReloadPlantConfig(void) { EAXJMP(0x5DD780); }
 
 void
@@ -781,6 +865,22 @@ CPostEffects::ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 		CPostEffects::ColourFilter_PS2(rgb1, rgb2);
 	else if(config->colorFilter == 1)
 		CPostEffects::ColourFilter(rgb1, rgb2);
+	else if(config->colorFilter == 2)
+		renderMobile();
+
+	//static int doramp = 0;
+	//{
+	//	static bool keystate = false;
+	//	if(GetAsyncKeyState(VK_F4) & 0x8000){
+	//		if(!keystate){
+	//			doramp = !doramp;
+	//			keystate = true;
+	//		}
+	//	}else
+	//		keystate = false;
+	//}
+	//if(doramp)
+	//	renderRamp();
 }
 
 void
@@ -816,6 +916,11 @@ CPostEffects::Init(void)
 		RwD3D9CreatePixelShader(shader, &simplePS);
 		FreeResource(shader);
 	}
+
+	resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_RAMPPS), RT_RCDATA);
+	shader = (RwUInt32*)LoadResource(dllModule, resource);
+	RwD3D9CreatePixelShader(shader, &rampPS);
+	FreeResource(shader);
 
 	static const D3DVERTEXELEMENT9 vertexElements[] =
 	{
@@ -859,6 +964,13 @@ CPostEffects::Init(void)
 
 // Mobile stuff, partly taken from NTAuthority
 
+short &clockSecond = *(short*)0xB70150;
+byte &clockMinute = *(byte*)0xB70152;
+byte &clockHour = *(byte*)0xB70153;
+short &oldWeather = *(short*)0xC81320;
+short &newWeather = *(short*)0xC8131C;
+float &weatherInterp = *(float*)0xC8130C;
+
 class CFileMgr
 {
 public:
@@ -873,18 +985,75 @@ public:
 	static char* LoadLine(void* file);
 };
 
-WRAPPER void* CFileMgr::OpenFile(const char* filename, const char* mode) { EAXJMP(0x538900); } //
-WRAPPER void  CFileMgr::CloseFile(void* file) { EAXJMP(0x5389D0); } //
-WRAPPER char* CFileLoader::LoadLine(void* file) { EAXJMP(0x536F80); } //
+WRAPPER void* CFileMgr::OpenFile(const char* filename, const char* mode) { EAXJMP(0x538900); }
+WRAPPER void  CFileMgr::CloseFile(void* file) { EAXJMP(0x5389D0); }
+WRAPPER char* CFileLoader::LoadLine(void* file) { EAXJMP(0x536F80); }
 
-struct Grade
-{
-	float r, g, b, a;
-};
 
 Grade redGrade[8][23];
 Grade greenGrade[8][23];
 Grade blueGrade[8][23];
+
+float blerp[4];
+
+int
+houridx(int hour)
+{
+	switch(hour){
+	default:
+	case 0: case 1: case 2: case 3: case 4:
+		return 0;
+	case 5: return 1;
+	case 6: return 2;
+	case 7: case 8: case 9: case 10: case 11:
+		return 3;
+	case 12: case 13: case 14: case 15: case 16: case 17: case 18:
+		return 4;
+	case 19: return 5;
+	case 20: case 21:
+		return 6;
+	case 22: case 23:
+		return 7;
+	}
+}
+
+void
+interpolateGrade(Grade *out, Grade *a, Grade *b)
+{
+	out->r = a[oldWeather].r*blerp[0] +
+	         b[oldWeather].r*blerp[1] +
+	         a[newWeather].r*blerp[2] +
+	         b[newWeather].r*blerp[3];
+	out->g = a[oldWeather].g*blerp[0] +
+	         b[oldWeather].g*blerp[1] +
+	         a[newWeather].g*blerp[2] +
+	         b[newWeather].g*blerp[3];
+	out->b  = a[oldWeather].b*blerp[0] +
+	          b[oldWeather].b*blerp[1] +
+	          a[newWeather].b*blerp[2] +
+	          b[newWeather].b*blerp[3];
+	out->a = a[oldWeather].a*blerp[0] +
+	         b[oldWeather].a*blerp[1] +
+	         a[newWeather].a*blerp[2] +
+	         b[newWeather].a*blerp[3];
+}
+
+void
+interpolateColorcycle(Grade *red, Grade *green, Grade *blue)
+{
+	int nextHour = (clockHour+1)%24;
+	float timeInterp = (clockSecond/60.0f + clockMinute)/60.0f;
+	blerp[0] = (1.0f-timeInterp)*(1.0f-weatherInterp);
+	blerp[1] = timeInterp*(1.0f-weatherInterp);
+	blerp[2] = (1.0f-timeInterp)*weatherInterp;
+	blerp[3] = timeInterp*weatherInterp;
+	nextHour = houridx(nextHour);
+	int thisHour = houridx(clockHour);
+	//printf("%d %d %f %f %f %f\n", thisHour, nextHour, blerp[0], blerp[1], blerp[2], blerp[3]);
+	interpolateGrade(red, redGrade[thisHour], redGrade[nextHour]);
+	interpolateGrade(green, greenGrade[thisHour], greenGrade[nextHour]);
+	interpolateGrade(blue, blueGrade[thisHour], blueGrade[nextHour]);
+}
 
 void
 loadColorcycle(void)
@@ -923,7 +1092,12 @@ loadColorcycle(void)
 			blueGrade[j][i].g *= 0.67f;
 			blueGrade[j][i].b *= 0.67f;
 			blueGrade[j][i].a *= 0.67f;
+			//printf("%f %f %f %f X %f %f %f %f X %f %f %f %f\n",
+			//	redGrade[j][i].r, redGrade[j][i].g, redGrade[j][i].b, redGrade[j][i].a,
+			//	greenGrade[j][i].r, greenGrade[j][i].g, greenGrade[j][i].b, greenGrade[j][i].a,
+			//	blueGrade[j][i].r, blueGrade[j][i].g, blueGrade[j][i].b, blueGrade[j][i].a);
 		}
 	}
 	CFileMgr::CloseFile(f);
+	colorcycleInitialized = 1;
 }
