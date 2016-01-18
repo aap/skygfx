@@ -17,7 +17,7 @@
 extern HMODULE dllModule;
 
 struct Config {
-	RwBool fixGrassPlacement, waterWriteZ;	// these two have to stay at that offset, see fixSeed and waterZwrite in main.cpp
+	RwBool fixGrassPlacement;	// this has to stay at that offset, see fixSeed in main.cpp
 	RwBool enableHotkeys;
 	RwBool ps2Ambient, ps2ModulateWorld, ps2ModulateGrass;
 	RwBool grassAddAmbient;
@@ -34,6 +34,7 @@ struct Config {
 	RwBool vcsTrails;
 	int trailsLimit, trailsIntensity;
 	int pedShadows, stencilShadows;
+	int detailedWaterDist;
 
 	float farDist, fadeDist, fadeInvDist, densityMult;
 
@@ -191,3 +192,4 @@ char *GetFrameNodeName(RwFrame *frame);
 void SetPipelineID(RpAtomic*, unsigned int it);
 RpAtomic *AtomicDefaultRenderCallBack(RpAtomic*);
 void CCustomCarEnvMapPipeline__CustomPipeRenderCB_exe(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags);
+void GTAfree(void *data);

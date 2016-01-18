@@ -310,6 +310,17 @@ DNInstance_PS2(void *object, RxD3D9ResEntryHeader *resEntryHeader, RwBool reinst
 
 		if(vertexData)
 			vertBuffer->Unlock();
+
+		RwRGBA **night = RWPLUGINOFFSET(RwRGBA*, geometry, CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset);
+		RwRGBA **day = RWPLUGINOFFSET(RwRGBA*, geometry, CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset + 4);
+		if(*night != nullptr){
+			GTAfree(*night);
+			*night = nullptr;
+		}
+		if(*day != nullptr){
+			GTAfree(*day);
+			*day = nullptr;
+		}
 	}
 	return 1;
 }

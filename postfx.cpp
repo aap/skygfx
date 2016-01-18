@@ -37,7 +37,7 @@ struct ScreenVertex
 };
 
 void *postfxVS, *colorFilterPS, *radiosityPS, *grainPS;
-void *rampPS;
+void *gradingPS;
 void *quadVertexDecl, *screenVertexDecl;
 RwRect smallRect;
 static QuadVertex quadVertices[4];
@@ -787,13 +787,23 @@ renderMobile(void)
 	RwD3D9SetVertexDeclaration(quadVertexDecl);
 
 	RwD3D9SetVertexShader(postfxVS);
-	RwD3D9SetPixelShader(rampPS);
+	RwD3D9SetPixelShader(gradingPS);
 
 	Grade red, green, blue;
 	interpolateColorcycle(&red, &green, &blue);
+	float mult[3], add[3];
+
+	mult[0] = red.r + red.g + red.b;
+	mult[1] = green.r + green.g + blue.b;
+	mult[2] = blue.r + blue.g + blue.b;
+	add[0] = red.a;
+	add[1] = green.a;
+	add[2] = blue.a;
 	RwD3D9SetPixelShaderConstant(0, &red, 1);
 	RwD3D9SetPixelShaderConstant(1, &green, 1);
 	RwD3D9SetPixelShaderConstant(2, &blue, 1);
+	RwD3D9SetPixelShaderConstant(3, &mult, 1);
+	RwD3D9SetPixelShaderConstant(4, &add, 1);
 
 	RwD3D9SetRenderState(D3DRS_ALPHABLENDENABLE, 0);
 	RwD3D9SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
@@ -917,9 +927,9 @@ CPostEffects::Init(void)
 		FreeResource(shader);
 	}
 
-	resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_RAMPPS), RT_RCDATA);
+	resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_GRADINGPS), RT_RCDATA);
 	shader = (RwUInt32*)LoadResource(dllModule, resource);
-	RwD3D9CreatePixelShader(shader, &rampPS);
+	RwD3D9CreatePixelShader(shader, &gradingPS);
 	FreeResource(shader);
 
 	static const D3DVERTEXELEMENT9 vertexElements[] =

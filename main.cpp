@@ -104,6 +104,8 @@ resetValues(void)
 		MemoryVP::Patch<float>(0x735F8B, 0.4f);
 	else
 		MemoryVP::Patch<float>(0x735F8B, 1.0f);
+
+	*(int*)0x8D37D0 = config->detailedWaterDist;
 }
 
 int
@@ -224,7 +226,7 @@ readIni(int n)
 	disableClouds = GetPrivateProfileInt("SkyGfx", "disableClouds", FALSE, modulePath) != FALSE;
 	uglyWheelHack = GetPrivateProfileInt("SkyGfx", "uglyWheelHack", FALSE, modulePath) != FALSE;
 
-	c->waterWriteZ = GetPrivateProfileInt("SkyGfx", "waterWriteZ", FALSE, modulePath) != FALSE;
+	c->detailedWaterDist = GetPrivateProfileInt("SkyGfx", "detailedWaterDist", 48, modulePath);
 
 	GetPrivateProfileString("SkyGfx", "farDist", "60.0", tmp, sizeof(tmp), modulePath);
 	c->farDist = atof(tmp);
