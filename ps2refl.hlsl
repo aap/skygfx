@@ -64,10 +64,11 @@ mainVS(VS_INPUT IN)
 		float4 intex = {IN.UV2.x, IN.UV2.y, 1.0, 0.0};
 		OUT.texcoord1.xyz = mul(Texture, intex).xyz;
 	} else if (envSwitch == 2.0f) {		// PS2 style environment map
-		float4 camNormal;
-		camNormal.xyz = normalize(mul((float3x3)View, worldNormal));
-		camNormal.w = 0.0;
-		OUT.texcoord1.xy = camNormal.xy - envXform.xy;
+		//float4 camNormal;
+		//camNormal.xyz = normalize(mul((float3x3)View, worldNormal));
+		//camNormal.w = 0.0;
+		//OUT.texcoord1.xy = camNormal.xy - envXform.xy;
+		OUT.texcoord1.xy = worldNormal.xy - envXform.xy;
 		OUT.texcoord1.xy *= -envXform.zw;
 	} else {				// PC style environment map
 		float4 camNormal;
@@ -94,7 +95,7 @@ mainVS(VS_INPUT IN)
 	OUT.color *= matCol;
 
 	OUT.envcolor = float4(192.0, 192.0, 192.0, 0.0)/128.0*reflData.x*reflData.z;
-
+	
 	if (OUT.texcoord2.z < 0.0)
 		OUT.speccolor = float4(96.0, 96.0, 96.0, 0.0)/128.0*reflData.y*reflData.z;
 	else

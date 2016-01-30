@@ -4,7 +4,7 @@ HMODULE dllModule;
 
 int numConfigs;
 Config *config, configs[10];
-bool oneGrassModel, usePCTimecyc, disableClouds, uglyWheelHack;
+bool oneGrassModel, usePCTimecyc, disableClouds;//, uglyWheelHack;
 int original_bRadiosity = 0;
 
 void *grassPixelShader;
@@ -224,7 +224,7 @@ readIni(int n)
 	c->pedShadows = GetPrivateProfileInt("SkyGfx", "pedShadows", 0, modulePath);
 	c->stencilShadows = GetPrivateProfileInt("SkyGfx", "stencilShadows", 0, modulePath);
 	disableClouds = GetPrivateProfileInt("SkyGfx", "disableClouds", FALSE, modulePath) != FALSE;
-	uglyWheelHack = GetPrivateProfileInt("SkyGfx", "uglyWheelHack", FALSE, modulePath) != FALSE;
+	//uglyWheelHack = GetPrivateProfileInt("SkyGfx", "uglyWheelHack", FALSE, modulePath) != FALSE;
 
 	c->detailedWaterDist = GetPrivateProfileInt("SkyGfx", "detailedWaterDist", 48, modulePath);
 
@@ -651,8 +651,8 @@ InjectDelayedPatches()
 			MemoryVP::Patch<BYTE>(0x5D7200, 0xC3);	// disable interpolation
 		}
 
-		if(uglyWheelHack)
-			MemoryVP::Patch<DWORD>(0x5d5b48, (DWORD)CCarFXRenderer__CustomCarPipeClumpSetup);
+		//if(uglyWheelHack)
+		//	MemoryVP::Patch<DWORD>(0x5d5b48, (DWORD)CCarFXRenderer__CustomCarPipeClumpSetup);
 
 		if(oneGrassModel){
 			char *modelname = "grass0_1.dff";
@@ -814,6 +814,8 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		MemoryVP::InjectHook(0x44ECEE, ps2rand);
 		MemoryVP::InjectHook(0x42453B, ps2rand);
 		MemoryVP::InjectHook(0x42454D, ps2rand);
+
+		//MemoryVP::InjectHook(0x53ECA1, myPluginAttach);
 
 //		MemoryVP::Nop(0x748054, 10);
 ///		MemoryVP::Nop(0x748063, 5);

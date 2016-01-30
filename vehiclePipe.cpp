@@ -61,6 +61,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 	RwV4d envXform;
 	float envSwitch;
 	D3DMATRIX worldMat, worldITMat, viewMat, projMat;
+	RwUInt32 pluginData;
 
 	// set multipass distance. i'm lazy, just do it here
 	float *mpd = (float*)0xC88044;
@@ -135,21 +136,39 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 		material = instancedData->material;
 		materialFlags = *(RwUInt32*)&material->surfaceProps.specular;
 
-		hasRefl = true;
-		if((materialFlags & 1) == 0 || noRefl)
-			hasRefl = false;
-		hasEnv = true;
-		if((materialFlags & 2) == 0 || noRefl || (atomic->geometry->flags & rpGEOMETRYTEXTURED2) == 0)
+		hasRefl  = !((materialFlags & 1) == 0 || noRefl);
+		hasEnv   = !((materialFlags & 2) == 0 || noRefl || (atomic->geometry->flags & rpGEOMETRYTEXTURED2) == 0);
+		hasSpec  = !((materialFlags & 4) == 0 || !lighting);
+		hasAlpha = instancedData->vertexAlpha || instancedData->material->color.alpha != 255;
+
+		int matfx = RpMatFXMaterialGetEffects(material);
+		if(matfx != rpMATFXEFFECTENVMAP){
+			hasSpec = false;
 			hasEnv = false;
-		// ignoring visualFX level
-		hasSpec = materialFlags & 4;
+			hasRefl = false;
+		}
+
+		//pluginData = *RWPLUGINOFFSET(RwUInt32, material, pdsOffset);
+		//switch(pluginData){
+		//case 0x53f20085:
+		//	hasSpec = false;
+		//	hasEnv = false;
+		//	hasRefl = false;
+		//	break;
+		//case 0x53f20087:
+		//	hasEnv = false;
+		//	break;
+		//case 0x53f2008B:
+		//	hasRefl = false;
+		//	break;
+		//}
 
 		if(flags & (rxGEOMETRY_TEXTURED2 | rxGEOMETRY_TEXTURED))
 			RwD3D9SetTexture(material->texture ? material->texture : gpWhiteTexture, 0);
 		else
 			RwD3D9SetTexture(gpWhiteTexture, 0);
 
-		if(hasSpec && lighting && !noRefl){
+		if(hasSpec && !noRefl){
 			specData = *RWPLUGINOFFSET(CustomSpecMapPipeMaterialData*, material,
 			                           CCustomCarEnvMapPipeline__ms_specularMapPluginOffset);
 			reflData.specularity = specData->specularity;
@@ -220,7 +239,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 			envXform.z = 1.0f;
 			envXform.w = 1.0f;
 		}
-		hasAlpha = instancedData->vertexAlpha || instancedData->material->color.alpha != 255;
+		//hasAlpha = instancedData->vertexAlpha || instancedData->material->color.alpha != 255;
 		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)hasAlpha);
 		RwD3D9SetVertexShaderConstant(LOC_reflData, (void*)&reflData, 1);
 		RwD3D9SetVertexShaderConstant(LOC_envXForm, (void*)&envXform, 1);
@@ -652,18 +671,18 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_VCS(RwResEntry *repEntry, void *obj
 	RwD3D9SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_DISABLE);
 }
 
-RpAtomic*
-CCarFXRenderer__CustomCarPipeClumpSetup(RpAtomic *atomic, void *data)
-{
-	RpAtomic *ret;
-
-	ret = CCustomCarEnvMapPipeline__CustomPipeAtomicSetup(atomic);
-	if(strstr(GetFrameNodeName(RpAtomicGetFrame(atomic)), "wheel")){
-		ret->pipeline = NULL;
-		SetPipelineID(atomic, 0);
-	}
-	return ret;
-}
+//RpAtomic*
+//CCarFXRenderer__CustomCarPipeClumpSetup(RpAtomic *atomic, void *data)
+//{
+//	RpAtomic *ret;
+//
+//	ret = CCustomCarEnvMapPipeline__CustomPipeAtomicSetup(atomic);
+//	if(strstr(GetFrameNodeName(RpAtomicGetFrame(atomic)), "wheel")){
+//		ret->pipeline = NULL;
+//		SetPipelineID(atomic, 0);
+//	}
+//	return ret;
+//}
 
 void
 setVehiclePipeCB(RxPipelineNode *node, RxD3D9AllInOneRenderCallBack callback)

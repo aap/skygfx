@@ -130,13 +130,14 @@ struct CPostEffects
 };
 
 RxPipeline *CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2(void);
+int myPluginAttach(void);
 void setVehiclePipeCB(RxPipelineNode *node, RxD3D9AllInOneRenderCallBack callback);
 void loadColorcycle(void);
 void readIni(int n);
 void SetCloseFarAlphaDist(float close, float far);
 void resetValues(void);
 void D3D9Render(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData);
-RpAtomic *CCarFXRenderer__CustomCarPipeClumpSetup(RpAtomic *atomic, void *data);
+//RpAtomic *CCarFXRenderer__CustomCarPipeClumpSetup(RpAtomic *atomic, void *data);
 
 #define RwEngineInstance (*rwengine)
 extern RsGlobalType *RsGlobal;
@@ -155,6 +156,7 @@ extern void *simplePS;
 extern void *vehiclePipePS;
 extern RwBool reflTexDone;
 extern RwRaster *reflTex;
+extern RwInt32 pdsOffset;
 
 extern void **rwengine;
 extern RwInt32 &CCustomCarEnvMapPipeline__ms_envMapPluginOffset;
