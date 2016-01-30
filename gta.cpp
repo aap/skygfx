@@ -51,6 +51,10 @@ WRAPPER RwTexture *RwTextureCreate(RwRaster*) { EAXJMP(0x7F37C0); }
 WRAPPER RwInt32 RpMaterialRegisterPlugin(RwInt32, RwUInt32, RwPluginObjectConstructor,
 	RwPluginObjectDestructor, RwPluginObjectCopy) { EAXJMP(0x74DBF0); }
 WRAPPER RwInt32 RpMaterialSetStreamRightsCallBack(RwUInt32, RwPluginDataChunkRightsCallBack) { EAXJMP(0x74DC70); }
+WRAPPER RwInt32 RpAtomicRegisterPlugin(RwInt32, RwUInt32, RwPluginObjectConstructor,
+	RwPluginObjectDestructor, RwPluginObjectCopy) { EAXJMP(0x74BDA0); }
+WRAPPER RwInt32 RpAtomicSetStreamRightsCallBack(RwUInt32, RwPluginDataChunkRightsCallBack) { EAXJMP(0x74BE50); }
+
 
 WRAPPER RpMatFXMaterialFlags RpMatFXMaterialGetEffects(const RpMaterial*) { EAXJMP(0x812140); }
 WRAPPER const RpMaterial *RpMatFXMaterialGetUVTransformMatrices(const RpMaterial*, RwMatrix**, RwMatrix**) { EAXJMP(0x812A50); }

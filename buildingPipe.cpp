@@ -1,6 +1,7 @@
 #include "skygfx.h"
 
-static void *DNPipeVS;
+static void *DNPipeVS, *ps2BuildingFxVS;
+RxPipeline *buildingPipeline, *buildingDNPipeline;
 
 enum {
 	LOC_World = 0,
@@ -13,12 +14,14 @@ enum {
 	LOC_reflData = 16,
 	LOC_envXform = 17,
 	LOC_texmat = 20,
+	LOC_basecolor = 24,
 };
 
 // PS2 callback
 void
 CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
 {
+	RpAtomic *atomic;
 	RxD3D9ResEntryHeader *resEntryHeader;
 	RxD3D9InstanceData *instancedData;
 	RpMaterial *material;
@@ -31,7 +34,8 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 	RwBool hasAlpha;
 	struct DNShaderVars {
 		float colorScale;
-		float balance;
+		float nightMult;
+		float dayMult;
 		float reflSwitch;
 	} dnShaderVars;
 	struct {
@@ -39,12 +43,14 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 		float intensity;
 	} reflData;
 	RwV4d envXform;
+	float white[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+	float black[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 
-//	if(GetAsyncKeyState(VK_F8) & 0x8000)
-//		return;
+	//if(GetAsyncKeyState(VK_F8) & 0x8000)
+	//	return;
 
-	RwD3D9SetPixelShader(vehiclePipePS);
-	RwD3D9SetVertexShader(DNPipeVS);
+	atomic = (RpAtomic*)object;
+
 	RwD3D9GetTransform(D3DTS_WORLD, &worldMat);
 	RwD3D9GetTransform(D3DTS_VIEW, &viewMat);
 	RwD3D9GetTransform(D3DTS_PROJECTION, &projMat);
@@ -61,9 +67,29 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 	_rwD3D9SetStreams(resEntryHeader->vertexStream, resEntryHeader->useOffsets);
 	RwD3D9SetVertexDeclaration(resEntryHeader->vertexDeclaration);
 
-	dnShaderVars.balance = CCustomBuildingDNPipeline__m_fDNBalanceParam;
-	if(dnShaderVars.balance < 0.0f) dnShaderVars.balance = 0.0f;
-	if(dnShaderVars.balance > 1.0f) dnShaderVars.balance = 1.0f;
+	dnShaderVars.nightMult = CCustomBuildingDNPipeline__m_fDNBalanceParam;
+	if(dnShaderVars.nightMult < 0.0f) dnShaderVars.nightMult = 0.0f;
+	if(dnShaderVars.nightMult > 1.0f) dnShaderVars.nightMult = 1.0f;
+	dnShaderVars.dayMult = 1.0f - dnShaderVars.nightMult;
+
+	// If no extra colors, force the one we have (night, unintuitively)
+	if(atomic->pipeline->pluginData == 0x53F2009C){
+		dnShaderVars.dayMult = 0.0f;
+		dnShaderVars.nightMult = 1.0f;
+	}
+	if(flags & rxGEOMETRY_PRELIT)
+		RwD3D9SetVertexShaderConstant(LOC_basecolor,(void*)&black,1);
+	else{
+		dnShaderVars.dayMult = dnShaderVars.nightMult = 0.0f;
+		RwD3D9SetVertexShaderConstant(LOC_basecolor,(void*)&white,1);
+	}
+
+	int alphafunc, alpharef;
+	int src, dst;
+	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, &alpharef);
+	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &alphafunc);
+	RwRenderStateGet(rwRENDERSTATESRCBLEND, &src);
+	RwRenderStateGet(rwRENDERSTATEDESTBLEND, &dst);
 
 	numMeshes = resEntryHeader->numMeshes;
 	while(numMeshes--){
@@ -89,28 +115,6 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 			RwD3D9SetVertexShaderConstant(LOC_texmat, (void*)&m, 4);
 		}
 
-		reflData.shininess = reflData.intensity = 0.0f;
-		dnShaderVars.reflSwitch = 0;
-		if(*(int*)&material->surfaceProps.specular & 1){
-			RwV3d transVec;
-
-			envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
-			dnShaderVars.reflSwitch = 1 + config->worldPipe;
-			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
-			RwD3D9SetTexture(envData->texture, 1);
-			reflData.shininess = envData->shininess/255.0f;
-			reflData.intensity = pDirect->color.red*(256.0f/255.0f);
-
-			// is this correct? taken from vehicle pipeline
-			D3D9GetTransScaleVector(envData, (RpAtomic*)object, &transVec);
-			envXform.x = transVec.x;
-			envXform.y = transVec.y;
-			envXform.z = envData->scaleX / 8.0f;
-			envXform.w = envData->scaleY / 8.0f;
-			RwD3D9SetVertexShaderConstant(LOC_envXform, (void*)&envXform, 1);
-		}
-		RwD3D9SetVertexShaderConstant(LOC_reflData, (void*)&reflData, 1);
-
 		hasAlpha = instancedData->vertexAlpha || instancedData->material->color.alpha != 255;
 		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)hasAlpha);
 
@@ -127,13 +131,15 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 		surfProps[0] = lighting || config->worldPipe == 0 ? material->surfaceProps.ambient : 0.0f;
 		RwD3D9SetVertexShaderConstant(LOC_surfaceProps, &surfProps, 1);
 
+		dnShaderVars.reflSwitch = 1 + config->worldPipe;
 		RwD3D9SetVertexShaderConstant(LOC_shaderVars, (void*)&dnShaderVars, 1);
+
+		RwD3D9SetVertexShader(DNPipeVS);
+		RwD3D9SetPixelShader(vehiclePipePS);
+
 		// this takes the texture into account, somehow....
 		RwD3D9GetRenderState(D3DRS_ALPHABLENDENABLE, &hasAlpha);
 		if(hasAlpha && config->dualPassWorld){
-			int alphafunc, alpharef;
-			RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, &alpharef);
-			RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &alphafunc);
 			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)128);
 			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONGREATEREQUAL);
 			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
@@ -141,13 +147,54 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONLESS);
 			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
 			D3D9Render(resEntryHeader, instancedData);
-			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)alpharef);
-			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphafunc);
 			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
 		}else
 			D3D9Render(resEntryHeader, instancedData);
+
+		// Reflection
+
+		if(*(int*)&material->surfaceProps.specular & 1){
+			RwV3d transVec;
+
+			envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
+			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
+			RwD3D9SetTexture(envData->texture, 1);
+			reflData.shininess = envData->shininess/255.0f;
+			reflData.intensity = pDirect->color.red*(256.0f/255.0f);
+
+			// is this correct? taken from vehicle pipeline
+			D3D9GetTransScaleVector(envData, (RpAtomic*)object, &transVec);
+			envXform.x = transVec.x;
+			envXform.y = transVec.y;
+			envXform.z = envData->scaleX / 8.0f;
+			envXform.w = envData->scaleY / 8.0f;
+			RwD3D9SetVertexShaderConstant(LOC_envXform, (void*)&envXform, 1);
+			RwD3D9SetVertexShaderConstant(LOC_reflData, (void*)&reflData, 1);
+
+			RwD3D9SetVertexShader(ps2BuildingFxVS);
+			RwD3D9SetPixelShader(ps2CarFxPS);
+
+			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONALWAYS);
+			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
+			RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
+			RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
+			RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
+			D3D9Render(resEntryHeader, instancedData);
+			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
+			RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)src);
+			RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)dst);
+			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphafunc);
+		}
+
 		instancedData++;
 	}
+	RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)alpharef);
+	RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphafunc);
+	RwD3D9SetTexture(NULL, 1);
+	RwD3D9SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_DISABLE);
+	RwD3D9SetTextureStageState(1, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
+	RwD3D9SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, 1);
+	RwD3D9SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_DISABLE);
 }
 
 static RwBool
@@ -288,7 +335,7 @@ DNInstance_PS2(void *object, RxD3D9ResEntryHeader *resEntryHeader, RwBool reinst
 					;
 				RwRGBA *night = *RWPLUGINOFFSET(RwRGBA*, geometry, CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset);
 				RwRGBA *day = *RWPLUGINOFFSET(RwRGBA*, geometry, CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset + 4);
-				if(isNightColorZero(night, geometry->numVertices))
+				if(night == NULL || isNightColorZero(night, geometry->numVertices))
 					night = day;
 				numMeshes = resEntryHeader->numMeshes;
 				instData = (RxD3D9InstanceData*)(resEntryHeader+1);
@@ -325,15 +372,48 @@ DNInstance_PS2(void *object, RxD3D9ResEntryHeader *resEntryHeader, RwBool reinst
 	return 1;
 }
 
+static void
+createShaders(void)
+{
+	HRSRC resource;
+	RwUInt32 *shader;
+
+	if(DNPipeVS == NULL){
+		resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_DNPIPEVS), RT_RCDATA);
+		shader = (RwUInt32*)LoadResource(dllModule, resource);
+		RwD3D9CreateVertexShader(shader, &DNPipeVS);
+		FreeResource(shader);
+	}
+
+	if(ps2BuildingFxVS == NULL){
+		resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_PS2BUILDINGFXVS), RT_RCDATA);
+		shader = (RwUInt32*)LoadResource(dllModule, resource);
+		RwD3D9CreateVertexShader(shader, &ps2BuildingFxVS);
+		FreeResource(shader);
+	}
+
+	if(vehiclePipePS == NULL){
+		resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_VEHICLEPS), RT_RCDATA);
+		shader = (RwUInt32*)LoadResource(dllModule, resource);
+		RwD3D9CreatePixelShader(shader, &vehiclePipePS);
+		FreeResource(shader);
+	}
+
+	if(ps2CarFxPS == NULL){
+		resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_PS2CARFXPS), RT_RCDATA);
+		shader = (RwUInt32*)LoadResource(dllModule, resource);
+		RwD3D9CreatePixelShader(shader, &ps2CarFxPS);
+		FreeResource(shader);
+	}
+}
+
 RxPipeline*
-CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2(void)
+CCustomBuildingPipeline__CreateCustomObjPipe_PS2(void)
 {
 	RxPipeline *pipeline;
 	RxLockedPipe *lockedpipe;
 	RxPipelineNode *node;
 	RxNodeDefinition *instanceNode;
-	RxD3D9AllInOneInstanceCallBack instanceCB;
-	RxD3D9AllInOneReinstanceCallBack reinstanceCB;
 
 	pipeline = RxPipelineCreate();
 	instanceNode = RxNodeDefinitionGetD3D9AtomicAllInOne();
@@ -347,31 +427,46 @@ CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2(void)
 		return NULL;
 	}
 	node = RxPipelineFindNodeByName(pipeline, instanceNode->name, NULL, NULL);
-	if(dword_C02C20){
-		instanceCB = DNInstance_PS2;
-		RxD3D9AllInOneSetInstanceCallBack(node, instanceCB);
-		RxD3D9AllInOneSetReinstanceCallBack(node, reinstance);
-	}else{
-		instanceCB = DNInstance_PS2;
-		RxD3D9AllInOneSetInstanceCallBack(node, instanceCB);
-		reinstanceCB = RxD3D9AllInOneGetReinstanceCallBack(node);
-		RxD3D9AllInOneSetReinstanceCallBack(node, reinstanceCB);
-	}
+	RxD3D9AllInOneSetInstanceCallBack(node, RxD3D9AllInOneGetInstanceCallBack(node));
+	RxD3D9AllInOneSetReinstanceCallBack(node, reinstance);
 	RxD3D9AllInOneSetRenderCallBack(node, CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2);
 
-	HRSRC resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_DNPIPEVS), RT_RCDATA);
-	RwUInt32 *shader = (RwUInt32*)LoadResource(dllModule, resource);
-	RwD3D9CreateVertexShader(shader, &DNPipeVS);
-	FreeResource(shader);
+	createShaders();
 
-	if(vehiclePipePS == NULL){
-		resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_VEHICLEPS), RT_RCDATA);
-		shader = (RwUInt32*)LoadResource(dllModule, resource);
-		RwD3D9CreatePixelShader(shader, &vehiclePipePS);
-		FreeResource(shader);
+	pipeline->pluginId = 0x53F2009C;
+	pipeline->pluginData = 0x53F2009C;
+	buildingPipeline = pipeline;
+	return pipeline;
+}
+
+RxPipeline*
+CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2(void)
+{
+	RxPipeline *pipeline;
+	RxLockedPipe *lockedpipe;
+	RxPipelineNode *node;
+	RxNodeDefinition *instanceNode;
+
+	pipeline = RxPipelineCreate();
+	instanceNode = RxNodeDefinitionGetD3D9AtomicAllInOne();
+	if(pipeline == NULL)
+		return NULL;
+	lockedpipe = RxPipelineLock(pipeline);
+	if(lockedpipe == NULL ||
+	   RxLockedPipeAddFragment(lockedpipe, NULL, instanceNode, NULL) == NULL ||
+	   RxLockedPipeUnlock(lockedpipe) == NULL){
+		RxPipelineDestroy(pipeline);
+		return NULL;
 	}
+	node = RxPipelineFindNodeByName(pipeline, instanceNode->name, NULL, NULL);
+	RxD3D9AllInOneSetInstanceCallBack(node, DNInstance_PS2);
+	RxD3D9AllInOneSetReinstanceCallBack(node, reinstance);
+	RxD3D9AllInOneSetRenderCallBack(node, CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2);
+
+	createShaders();
 
 	pipeline->pluginId = 0x53F20098;
 	pipeline->pluginData = 0x53F20098;
+	buildingDNPipeline = pipeline;
 	return pipeline;
 }

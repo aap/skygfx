@@ -4,7 +4,7 @@ HMODULE dllModule;
 
 int numConfigs;
 Config *config, configs[10];
-bool oneGrassModel, usePCTimecyc, disableClouds;//, uglyWheelHack;
+bool oneGrassModel, usePCTimecyc, disableClouds, disableGamma, ps2MarkerAmbient;
 int original_bRadiosity = 0;
 
 void *grassPixelShader;
@@ -29,50 +29,9 @@ D3D9Render(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceDat
 		RwD3D9DrawPrimitive(resEntryHeader->primType, instanceData->baseIndex, instanceData->numPrimitives);
 }
 
-double
-CTimeCycle_GetAmbientRed(void)
-{
-	float c = 0.0;
-	if(config->ps2Ambient){
-		for(int i = 0; i < 3; i++)
-			if(ambientColors[i] > c)
-				c = ambientColors[i];
-		c += ambientColors[0];
-		if(c > 1.0f) c = 1.0f;
-	}else
-		c = ambientColors[0];
-	return *gfLaRiotsLightMult * c;
-}
-
-double
-CTimeCycle_GetAmbientGreen(void)
-{
-	float c = 0.0;
-	if(config->ps2Ambient){
-		for(int i = 0; i < 3; i++)
-			if(ambientColors[i] > c)
-				c = ambientColors[i];
-		c += ambientColors[1];
-		if(c > 1.0f) c = 1.0f;
-	}else
-		c = ambientColors[1];
-	return *gfLaRiotsLightMult * c;
-}
-
-double
-CTimeCycle_GetAmbientBlue(void)
-{
-	float c = 0.0;
-	if(config->ps2Ambient){
-		for(int i = 0; i < 3; i++)
-			if(ambientColors[i] > c)
-				c = ambientColors[i];
-		c += ambientColors[2];
-		if(c > 1.0f) c = 1.0f;
-	}else
-		c = ambientColors[2];
-	return *gfLaRiotsLightMult * c;
-}
+WRAPPER double CTimeCycle_GetAmbientRed(void) { EAXJMP(0x560330); }
+WRAPPER double CTimeCycle_GetAmbientGreen(void) { EAXJMP(0x560340); }
+WRAPPER double CTimeCycle_GetAmbientBlue(void) { EAXJMP(0x560350); }
 
 void
 SetCloseFarAlphaDist(float close, float far)
@@ -177,7 +136,6 @@ readIni(int n)
 	c->keys[2] = readhex(tmp);
 
 	c->enableHotkeys = GetPrivateProfileInt("SkyGfx", "enableHotkeys", TRUE, modulePath) != FALSE;
-	c->ps2Ambient = GetPrivateProfileInt("SkyGfx", "ps2Ambient", TRUE, modulePath) != FALSE;
 	c->ps2ModulateWorld = GetPrivateProfileInt("SkyGfx", "ps2ModulateWorld", TRUE, modulePath) != FALSE;
 	c->ps2ModulateGrass = GetPrivateProfileInt("SkyGfx", "ps2ModulateGrass", TRUE, modulePath) != FALSE;
 	c->dualPassWorld = GetPrivateProfileInt("SkyGfx", "dualPassWorld", TRUE, modulePath) != FALSE;
@@ -224,7 +182,8 @@ readIni(int n)
 	c->pedShadows = GetPrivateProfileInt("SkyGfx", "pedShadows", 0, modulePath);
 	c->stencilShadows = GetPrivateProfileInt("SkyGfx", "stencilShadows", 0, modulePath);
 	disableClouds = GetPrivateProfileInt("SkyGfx", "disableClouds", FALSE, modulePath) != FALSE;
-	//uglyWheelHack = GetPrivateProfileInt("SkyGfx", "uglyWheelHack", FALSE, modulePath) != FALSE;
+	disableGamma = GetPrivateProfileInt("SkyGfx", "disableGamma", FALSE, modulePath) != FALSE;
+	ps2MarkerAmbient = GetPrivateProfileInt("SkyGfx", "ps2MarkerAmbient", FALSE, modulePath) != FALSE;
 
 	c->detailedWaterDist = GetPrivateProfileInt("SkyGfx", "detailedWaterDist", 48, modulePath);
 
@@ -645,14 +604,12 @@ InjectDelayedPatches()
 			MemoryVP::Nop(0x5BBF83, 2);
 		}
 
-		// DNPipeline
+		// custom building pipeline
 		if(config->worldPipe >= 0){
 			MemoryVP::InjectHook(0x5D7100, CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2);
+			MemoryVP::InjectHook(0x5D7D90, CCustomBuildingPipeline__CreateCustomObjPipe_PS2);
 			MemoryVP::Patch<BYTE>(0x5D7200, 0xC3);	// disable interpolation
 		}
-
-		//if(uglyWheelHack)
-		//	MemoryVP::Patch<DWORD>(0x5d5b48, (DWORD)CCarFXRenderer__CustomCarPipeClumpSetup);
 
 		if(oneGrassModel){
 			char *modelname = "grass0_1.dff";
@@ -694,7 +651,11 @@ InjectDelayedPatches()
 			MemoryVP::InjectHook(0x714145, 0x71422A, PATCH_JUMP);
 		}
 
-		//loadColorcycle();
+		if(disableGamma)
+			MemoryVP::InjectHook(0x74721C, 0x7472F3, PATCH_JUMP);
+
+		if(ps2MarkerAmbient)
+			MemoryVP::InjectHook(0x722627, 0x735C40);
 		return FALSE;
 	}
 	return TRUE;
@@ -773,9 +734,6 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		MemoryVP::InjectHook(0x756DFE, rxD3D9DefaultRenderCallback_Hook, PATCH_JUMP);
 		MemoryVP::InjectHook(0x5DADB7, fixSeed, PATCH_JUMP);
 		MemoryVP::InjectHook(0x5DAE61, saveIntensity, PATCH_JUMP);
-		MemoryVP::InjectHook(0x560330, CTimeCycle_GetAmbientRed, PATCH_JUMP);
-		MemoryVP::InjectHook(0x560340, CTimeCycle_GetAmbientGreen, PATCH_JUMP);
-		MemoryVP::InjectHook(0x560350, CTimeCycle_GetAmbientBlue, PATCH_JUMP);
 		MemoryVP::Patch<DWORD>(0x5DAEC8, (DWORD)setTextureAndColor);
 
 		MemoryVP::InjectHook(0x5DDB47, SetCloseFarAlphaDist);
@@ -815,7 +773,7 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		MemoryVP::InjectHook(0x42453B, ps2rand);
 		MemoryVP::InjectHook(0x42454D, ps2rand);
 
-		//MemoryVP::InjectHook(0x53ECA1, myPluginAttach);
+		MemoryVP::InjectHook(0x53ECA1, myPluginAttach);
 
 //		MemoryVP::Nop(0x748054, 10);
 ///		MemoryVP::Nop(0x748063, 5);

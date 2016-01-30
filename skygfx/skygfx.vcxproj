@@ -96,7 +96,7 @@
     </ClCompile>
     <ClCompile Include="..\gta.cpp" />
     <ClCompile Include="..\main.cpp" />
-    <ClCompile Include="..\DNPipe.cpp" />
+    <ClCompile Include="..\buildingPipe.cpp" />
     <ClCompile Include="..\pipeplg.cpp" />
     <ClCompile Include="..\postfx.cpp" />
     <ClCompile Include="..\vehiclePipe.cpp" />
@@ -118,6 +118,8 @@
     <FxCompile Include="..\DNPipeVS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Vertex</ShaderType>
+      <DisableOptimizations Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</DisableOptimizations>
+      <EnableDebuggingInformation Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</EnableDebuggingInformation>
     </FxCompile>
     <FxCompile Include="..\grainPS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
@@ -130,6 +132,11 @@
     <FxCompile Include="..\postfxVS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Vertex</ShaderType>
+    </FxCompile>
+    <FxCompile Include="..\ps2BuildingFxVS.hlsl" />
+    <FxCompile Include="..\ps2CarFxPS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
     </FxCompile>
     <FxCompile Include="..\radiosityPS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
@@ -169,6 +176,7 @@
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">mainVS</EntryPointName>
       <EnableDebuggingInformation Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</EnableDebuggingInformation>
     </FxCompile>
+    <FxCompile Include="..\ps2CarFxVS.hlsl" />
     <FxCompile Include="..\xboxCarVS.hlsl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

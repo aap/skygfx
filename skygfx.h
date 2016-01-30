@@ -129,6 +129,7 @@ struct CPostEffects
 	static bool &m_bInfraredVision;
 };
 
+RxPipeline *CCustomBuildingPipeline__CreateCustomObjPipe_PS2(void);
 RxPipeline *CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2(void);
 int myPluginAttach(void);
 void setVehiclePipeCB(RxPipelineNode *node, RxD3D9AllInOneRenderCallBack callback);
@@ -137,7 +138,6 @@ void readIni(int n);
 void SetCloseFarAlphaDist(float close, float far);
 void resetValues(void);
 void D3D9Render(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData);
-//RpAtomic *CCarFXRenderer__CustomCarPipeClumpSetup(RpAtomic *atomic, void *data);
 
 #define RwEngineInstance (*rwengine)
 extern RsGlobalType *RsGlobal;
@@ -149,11 +149,13 @@ extern RpLight **pExtraDirectionals;
 extern int &NumExtraDirLightsInWorld;
 extern D3DLIGHT9 &gCarEnvMapLight;
 
+extern RxPipeline *buildingPipeline, *buildingDNPipeline;
+
 extern char &doRadiosity;
 
 extern RwTexture *&gpWhiteTexture;
 extern void *simplePS;
-extern void *vehiclePipePS;
+extern void *vehiclePipePS, *ps2CarFxPS;
 extern RwBool reflTexDone;
 extern RwRaster *reflTex;
 extern RwInt32 pdsOffset;

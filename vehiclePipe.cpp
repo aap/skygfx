@@ -1,7 +1,7 @@
 #include "skygfx.h"
 
-static void *vehiclePipeVS;
-void *vehiclePipePS;
+static void *vehiclePipeVS, *ps2CarFxVS;
+void *vehiclePipePS, *ps2CarFxPS;	// reused by the building pipeline
 static void *vcsReflVS, *vcsReflPS;
 static void *xboxCarVS;
 
@@ -61,7 +61,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 	RwV4d envXform;
 	float envSwitch;
 	D3DMATRIX worldMat, worldITMat, viewMat, projMat;
-	RwUInt32 pluginData;
+	//RwUInt32 pluginData;
 
 	// set multipass distance. i'm lazy, just do it here
 	float *mpd = (float*)0xC88044;
@@ -82,10 +82,6 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 	}
 
 	atomic = (RpAtomic*)object;
-
-	// matrices
-	RwD3D9SetPixelShader(vehiclePipePS);
-	RwD3D9SetVertexShader(vehiclePipeVS);
 
 	float colorscale = 1.0f;
 	RwD3D9SetPixelShaderConstant(0, &colorscale, 1);
@@ -132,15 +128,70 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 	RwD3D9SetVertexDeclaration(resEntryHeader->vertexDeclaration);
 	numMeshes = resEntryHeader->numMeshes;
 
+	int alphafunc, alpharef;
+	int src, dst;
+	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, &alpharef);
+	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &alphafunc);
+	RwRenderStateGet(rwRENDERSTATESRCBLEND, &src);
+	RwRenderStateGet(rwRENDERSTATEDESTBLEND, &dst);
+
 	while(numMeshes--){
 		material = instancedData->material;
-		materialFlags = *(RwUInt32*)&material->surfaceProps.specular;
+		if(flags & (rxGEOMETRY_TEXTURED2 | rxGEOMETRY_TEXTURED))
+			RwD3D9SetTexture(material->texture ? material->texture : gpWhiteTexture, 0);
+		else
+			RwD3D9SetTexture(gpWhiteTexture, 0);
 
-		hasRefl  = !((materialFlags & 1) == 0 || noRefl);
-		hasEnv   = !((materialFlags & 2) == 0 || noRefl || (atomic->geometry->flags & rpGEOMETRYTEXTURED2) == 0);
-		hasSpec  = !((materialFlags & 4) == 0 || !lighting);
 		hasAlpha = instancedData->vertexAlpha || instancedData->material->color.alpha != 255;
+		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)hasAlpha);
 
+		RwRGBA matColor = material->color;
+		float surfProps[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+		if(lighting || flags & rpGEOMETRYPRELIT){
+			// WTF is this?
+			int rgb;
+			rgb = *(int*)&matColor & 0xFFFFFF;
+			if(rgb == 0xAF00FF || rgb == 0x00FFB9 || rgb == 0x00FF3C || rgb == 0x003CFF ||
+			   rgb == 0x00AFFF || rgb == 0xC8FF00 || rgb == 0xFF00FF || rgb == 0xFFFF00){
+				matColor.red = 0;
+				matColor.green = 0;
+				matColor.blue = 0;
+			}
+
+			surfProps[0] = material->surfaceProps.ambient;
+			surfProps[2] = material->surfaceProps.diffuse;
+			surfProps[3] = !!(flags & rpGEOMETRYPRELIT);
+		}
+		RwRGBAReal color;
+		RwRGBARealFromRwRGBA(&color, &matColor);
+		RwD3D9SetVertexShaderConstant(LOC_matCol, (void*)&color, 1);
+		RwD3D9SetVertexShaderConstant(LOC_surfProps, (void*)surfProps, 1);
+
+		RwD3D9SetVertexShader(vehiclePipeVS);
+		RwD3D9SetPixelShader(vehiclePipePS);
+
+		// this takes the texture into account, somehow....
+		RwD3D9GetRenderState(D3DRS_ALPHABLENDENABLE, &hasAlpha);
+		if(hasAlpha && config->dualPassVehicle){
+			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)128);
+			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONGREATEREQUAL);
+			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
+			D3D9Render(resEntryHeader, instancedData);
+			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONLESS);
+			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
+			D3D9Render(resEntryHeader, instancedData);
+			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
+		}else
+			D3D9Render(resEntryHeader, instancedData);
+
+		//
+		// FX pass
+		//
+
+		materialFlags = *(RwUInt32*)&material->surfaceProps.specular;
+		hasRefl  = !((materialFlags & 1) == 0);
+		hasEnv   = !((materialFlags & 2) == 0 || (atomic->geometry->flags & rpGEOMETRYTEXTURED2) == 0);
+		hasSpec  = !((materialFlags & 4) == 0 || !lighting);
 		int matfx = RpMatFXMaterialGetEffects(material);
 		if(matfx != rpMATFXEFFECTENVMAP){
 			hasSpec = false;
@@ -148,40 +199,12 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 			hasRefl = false;
 		}
 
-		//pluginData = *RWPLUGINOFFSET(RwUInt32, material, pdsOffset);
-		//switch(pluginData){
-		//case 0x53f20085:
-		//	hasSpec = false;
-		//	hasEnv = false;
-		//	hasRefl = false;
-		//	break;
-		//case 0x53f20087:
-		//	hasEnv = false;
-		//	break;
-		//case 0x53f2008B:
-		//	hasRefl = false;
-		//	break;
-		//}
-
-		if(flags & (rxGEOMETRY_TEXTURED2 | rxGEOMETRY_TEXTURED))
-			RwD3D9SetTexture(material->texture ? material->texture : gpWhiteTexture, 0);
-		else
-			RwD3D9SetTexture(gpWhiteTexture, 0);
-
-		if(hasSpec && !noRefl){
-			specData = *RWPLUGINOFFSET(CustomSpecMapPipeMaterialData*, material,
-			                           CCustomCarEnvMapPipeline__ms_specularMapPluginOffset);
-			reflData.specularity = specData->specularity;
-			RwD3D9SetTexture(specData->texture, 2);
-		}else{
-			reflData.specularity = 0.0f;
-			RwD3D9SetTexture(NULL, 2);
-		}
-
+		int fxpass = 0;
 		reflData.shininess = 0.0f;
-		RwD3D9SetTexture(NULL, 1);
+		reflData.specularity = 0.0f;
 		envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
-		if(hasRefl){
+		specData = *RWPLUGINOFFSET(CustomSpecMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_specularMapPluginOffset);
+		if(hasRefl && !noRefl){
 			static D3DMATRIX texMat;
 			RwV3d transVec;
 
@@ -203,9 +226,8 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 			envXform.y = transVec.y;
 			envXform.z = envData->scaleX / 8.0f;
 			envXform.w = envData->scaleY / 8.0f;
-		}
-
-		if(hasEnv && envData->pad3 == 0xF2){
+			fxpass = 1;
+		}else if(hasEnv && !noRefl){
 			static D3DMATRIX texMat;
 			RwV3d transVec;
 
@@ -235,58 +257,43 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 
 			envXform.x = -transVec.x;
 			envXform.y = transVec.y;
-			// is this correct?
-			envXform.z = 1.0f;
-			envXform.w = 1.0f;
+			envXform.z = envData->scaleX / 8.0f;
+			envXform.w = envData->scaleY / 8.0f;
+			fxpass = 1;
 		}
-		//hasAlpha = instancedData->vertexAlpha || instancedData->material->color.alpha != 255;
-		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)hasAlpha);
-		RwD3D9SetVertexShaderConstant(LOC_reflData, (void*)&reflData, 1);
-		RwD3D9SetVertexShaderConstant(LOC_envXForm, (void*)&envXform, 1);
-		RwD3D9SetVertexShaderConstant(LOC_envSwitch, (void*)&envSwitch, 1);
 
-		RwRGBA matColor = material->color;
-		float surfProps[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-		if(lighting || flags & rpGEOMETRYPRELIT){
-			// WTF is this?
-			int rgb;
-			rgb = *(int*)&matColor & 0xFFFFFF;
-			if(rgb == 0xAF00FF || rgb == 0x00FFB9 || rgb == 0x00FF3C || rgb == 0x003CFF ||
-			   rgb == 0x00AFFF || rgb == 0xC8FF00 || rgb == 0xFF00FF || rgb == 0xFFFF00){
-				matColor.red = 0;
-				matColor.green = 0;
-				matColor.blue = 0;
-			}
-
-			surfProps[0] = material->surfaceProps.ambient;
-			surfProps[2] = material->surfaceProps.diffuse;
-			surfProps[3] = !!(flags & rpGEOMETRYPRELIT);
+		if(hasSpec && !noRefl){
+			reflData.specularity = specData->specularity;
+			RwD3D9SetTexture(specData->texture, 2);
+			fxpass = 1;
 		}
-		RwRGBAReal color;
-		RwRGBARealFromRwRGBA(&color, &matColor);
-		RwD3D9SetVertexShaderConstant(LOC_matCol, (void*)&color, 1);
-		RwD3D9SetVertexShaderConstant(LOC_surfProps, (void*)surfProps, 1);
-		// this takes the texture into account, somehow....
-		RwD3D9GetRenderState(D3DRS_ALPHABLENDENABLE, &hasAlpha);
-		if(hasAlpha && config->dualPassVehicle){
-			int alphafunc, alpharef;
-			RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, &alpharef);
-			RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &alphafunc);
-			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)128);
-			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONGREATEREQUAL);
-			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
-			D3D9Render(resEntryHeader, instancedData);
-			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONLESS);
+
+		if(fxpass){
+			RwD3D9SetVertexShader(ps2CarFxVS);
+			RwD3D9SetPixelShader(ps2CarFxPS);
+
+			RwD3D9SetVertexShaderConstant(LOC_reflData, (void*)&reflData, 1);
+			RwD3D9SetVertexShaderConstant(LOC_envXForm, (void*)&envXform, 1);
+			RwD3D9SetVertexShaderConstant(LOC_envSwitch, (void*)&envSwitch, 1);
+
+			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONALWAYS);
 			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
+			RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
+			RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
+			RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
 			D3D9Render(resEntryHeader, instancedData);
-			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)alpharef);
-			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphafunc);
 			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
-		}else
-			D3D9Render(resEntryHeader, instancedData);
+			RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)src);
+			RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)dst);
+			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphafunc);
+		}
+
 		instancedData++;
 	}
-	// we don't even change it, but apparently this render CB has to reset it (otherwise might still be on from MatFX)
+	RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)alpharef);
+	RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphafunc);
+	RwD3D9SetTexture(NULL, 1);
+	RwD3D9SetTexture(NULL, 2);
 	RwD3D9SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_DISABLE);
 	RwD3D9SetTextureStageState(1, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
 	RwD3D9SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, 1);
@@ -671,19 +678,6 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_VCS(RwResEntry *repEntry, void *obj
 	RwD3D9SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_DISABLE);
 }
 
-//RpAtomic*
-//CCarFXRenderer__CustomCarPipeClumpSetup(RpAtomic *atomic, void *data)
-//{
-//	RpAtomic *ret;
-//
-//	ret = CCustomCarEnvMapPipeline__CustomPipeAtomicSetup(atomic);
-//	if(strstr(GetFrameNodeName(RpAtomicGetFrame(atomic)), "wheel")){
-//		ret->pipeline = NULL;
-//		SetPipelineID(atomic, 0);
-//	}
-//	return ret;
-//}
-
 void
 setVehiclePipeCB(RxPipelineNode *node, RxD3D9AllInOneRenderCallBack callback)
 {
@@ -698,6 +692,18 @@ setVehiclePipeCB(RxPipelineNode *node, RxD3D9AllInOneRenderCallBack callback)
 		resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_VEHICLEPS), RT_RCDATA);
 		shader = (RwUInt32*)LoadResource(dllModule, resource);
 		RwD3D9CreatePixelShader(shader, &vehiclePipePS);
+		FreeResource(shader);
+	}
+
+	resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_PS2CARFXVS), RT_RCDATA);
+	shader = (RwUInt32*)LoadResource(dllModule, resource);
+	RwD3D9CreateVertexShader(shader, &ps2CarFxVS);
+	FreeResource(shader);
+
+	if(ps2CarFxPS == NULL){
+		resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_PS2CARFXPS), RT_RCDATA);
+		shader = (RwUInt32*)LoadResource(dllModule, resource);
+		RwD3D9CreatePixelShader(shader, &ps2CarFxPS);
 		FreeResource(shader);
 	}
 
