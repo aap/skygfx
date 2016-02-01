@@ -683,11 +683,35 @@ int currentLight;
 char *stkp;
 
 unsigned __int64 rand_seed = 1;
+float ps2randnormalize = 1.0f/0x7FFFFFFF;
 
 int ps2rand()
 {
 	rand_seed = 0x5851F42D4C957F2D * rand_seed + 1;
 	return ((rand_seed >> 32) & 0x7FFFFFFF);
+}
+
+void ps2srand(unsigned int seed)
+{
+	rand_seed = seed;
+}
+
+void __declspec(naked) floatbitpattern(void)
+{
+	_asm {
+		fstp [esp-4]
+		mov eax, [esp-4]
+		ret
+	}
+}
+
+WRAPPER void gtasrand(unsigned int seed) { EAXJMP(0x821B11); }
+
+void
+mysrand(unsigned int seed)
+{
+	gtasrand(ps2rand());
+//	gtasrand(seed);
 }
 
 void
@@ -718,10 +742,12 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 			return FALSE;
 		dllModule = hInst;
 
-/*		AllocConsole();
-		freopen("CONIN$", "r", stdin);
-		freopen("CONOUT$", "w", stdout);
-		freopen("CONOUT$", "w", stderr);*/
+		if(GetAsyncKeyState(VK_F8) & 0x8000){
+			AllocConsole();
+			freopen("CONIN$", "r", stdin);
+			freopen("CONOUT$", "w", stdout);
+			freopen("CONOUT$", "w", stderr);
+		}
 
 		IsAlreadyRunning = (BOOL(*)())(*(int*)(0x74872D+1) + 0x74872D + 5);
 		MemoryVP::InjectHook(0x74872D, InjectDelayedPatches);
@@ -773,7 +799,23 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		MemoryVP::InjectHook(0x42453B, ps2rand);
 		MemoryVP::InjectHook(0x42454D, ps2rand);
 
-		MemoryVP::InjectHook(0x53ECA1, myPluginAttach);
+		//MemoryVP::InjectHook(0x53ECA1, myPluginAttach);
+		MemoryVP::InjectHook(0x53D903, myPluginAttach);
+
+		//MemoryVP::InjectHook(0x5A3C7D, ps2srand);
+		//MemoryVP::InjectHook(0x5A3DFB, ps2srand);
+		//MemoryVP::InjectHook(0x5A3C75, ps2rand);
+		//MemoryVP::InjectHook(0x5A3CB9, ps2rand);
+		//MemoryVP::InjectHook(0x5A3CDB, ps2rand);
+		//MemoryVP::InjectHook(0x5A3CF2, ps2rand);
+		//MemoryVP::Patch<float*>(0x5A3CC8, (float*)&ps2randnormalize);
+		//MemoryVP::Patch<float*>(0x5A3CEA, (float*)&ps2randnormalize);
+		//MemoryVP::Patch<float*>(0x5A3D05, (float*)&ps2randnormalize);
+		MemoryVP::InjectHook(0x5A3C6E, floatbitpattern);
+		
+		//MemoryVP::InjectHook(0x5A3C7D, mysrand);
+		//MemoryVP::InjectHook(0x5A3DFB, mysrand);
+		//MemoryVP::InjectHook(0x5A3C75, ps2rand);
 
 //		MemoryVP::Nop(0x748054, 10);
 ///		MemoryVP::Nop(0x748063, 5);

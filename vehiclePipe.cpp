@@ -130,10 +130,12 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 
 	int alphafunc, alpharef;
 	int src, dst;
+	int fog;
 	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, &alpharef);
 	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &alphafunc);
 	RwRenderStateGet(rwRENDERSTATESRCBLEND, &src);
 	RwRenderStateGet(rwRENDERSTATEDESTBLEND, &dst);
+	RwRenderStateGet(rwRENDERSTATEFOGENABLE, &fog);
 
 	while(numMeshes--){
 		material = instancedData->material;
@@ -281,7 +283,9 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 			RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
 			RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
 			RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
+			RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)0);
 			D3D9Render(resEntryHeader, instancedData);
+			RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)fog);
 			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
 			RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)src);
 			RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)dst);
