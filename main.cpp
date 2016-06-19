@@ -5,6 +5,7 @@ HMODULE dllModule;
 int numConfigs;
 Config *config, configs[10];
 bool oneGrassModel, usePCTimecyc, disableClouds, disableGamma, ps2MarkerAmbient;
+bool procObjChangeForInadequate;
 int original_bRadiosity = 0;
 
 void *grassPixelShader;
@@ -27,6 +28,61 @@ D3D9Render(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceDat
 		RwD3D9DrawIndexedPrimitive(resEntryHeader->primType, instanceData->baseIndex, 0, instanceData->numVertices, instanceData->startIndex, instanceData->numPrimitives);
 	else
 		RwD3D9DrawPrimitive(resEntryHeader->primType, instanceData->baseIndex, instanceData->numPrimitives);
+}
+
+void
+D3D9RenderVehicleDual(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instancedData)
+{
+	RwBool hasAlpha;
+	int alphafunc, alpharef;
+	RwD3D9GetRenderState(D3DRS_ALPHABLENDENABLE, &hasAlpha);
+	if(hasAlpha && config->dualPassVehicle){
+		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, &alpharef);
+		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &alphafunc);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)128);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONGREATEREQUAL);
+		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
+		D3D9Render(resEntryHeader, instancedData);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONLESS);
+		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
+		D3D9Render(resEntryHeader, instancedData);
+		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)alpharef);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphafunc);
+	}else
+		D3D9Render(resEntryHeader, instancedData);
+}
+
+// Add a dual pass to the PC pipeline, the lazy way
+void
+D3D9RenderNotLit_DUAL(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData)
+{
+	RwD3D9SetPixelShader(NULL);
+	RwD3D9SetVertexShader(instanceData->vertexShader);
+	D3D9RenderVehicleDual(resEntryHeader, instanceData);
+}
+
+void
+D3D9RenderPreLit_DUAL(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData, RwUInt8 flags, RwTexture *texture)
+{
+	if(flags & (rxGEOMETRY_TEXTURED2 | rxGEOMETRY_TEXTURED)){
+		RwD3D9SetTexture(texture, 0);
+		RwD3D9SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE);
+		RwD3D9SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+		RwD3D9SetTextureStageState(0, D3DTSS_COLORARG2, D3DTA_DIFFUSE);
+		RwD3D9SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_MODULATE);
+		RwD3D9SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
+		RwD3D9SetTextureStageState(0, D3DTSS_ALPHAARG2, D3DTA_DIFFUSE);
+	}else{
+		RwD3D9SetTexture(NULL, 0);
+		RwD3D9SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG2);
+		RwD3D9SetTextureStageState(0, D3DTSS_COLORARG2, D3DTA_DIFFUSE);
+		RwD3D9SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG2);
+		RwD3D9SetTextureStageState(0, D3DTSS_ALPHAARG2, D3DTA_DIFFUSE);
+	}
+	RwD3D9SetPixelShader(NULL);
+	RwD3D9SetVertexShader(instanceData->vertexShader);
+	D3D9RenderVehicleDual(resEntryHeader, instanceData);
 }
 
 WRAPPER double CTimeCycle_GetAmbientRed(void) { EAXJMP(0x560330); }
@@ -147,7 +203,7 @@ readIni(int n)
 	c->fixGrassPlacement = GetPrivateProfileInt("SkyGfx", "fixGrassPlacement", TRUE, modulePath) != FALSE;
 	oneGrassModel = GetPrivateProfileInt("SkyGfx", "oneGrassModel", TRUE, modulePath) != FALSE;
 	c->backfaceCull = GetPrivateProfileInt("SkyGfx", "backfaceCull", FALSE, modulePath) != FALSE;
-	c->vehiclePipe = GetPrivateProfileInt("SkyGfx", "vehiclePipe", 0, modulePath) % 5;
+	c->vehiclePipe = GetPrivateProfileInt("SkyGfx", "vehiclePipe", 0, modulePath) % 6;
 	tmpint = GetPrivateProfileInt("SkyGfx", "worldPipe", 0, modulePath);
 	c->worldPipe = tmpint >= 0 ? tmpint % 3 : -1;
 	c->colorFilter = GetPrivateProfileInt("SkyGfx", "colorFilter", 0, modulePath) % 4;
@@ -185,6 +241,8 @@ readIni(int n)
 	disableGamma = GetPrivateProfileInt("SkyGfx", "disableGamma", FALSE, modulePath) != FALSE;
 	ps2MarkerAmbient = GetPrivateProfileInt("SkyGfx", "ps2MarkerAmbient", FALSE, modulePath) != FALSE;
 
+	c->dontChangeAmbient = GetPrivateProfileInt("SkyGfx", "dontChangeAmbient", FALSE, modulePath) != FALSE;
+
 	c->detailedWaterDist = GetPrivateProfileInt("SkyGfx", "detailedWaterDist", 48, modulePath);
 
 	GetPrivateProfileString("SkyGfx", "farDist", "60.0", tmp, sizeof(tmp), modulePath);
@@ -194,6 +252,8 @@ readIni(int n)
 	c->fadeInvDist = 1.0f/c->fadeDist;
 	GetPrivateProfileString("SkyGfx", "densityMult", "1.0", tmp, sizeof(tmp), modulePath);
 	c->densityMult = atof(tmp)*0.5;
+
+	procObjChangeForInadequate = GetPrivateProfileInt("SkyGfx", "procObjChangeForInadequate", FALSE, modulePath) != FALSE;
 
 	*(float**)0x5DC281 = &c->densityMult;
 	*(float**)0x5DAD98 = &c->fadeDist;
@@ -584,6 +644,38 @@ FX::GetFxQuality_stencil(void)
 	return this->fxQuality;
 }
 
+unsigned __int64 rand_seed = 1;
+float ps2randnormalize = 1.0f/0x7FFFFFFF;
+
+int ps2rand()
+{
+	rand_seed = 0x5851F42D4C957F2D * rand_seed + 1;
+	return ((rand_seed >> 32) & 0x7FFFFFFF);
+}
+
+void ps2srand(unsigned int seed)
+{
+	rand_seed = seed;
+}
+
+void __declspec(naked) floatbitpattern(void)
+{
+	_asm {
+		fstp [esp-4]
+		mov eax, [esp-4]
+		ret
+	}
+}
+
+WRAPPER void gtasrand(unsigned int seed) { EAXJMP(0x821B11); }
+
+void
+mysrand(unsigned int seed)
+{
+	gtasrand(ps2rand());
+//	gtasrand(seed);
+}
+
 static BOOL (*IsAlreadyRunning)();
 
 BOOL
@@ -654,6 +746,11 @@ InjectDelayedPatches()
 		if(disableGamma)
 			MemoryVP::InjectHook(0x74721C, 0x7472F3, PATCH_JUMP);
 
+		if(procObjChangeForInadequate){
+			MemoryVP::InjectHook(0x5A3C7D, mysrand);
+			MemoryVP::InjectHook(0x5A3DFB, mysrand);
+		}
+
 		if(ps2MarkerAmbient)
 			MemoryVP::InjectHook(0x722627, 0x735C40);
 		return FALSE;
@@ -682,38 +779,6 @@ CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect_orig(float x, float y, float z
 int currentLight;
 char *stkp;
 
-unsigned __int64 rand_seed = 1;
-float ps2randnormalize = 1.0f/0x7FFFFFFF;
-
-int ps2rand()
-{
-	rand_seed = 0x5851F42D4C957F2D * rand_seed + 1;
-	return ((rand_seed >> 32) & 0x7FFFFFFF);
-}
-
-void ps2srand(unsigned int seed)
-{
-	rand_seed = seed;
-}
-
-void __declspec(naked) floatbitpattern(void)
-{
-	_asm {
-		fstp [esp-4]
-		mov eax, [esp-4]
-		ret
-	}
-}
-
-WRAPPER void gtasrand(unsigned int seed) { EAXJMP(0x821B11); }
-
-void
-mysrand(unsigned int seed)
-{
-	gtasrand(ps2rand());
-//	gtasrand(seed);
-}
-
 void
 CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect(float x, float y, float z, float a4, float a5, RwUInt8 r, RwUInt8 g, RwUInt8 b, RwInt16 f, int a10, float a11, RwUInt8 alpha)
 {
@@ -729,8 +794,6 @@ CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect(float x, float y, float z, flo
 	f = 0xFF;
 	CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect_orig(x, y, z, a4, a5, r, g, b, f, a10, a11, alpha);
 }
-
-WRAPPER void CPointLights__RenderFogEffect_orig(void) { EAXJMP(0x7002D0); }
 
 BOOL WINAPI
 DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
@@ -766,6 +829,9 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 
 		// VehiclePipeline
 		MemoryVP::InjectHook(0x5D9FE9, setVehiclePipeCB);
+		// add dual pass for PC pipeline
+		MemoryVP::InjectHook(0x5D9EEB, D3D9RenderPreLit_DUAL);
+		MemoryVP::InjectHook(0x5DA640, D3D9RenderNotLit_DUAL);
 
 		// postfx
 		MemoryVP::InjectHook(0x74EAA6, CPostEffects::Init, PATCH_JUMP);
@@ -787,11 +853,7 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		MemoryVP::InjectHook(0x53DFDD, CRenderer__RenderEverythingBarRoads);
 		MemoryVP::InjectHook(0x53DD27, CRenderer__RenderEverythingBarRoads); // unused?
 
-///		MemoryVP::InjectHook(0x7000E0, CPointLights__AddLight, PATCH_JUMP);
-//		MemoryVP::InjectHook(0x53E21D, CPointLights__RenderFogEffect);
-//		MemoryVP::InjectHook(0x7FB824, _rwD3D9SetPixelShader_override);
-
-//		MemoryVP::InjectHook(0x700817, CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect);
+		// fix pointlight fog
 		MemoryVP::InjectHook(0x700B6B, CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect);
 
 		MemoryVP::InjectHook(0x44E82E, ps2rand);
@@ -799,7 +861,6 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		MemoryVP::InjectHook(0x42453B, ps2rand);
 		MemoryVP::InjectHook(0x42454D, ps2rand);
 
-		//MemoryVP::InjectHook(0x53ECA1, myPluginAttach);
 		MemoryVP::InjectHook(0x53D903, myPluginAttach);
 
 		//MemoryVP::InjectHook(0x5A3C7D, ps2srand);
@@ -812,6 +873,9 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		//MemoryVP::Patch<float*>(0x5A3CEA, (float*)&ps2randnormalize);
 		//MemoryVP::Patch<float*>(0x5A3D05, (float*)&ps2randnormalize);
 		MemoryVP::InjectHook(0x5A3C6E, floatbitpattern);
+
+		//void dumpMenu(void);
+		//dumpMenu();
 		
 		//MemoryVP::InjectHook(0x5A3C7D, mysrand);
 		//MemoryVP::InjectHook(0x5A3DFB, mysrand);

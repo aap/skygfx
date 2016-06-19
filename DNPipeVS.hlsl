@@ -21,7 +21,6 @@ float3		surfaceProps : register(c13);
 float3		ambientLight : register(c14);
 float4		shaderVars : register(c15);	// colorScale, nightMult, dayMult, reflSwitch
 float4x4	texmat : register(c20);
-float4		basecolor : register(c24);
 
 VS_OUTPUT main(in VS_INPUT IN)
 {
@@ -33,7 +32,6 @@ VS_OUTPUT main(in VS_INPUT IN)
 
 	OUT.color.rgb = (IN.DayColor*shaderVars[2] + IN.NightColor*shaderVars[1]).rgb;
 	OUT.color.a = IN.NightColor.a;
-	OUT.color += basecolor;
 	OUT.color *= materialColor / shaderVars[0];
 	OUT.color.rgb += ambientLight*surfaceProps.x;
 

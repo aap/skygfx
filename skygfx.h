@@ -36,6 +36,8 @@ struct Config {
 	int pedShadows, stencilShadows;
 	int detailedWaterDist;
 
+	RwBool dontChangeAmbient;
+
 	float farDist, fadeDist, fadeInvDist, densityMult;
 
 	int keys[3];
@@ -138,6 +140,7 @@ void readIni(int n);
 void SetCloseFarAlphaDist(float close, float far);
 void resetValues(void);
 void D3D9Render(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData);
+void D3D9RenderVehicleDual(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instancedData);
 
 #define RwEngineInstance (*rwengine)
 extern RsGlobalType *RsGlobal;

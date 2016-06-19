@@ -62,6 +62,7 @@ mainVS(VS_INPUT IN)
 	OUT.color = float4(IN.Color.rgb*surfProps.w, 1.0);
 	OUT.color.xyz += sunAmb*surfProps.x;
 	OUT.color.xyz += l*sunDiff*surfProps.z;
+	[loop]
 	for(int i = 0; i < activeLights; i++) {
 		l = max(0.0, dot(worldNormal, -lights[i].dir));
 		OUT.color.xyz += l*lights[i].diff*surfProps.z;

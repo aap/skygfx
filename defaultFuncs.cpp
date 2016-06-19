@@ -159,7 +159,7 @@ DNInstance_default(void *object, RxD3D9ResEntryHeader *resEntryHeader, RwBool re
 	RwBool isTextured, isPrelit, hasNormals;
 	D3DVERTEXELEMENT9 dcl[5];
 	void *vertexBuffer;
-	RwUInt32 stride;
+	RwUInt16 stride;
 	RxD3D9InstanceData *instData;
 	IDirect3DVertexBuffer9 *vertBuffer;
 	int i;

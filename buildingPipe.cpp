@@ -1,5 +1,8 @@
 #include "skygfx.h"
 
+WRAPPER void ReSetAmbientAndDirectionalColours(void) { EAXJMP(0x735C40); }
+WRAPPER void SetLightColoursForPedsCarsAndObjects(float f) { EAXJMP(0x735D90); }
+
 static void *DNPipeVS, *ps2BuildingFxVS;
 RxPipeline *buildingPipeline, *buildingDNPipeline;
 
@@ -14,7 +17,6 @@ enum {
 	LOC_reflData = 16,
 	LOC_envXform = 17,
 	LOC_texmat = 20,
-	LOC_basecolor = 24,
 };
 
 // PS2 callback
@@ -46,9 +48,6 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 	float white[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
 	float black[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 
-	//if(GetAsyncKeyState(VK_F8) & 0x8000)
-	//	return;
-
 	atomic = (RpAtomic*)object;
 
 	RwD3D9GetTransform(D3DTS_WORLD, &worldMat);
@@ -58,6 +57,10 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 	RwD3D9SetVertexShaderConstant(LOC_View,(void*)&viewMat,4);
 	RwD3D9SetVertexShaderConstant(LOC_Proj,(void*)&projMat,4);
 	// TODO: maybe upload normal matrix?
+
+	if(!config->dontChangeAmbient)
+		ReSetAmbientAndDirectionalColours();
+	//SetLightColoursForPedsCarsAndObjects(0.0f);
 
 	RwD3D9GetRenderState(D3DRS_LIGHTING, &lighting);
 	resEntryHeader = (RxD3D9ResEntryHeader*)(repEntry + 1);
@@ -72,16 +75,16 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 	if(dnShaderVars.nightMult > 1.0f) dnShaderVars.nightMult = 1.0f;
 	dnShaderVars.dayMult = 1.0f - dnShaderVars.nightMult;
 
-	// If no extra colors, force the one we have (night, unintuitively)
-	if(atomic->pipeline->pluginData == 0x53F2009C){
+	int noExtraColors = atomic->pipeline->pluginData == 0x53F2009C;
+
+	//if(!noExtraColors && GetAsyncKeyState(VK_F8) & 0x8000)
+	//	return;
+
+	// If no extra colors, force the one we have (night, unintuitively).
+	// Night colors are guaranteed to be preset by the instance callback.
+	if(noExtraColors){
 		dnShaderVars.dayMult = 0.0f;
 		dnShaderVars.nightMult = 1.0f;
-	}
-	if(flags & rxGEOMETRY_PRELIT)
-		RwD3D9SetVertexShaderConstant(LOC_basecolor,(void*)&black,1);
-	else{
-		dnShaderVars.dayMult = dnShaderVars.nightMult = 0.0f;
-		RwD3D9SetVertexShaderConstant(LOC_basecolor,(void*)&white,1);
 	}
 
 	int alphafunc, alpharef;
@@ -104,6 +107,9 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 			RwD3D9SetTexture(material->texture ? material->texture : gpWhiteTexture, 0);
 		}else
 			RwD3D9SetTexture(gpWhiteTexture, 0);
+		//if(noExtraColors){
+		//	colorScalePS = dnShaderVars.colorScale = 1.0f;
+		//}
 		RwD3D9SetPixelShaderConstant(0, &colorScalePS, 1);
 
 		int effect = RpMatFXMaterialGetEffects(material);
@@ -218,6 +224,35 @@ isNightColorZero(RwRGBA *rgbac, int nv)
 	return true;
 }
 
+RwRGBA*
+getVertexColors(RpGeometry *geometry)
+{
+	RwRGBA *day = *RWPLUGINOFFSET(RwRGBA*, geometry, CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset + 4);
+	if(day == NULL)
+		return geometry->preLitLum;
+	return day;
+}
+
+RwRGBA*
+getExtraColors(RpGeometry *geometry)
+{
+	RwRGBA *night = *RWPLUGINOFFSET(RwRGBA*, geometry, CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset);
+	if(night && isNightColorZero(night, geometry->numVertices))
+		return NULL;
+	return night;
+//	if(night == NULL || isNightColorZero(night, geometry->numVertices))
+//		night = day;
+}
+
+void
+instWhite(RwUInt8 *mem, RwInt32 numVerts, RwUInt32 stride)
+{
+	while(numVerts--){
+		*(D3DCOLOR*)mem = 0xFFFFFFFF;
+		mem += stride;
+	}
+}
+
 RwBool
 DNInstance_PS2(void *object, RxD3D9ResEntryHeader *resEntryHeader, RwBool reinstance)
 {
@@ -227,13 +262,14 @@ DNInstance_PS2(void *object, RxD3D9ResEntryHeader *resEntryHeader, RwBool reinst
 	RwBool isTextured, isPrelit, hasNormals;
 	D3DVERTEXELEMENT9 dcl[6];
 	void *vertexBuffer;
-	RwUInt32 stride;
+	RwUInt16 stride;
 	RxD3D9InstanceData *instData;
 	IDirect3DVertexBuffer9 *vertBuffer;
 	int i, j;
 	int numMeshes;
 	void *vertexData;
 	int lastLocked;
+	RwRGBA *day, *night;
 
 	atomic = (RpAtomic*)object;
 	geometry = atomic->geometry;
@@ -241,6 +277,8 @@ DNInstance_PS2(void *object, RxD3D9ResEntryHeader *resEntryHeader, RwBool reinst
 	morphTarget = geometry->morphTarget;
 	isPrelit = geometry->flags & rpGEOMETRYPRELIT;
 	hasNormals = geometry->flags & rpGEOMETRYNORMALS;
+	day = getVertexColors(geometry);
+	night = getExtraColors(geometry);
 	if(reinstance){
 		IDirect3DVertexDeclaration9 *vertDecl = (IDirect3DVertexDeclaration9*)resEntryHeader->vertexDeclaration;
 		vertDecl->GetDeclaration(dcl, (UINT*)&i);
@@ -278,6 +316,12 @@ DNInstance_PS2(void *object, RxD3D9ResEntryHeader *resEntryHeader, RwBool reinst
 			dcl[i++] = {0, stride, D3DDECLTYPE_D3DCOLOR, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_COLOR, 0};
 			stride += 4;
 			dcl[i++] = {0, stride, D3DDECLTYPE_D3DCOLOR, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_COLOR, 1};
+			stride += 4;
+			resEntryHeader->vertexStream[0].stride = stride;
+			resEntryHeader->vertexStream[0].geometryFlags |= rpGEOMETRYLOCKPRELIGHT;
+		}else{
+			// we need vertex colors in the shader so force white like on PS2, one set is enough
+			dcl[i++] = {0, stride, D3DDECLTYPE_D3DCOLOR, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_COLOR, 0};
 			stride += 4;
 			resEntryHeader->vertexStream[0].stride = stride;
 			resEntryHeader->vertexStream[0].geometryFlags |= rpGEOMETRYLOCKPRELIGHT;
@@ -337,10 +381,16 @@ DNInstance_PS2(void *object, RxD3D9ResEntryHeader *resEntryHeader, RwBool reinst
 					;
 				for(j = 0; dcl[j].Usage != D3DDECLUSAGE_COLOR || dcl[j].UsageIndex != 1; ++j)
 					;
-				RwRGBA *night = *RWPLUGINOFFSET(RwRGBA*, geometry, CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset);
-				RwRGBA *day = *RWPLUGINOFFSET(RwRGBA*, geometry, CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset + 4);
-				if(night == NULL || isNightColorZero(night, geometry->numVertices))
+//				RwRGBA *night = *RWPLUGINOFFSET(RwRGBA*, geometry, CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset);
+//				RwRGBA *day = *RWPLUGINOFFSET(RwRGBA*, geometry, CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset + 4);
+//				if(night == NULL || isNightColorZero(night, geometry->numVertices))
+//					night = day;
+				// If no extra colors, use regular colors
+				// TODO: only instance one set in this case
+				if(night == NULL)
 					night = day;
+				assert(day);
+				assert(night);
 				numMeshes = resEntryHeader->numMeshes;
 				instData = (RxD3D9InstanceData*)(resEntryHeader+1);
 				while(numMeshes--){
@@ -354,6 +404,18 @@ DNInstance_PS2(void *object, RxD3D9ResEntryHeader *resEntryHeader, RwBool reinst
 					          day + instData->minVert,
 					          instData->numVertices,
 					          resEntryHeader->vertexStream[dcl[j].Stream].stride);
+					instData++;
+				}
+			}else if(lastLocked & rpGEOMETRYLOCKPRELIGHT){
+				for(i = 0; dcl[i].Usage != D3DDECLUSAGE_COLOR || dcl[i].UsageIndex != 0; ++i)
+					;
+				numMeshes = resEntryHeader->numMeshes;
+				instData = (RxD3D9InstanceData*)(resEntryHeader+1);
+				while(numMeshes--){
+					instData->vertexAlpha = 0;
+					instWhite((RwUInt8*)vertexData + dcl[i].Offset + resEntryHeader->vertexStream[dcl[i].Stream].stride*instData->minVert,
+					          instData->numVertices,
+					          resEntryHeader->vertexStream[dcl[i].Stream].stride);
 					instData++;
 				}
 			}
@@ -431,7 +493,7 @@ CCustomBuildingPipeline__CreateCustomObjPipe_PS2(void)
 		return NULL;
 	}
 	node = RxPipelineFindNodeByName(pipeline, instanceNode->name, NULL, NULL);
-	RxD3D9AllInOneSetInstanceCallBack(node, RxD3D9AllInOneGetInstanceCallBack(node));
+	RxD3D9AllInOneSetInstanceCallBack(node, DNInstance_PS2); //RxD3D9AllInOneGetInstanceCallBack(node));
 	RxD3D9AllInOneSetReinstanceCallBack(node, reinstance);
 	RxD3D9AllInOneSetRenderCallBack(node, CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2);
 
