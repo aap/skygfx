@@ -63,27 +63,20 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 	RwV4d envXform;
 	float envSwitch;
 	D3DMATRIX worldMat, worldITMat, viewMat, projMat;
-	//RwUInt32 pluginData;
+	int pcTrans = 0;
 
-	// set multipass distance. i'm lazy, just do it here
-	float *mpd = (float*)0xC88044;
-	*mpd = 100000000.0f;
-
-	if(config->vehiclePipe == 3){
-		CCustomCarEnvMapPipeline__CustomPipeRenderCB_VCS(repEntry, object, type, flags);
+	switch(config->vehiclePipe){
+	case 1:
+		CCustomCarEnvMapPipeline__CustomPipeRenderCB_exe(repEntry, object, type, flags);
 		return;
-	}
-	if(config->vehiclePipe == 4){
+	case 2:
 		CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(repEntry, object, type, flags);
 		return;
-	}
-	if(config->vehiclePipe == 5){
+	case 3:
 		CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(repEntry, object, type, flags);
 		return;
-	}
-
-	if(config->vehiclePipe > 1){
-		CCustomCarEnvMapPipeline__CustomPipeRenderCB_exe(repEntry, object, type, flags);
+	case 4:
+		CCustomCarEnvMapPipeline__CustomPipeRenderCB_VCS(repEntry, object, type, flags);
 		return;
 	}
 
@@ -204,7 +197,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 			static D3DMATRIX texMat;
 			RwV3d transVec;
 
-			envSwitch = 2 + config->vehiclePipe;
+			envSwitch = 2 + pcTrans;
 			reflData.shininess = envData->shininess/255.0f;
 			// ?
 			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
@@ -227,7 +220,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 			static D3DMATRIX texMat;
 			RwV3d transVec;
 
-			envSwitch = 0 + config->vehiclePipe;
+			envSwitch = 0 + pcTrans;
 			reflData.shininess = envData->shininess/255.0f;
 			// ?
 			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
@@ -264,7 +257,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 			fxpass = 1;
 		}
 
-		if(fxpass){
+		if(fxpass && instancedData->material->color.alpha > 0){
 			RwD3D9SetVertexShader(ps2CarFxVS);
 			RwD3D9SetPixelShader(ps2CarFxPS);
 
@@ -505,7 +498,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(RwResEntry *repEntry, void
 			fxpass = 1;
 		}
 
-		if(fxpass){
+		if(fxpass && instancedData->material->color.alpha > 0){
 			RwD3D9SetVertexShader(specCarFxVS);
 			RwD3D9SetPixelShader(specCarFxPS);
 
@@ -768,10 +761,6 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_VCS(RwResEntry *repEntry, void *obj
 	} reflData;
 	RwV4d envXform;
 	D3DMATRIX worldMat, worldITMat, viewMat, projMat;
-
-	// set multipass distance. i'm lazy, just do it here
-	float *mpd = (float*)0xC88044;
-	*mpd = 100000000.0f;
 
 	atomic = (RpAtomic*)object;
 

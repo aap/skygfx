@@ -1,11 +1,11 @@
 #include "skygfx.h"
+#include "ini_parser.hpp"
 
 HMODULE dllModule;
 
 int numConfigs;
 Config *config, configs[10];
-bool oneGrassModel, usePCTimecyc, disableClouds, disableGamma, ps2MarkerAmbient;
-bool procObjChangeForInadequate;
+bool ps2grassFiles, usePCTimecyc, disableClouds, disableGamma, ps2MarkerAmbient;
 int original_bRadiosity = 0;
 
 void *grassPixelShader;
@@ -90,13 +90,6 @@ WRAPPER double CTimeCycle_GetAmbientGreen(void) { EAXJMP(0x560340); }
 WRAPPER double CTimeCycle_GetAmbientBlue(void) { EAXJMP(0x560350); }
 
 void
-SetCloseFarAlphaDist(float close, float far)
-{
-	*(float*)0xC02DBC = close;
-	*(float*)0x8D132C = config->farDist;
-}
-
-void
 resetValues(void)
 {
 	CPostEffects__m_RadiosityFilterPasses = config->radiosityFilterPasses;
@@ -139,6 +132,22 @@ BOOL FileExists(LPCTSTR szPath)
 	       !(dwAttrib & FILE_ATTRIBUTE_DIRECTORY);
 }
 
+struct StrAssoc
+{
+	const char *key;
+	int val;
+
+	static int get(StrAssoc *desc, const char *key);
+};
+int
+StrAssoc::get(StrAssoc *desc, const char *key)
+{
+	for(; desc->key[0] != '\0'; desc++)
+		if(strcmp(desc->key, key) == 0)
+			return desc->val;
+	return desc->val;
+}
+
 void
 findInis(void)
 {
@@ -159,11 +168,29 @@ findInis(void)
 	}
 }
 
+int
+readhex(const char *str)
+{
+	int n = 0;
+	if(strlen(str) > 2)
+		sscanf(str+2, "%X", &n);
+	return n;
+}
+
+int
+readint(const std::string &s, int default = 0)
+{
+	try{
+		return std::stoi(s);
+	}catch(...){
+		return default;
+	}
+}
+
 void
 readIni(int n)
 {
 	int tmpint;
-	char tmp[32];
 	char modulePath[MAX_PATH];
 
 	GetModuleFileName(dllModule, modulePath, MAX_PATH);
@@ -183,81 +210,103 @@ readIni(int n)
 		modulePath[nLen-3] = L'i';
 		c = &configs[n];
 	}
+	linb::ini cfg;
+	cfg.load_file(modulePath);
 
-	GetPrivateProfileString("SkyGfx", "keySwitch", "0x79", tmp, sizeof(tmp), modulePath);
-	c->keys[0] = readhex(tmp);
-	GetPrivateProfileString("SkyGfx", "keyReload", "0x7A", tmp, sizeof(tmp), modulePath);
-	c->keys[1] = readhex(tmp);
-	GetPrivateProfileString("SkyGfx", "keyReloadPlants", "0x7B", tmp, sizeof(tmp), modulePath);
-	c->keys[2] = readhex(tmp);
+	c->keys[0] = readhex(cfg.get("SkyGfx", "keySwitch", "0x0").c_str());
+	c->keys[1] = readhex(cfg.get("SkyGfx", "keyReload", "0x0").c_str());
 
-	c->enableHotkeys = GetPrivateProfileInt("SkyGfx", "enableHotkeys", TRUE, modulePath) != FALSE;
-	c->ps2ModulateWorld = GetPrivateProfileInt("SkyGfx", "ps2ModulateWorld", TRUE, modulePath) != FALSE;
-	c->ps2ModulateGrass = GetPrivateProfileInt("SkyGfx", "ps2ModulateGrass", TRUE, modulePath) != FALSE;
-	c->dualPassWorld = GetPrivateProfileInt("SkyGfx", "dualPassWorld", TRUE, modulePath) != FALSE;
-	c->dualPassDefault = GetPrivateProfileInt("SkyGfx", "dualPassDefault", TRUE, modulePath) != FALSE;
-	c->dualPassGrass = GetPrivateProfileInt("SkyGfx", "dualPassGrass", TRUE, modulePath) != FALSE;
-	c->dualPassVehicle = GetPrivateProfileInt("SkyGfx", "dualPassVehicle", TRUE, modulePath) != FALSE;
-	c->dualPassPed = GetPrivateProfileInt("SkyGfx", "dualPassPed", TRUE, modulePath) != FALSE;
-	c->grassAddAmbient = GetPrivateProfileInt("SkyGfx", "grassAddAmbient", TRUE, modulePath) != FALSE;
-	c->fixGrassPlacement = GetPrivateProfileInt("SkyGfx", "fixGrassPlacement", TRUE, modulePath) != FALSE;
-	oneGrassModel = GetPrivateProfileInt("SkyGfx", "oneGrassModel", TRUE, modulePath) != FALSE;
-	c->backfaceCull = GetPrivateProfileInt("SkyGfx", "backfaceCull", FALSE, modulePath) != FALSE;
-	c->vehiclePipe = GetPrivateProfileInt("SkyGfx", "vehiclePipe", 0, modulePath) % 6;
-	tmpint = GetPrivateProfileInt("SkyGfx", "worldPipe", 0, modulePath);
-	c->worldPipe = tmpint >= 0 ? tmpint % 3 : -1;
-	c->colorFilter = GetPrivateProfileInt("SkyGfx", "colorFilter", 0, modulePath) % 4;
-	c->infraredVision = GetPrivateProfileInt("SkyGfx", "infraredVision", 0, modulePath) % 2;
-	c->nightVision = GetPrivateProfileInt("SkyGfx", "nightVision", 0, modulePath) % 2;
-	c->grainFilter = GetPrivateProfileInt("SkyGfx", "grainFilter", 0, modulePath) % 2;
-	usePCTimecyc = GetPrivateProfileInt("SkyGfx", "usePCTimecyc", FALSE, modulePath) != FALSE;
+	int ps2Modulate, dualPass;
+	ps2Modulate = readint(cfg.get("SkyGfx", "ps2Modulate", ""), 0);
+	dualPass = readint(cfg.get("SkyGfx", "dualPass", ""), 0);
 
-	tmpint = GetPrivateProfileInt("SkyGfx", "blurLeft", 4000, modulePath);
+	static StrAssoc buildPipeMap[] = {
+		{"PS2",     0},
+		{"PCfixed", 1},
+		{"PC",      2},
+		{"",       -1},
+	};
+	c->buildingPipe = StrAssoc::get(buildPipeMap, cfg.get("SkyGfx", "buildingPipe", "").c_str());
+	c->ps2ModulateBuilding = readint(cfg.get("SkyGfx", "ps2ModulateBuilding", ""), ps2Modulate);
+	c->dualPassBuilding = readint(cfg.get("SkyGfx", "dualPassBuilding", ""), dualPass);
+
+	static StrAssoc vehPipeMap[] = {
+		{"PS2",     0},
+		{"PC",      1},
+		{"Xbox",    2},
+		{"Spec",    3},
+		{"VCS",     4},
+		{"",       -1},
+	};
+	c->vehiclePipe = StrAssoc::get(vehPipeMap, cfg.get("SkyGfx", "vehiclePipe", "").c_str());
+	c->dualPassVehicle = readint(cfg.get("SkyGfx", "dualPassVehicle", ""), dualPass);
+
+	c->ps2ModulateGrass = readint(cfg.get("SkyGfx", "ps2ModulateGrass", ""), ps2Modulate);
+	c->dualPassGrass = readint(cfg.get("SkyGfx", "dualPassGrass", ""), dualPass);
+	c->grassAddAmbient = readint(cfg.get("SkyGfx", "grassAddAmbient", ""), 0);
+	ps2grassFiles = readint(cfg.get("SkyGfx", "ps2grassFiles", ""), 0);
+	c->fixGrassPlacement = readint(cfg.get("SkyGfx", "grassFixPlacement", ""), 0);
+	c->backfaceCull = readint(cfg.get("SkyGfx", "grassBackfaceCull", ""), 1);
+
+	static StrAssoc boolMap[] = {
+		{"0",       0},
+		{"false",   0},
+		{"1",       1},
+		{"true",    1},
+		{"",       -1},
+	};
+	c->dualPassDefault = readint(cfg.get("SkyGfx", "dualPassDefault", ""), dualPass);
+	c->dualPassPed = readint(cfg.get("SkyGfx", "dualPassPed", ""), dualPass);
+	c->pedShadows = StrAssoc::get(boolMap, cfg.get("SkyGfx", "pedShadows", "").c_str());
+	c->stencilShadows = StrAssoc::get(boolMap, cfg.get("SkyGfx", "stencilShadows", "").c_str());
+	disableClouds = readint(cfg.get("SkyGfx", "disableClouds", ""), 0);
+	ps2MarkerAmbient = readint(cfg.get("SkyGfx", "ps2MarkerAmbient", ""), 0);
+	disableGamma = readint(cfg.get("SkyGfx", "disableGamma", ""), 0);
+	c->detailedWaterDist = readint(cfg.get("SkyGfx", "detailedWaterDist", ""), 48);
+
+	static StrAssoc colorFilterMap[] = {
+		{"PS2",     0},
+		{"PC",      1},
+		{"Mobile",  2},
+		{"None",    3},
+		{"",        1},
+	};
+	static StrAssoc ps2pcMap[] = {
+		{"PS2",     0},
+		{"PC",      1},
+		{"",        1},
+	};
+	c->colorFilter = StrAssoc::get(colorFilterMap, cfg.get("SkyGfx", "colorFilter", "").c_str());
+	ps2pcMap[2].val = c->colorFilter == 0 ? 0 : 1;
+	c->infraredVision = StrAssoc::get(ps2pcMap, cfg.get("SkyGfx", "infraredVision", "").c_str());
+	c->nightVision = StrAssoc::get(ps2pcMap, cfg.get("SkyGfx", "nightVision", "").c_str());
+	c->grainFilter = StrAssoc::get(ps2pcMap, cfg.get("SkyGfx", "grainFilter", "").c_str());
+	usePCTimecyc = readint(cfg.get("SkyGfx", "usePCTimecyc", ""), 0);
+
+	tmpint = readint(cfg.get("SkyGfx", "blurLeft", ""), 4000);
 	c->offLeft = tmpint == 4000 ? colourLeftVOffset : tmpint;
-	tmpint = GetPrivateProfileInt("SkyGfx", "blurTop", 4000, modulePath);
+	tmpint = readint(cfg.get("SkyGfx", "blurTop", ""), 4000);
 	c->offTop = tmpint == 4000 ? colourTopVOffset : tmpint;
-	tmpint = GetPrivateProfileInt("SkyGfx", "blurRight", 4000, modulePath);
+	tmpint = readint(cfg.get("SkyGfx", "blurRight", ""), 4000);
 	c->offRight = tmpint == 4000 ? colourRightVOffset : tmpint;
-	tmpint = GetPrivateProfileInt("SkyGfx", "blurBottom", 4000, modulePath);
+	tmpint = readint(cfg.get("SkyGfx", "blurBottom", ""), 4000);
 	c->offBottom = tmpint == 4000 ? colourBottomVOffset : tmpint;
 
-	c->scaleOffsets = GetPrivateProfileInt("SkyGfx", "scaleOffsets", TRUE, modulePath) != FALSE;
-	tmpint = GetPrivateProfileInt("SkyGfx", "doRadiosity", 4000, modulePath);
+	tmpint = readint(cfg.get("SkyGfx", "doRadiosity", ""), 4000);
 	c->doRadiosity = tmpint == 4000 ? original_bRadiosity : tmpint;	// saved value from stream.ini
+	c->vcsTrails = readint(cfg.get("SkyGfx", "vcsTrails", ""), 0);
 
-	c->radiosityFilterPasses = GetPrivateProfileInt("SkyGfx", "radiosityFilterPasses", 2, modulePath);
-	c->radiosityRenderPasses = GetPrivateProfileInt("SkyGfx", "radiosityRenderPasses", 1, modulePath);
-	c->radiosityIntensityLimit = GetPrivateProfileInt("SkyGfx", "radiosityIntensityLimit", 0xDC, modulePath);
-	c->radiosityIntensity = GetPrivateProfileInt("SkyGfx", "radiosityIntensity", 0x23, modulePath);
-	c->radiosityFilterUCorrection = GetPrivateProfileInt("SkyGfx", "radiosityFilterUCorrection", 2, modulePath);
-	c->radiosityFilterVCorrection = GetPrivateProfileInt("SkyGfx", "radiosityFilterVCorrection", 2, modulePath);
+	c->radiosityFilterPasses = readint(cfg.get("SkyGfx", "radiosityFilterPasses", ""), 2);
+	c->radiosityRenderPasses = readint(cfg.get("SkyGfx", "radiosityRenderPasses", ""), 1);
+	c->radiosityIntensityLimit = readint(cfg.get("SkyGfx", "radiosityIntensityLimit", ""), 0xDC);
+	c->radiosityIntensity = readint(cfg.get("SkyGfx", "radiosityIntensity", ""), 0x23);
+	c->radiosityFilterUCorrection = readint(cfg.get("SkyGfx", "radiosityFilterUCorrection", ""), 2);
+	c->radiosityFilterVCorrection = readint(cfg.get("SkyGfx", "radiosityFilterVCorrection", ""), 2);
 
-	c->vcsTrails = GetPrivateProfileInt("SkyGfx", "vcsTrails", FALSE, modulePath) != FALSE;
-	c->trailsLimit = GetPrivateProfileInt("SkyGfx", "trailsLimit", 80, modulePath);
-	c->trailsIntensity = GetPrivateProfileInt("SkyGfx", "trailsIntensity", 38, modulePath);
-	c->pedShadows = GetPrivateProfileInt("SkyGfx", "pedShadows", 0, modulePath);
-	c->stencilShadows = GetPrivateProfileInt("SkyGfx", "stencilShadows", 0, modulePath);
-	disableClouds = GetPrivateProfileInt("SkyGfx", "disableClouds", FALSE, modulePath) != FALSE;
-	disableGamma = GetPrivateProfileInt("SkyGfx", "disableGamma", FALSE, modulePath) != FALSE;
-	ps2MarkerAmbient = GetPrivateProfileInt("SkyGfx", "ps2MarkerAmbient", FALSE, modulePath) != FALSE;
+	c->trailsLimit = readint(cfg.get("SkyGfx", "trailsLimit", ""), 80);
+	c->trailsIntensity = readint(cfg.get("SkyGfx", "trailsIntensity", ""), 38);
 
-	c->dontChangeAmbient = GetPrivateProfileInt("SkyGfx", "dontChangeAmbient", FALSE, modulePath) != FALSE;
-
-	c->detailedWaterDist = GetPrivateProfileInt("SkyGfx", "detailedWaterDist", 48, modulePath);
-
-	GetPrivateProfileString("SkyGfx", "farDist", "60.0", tmp, sizeof(tmp), modulePath);
-	c->farDist = atof(tmp);
-	GetPrivateProfileString("SkyGfx", "blendDist", "20.0", tmp, sizeof(tmp), modulePath);
-	c->fadeDist = atof(tmp);
-	c->fadeInvDist = 1.0f/c->fadeDist;
-	GetPrivateProfileString("SkyGfx", "densityMult", "1.0", tmp, sizeof(tmp), modulePath);
-	c->densityMult = atof(tmp)*0.5;
-
-	procObjChangeForInadequate = GetPrivateProfileInt("SkyGfx", "procObjChangeForInadequate", FALSE, modulePath) != FALSE;
-
-	*(float**)0x5DC281 = &c->densityMult;
-	*(float**)0x5DAD98 = &c->fadeDist;
-	*(float**)0x5DAE05 = &c->fadeInvDist;
+	c->dontChangeAmbient = readint(cfg.get("SkyGfx", "dontChangeAmbient", ""), 0);
 }
 
 RpAtomic *(*plantTab0)[4] = (RpAtomic *(*)[4])0xC039F0;
@@ -433,7 +482,7 @@ myDefaultCallback(RpAtomic *atomic)
 		dodual = 1;
 //	if(pipe == CCustomCarEnvMapPipeline__ObjPipeline && !reflTexDone){
 	if(pipe == skinPipe && !reflTexDone){
-		if(config->vehiclePipe == 3){
+		if(config->vehiclePipe == 4){
 			RwCameraEndUpdate(Camera);
 			RwRasterPushContext(reflTex);
 			RwRasterRenderFast(RwCameraGetRaster(Camera), 0, 0);
@@ -697,59 +746,48 @@ InjectDelayedPatches()
 		}
 
 		// custom building pipeline
-		if(config->worldPipe >= 0){
+		if(config->buildingPipe >= 0){
 			MemoryVP::InjectHook(0x5D7100, CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2);
 			MemoryVP::InjectHook(0x5D7D90, CCustomBuildingPipeline__CreateCustomObjPipe_PS2);
 			MemoryVP::Patch<BYTE>(0x5D7200, 0xC3);	// disable interpolation
 		}
 
-		if(oneGrassModel){
-			char *modelname = "grass0_1.dff";
-			MemoryVP::Patch<DWORD>(0x5DDA87, (DWORD)modelname);
-			MemoryVP::Patch<DWORD>(0x5DDA8F, (DWORD)modelname);
-			MemoryVP::Patch<DWORD>(0x5DDA97, (DWORD)modelname);
-			MemoryVP::Patch<DWORD>(0x5DDA9F, (DWORD)modelname);
+		// custom vehicle pipeline
+		if(config->vehiclePipe >= 0)
+			MemoryVP::InjectHook(0x5D9FE9, setVehiclePipeCB);
 
-			MemoryVP::Patch<DWORD>(0x5DDAC3, (DWORD)modelname);
-			MemoryVP::Patch<DWORD>(0x5DDACB, (DWORD)modelname);
-			MemoryVP::Patch<DWORD>(0x5DDAD3, (DWORD)modelname);
-			MemoryVP::Patch<DWORD>(0x5DDADB, (DWORD)modelname);
+		if(ps2grassFiles){
+			MemoryVP::Patch<const char*>(0x5DDA87, "grass2_1.dff");
+			MemoryVP::Patch<const char*>(0x5DDA8F, "grass2_2.dff");
+			MemoryVP::Patch<const char*>(0x5DDA97, "grass2_3.dff");
+			MemoryVP::Patch<const char*>(0x5DDA9F, "grass2_4.dff");
+
+			MemoryVP::Patch<const char*>(0x5DDAC3, "grass3_1.dff");
+			MemoryVP::Patch<const char*>(0x5DDACB, "grass3_2.dff");
+			MemoryVP::Patch<const char*>(0x5DDAD3, "grass3_3.dff");
+			MemoryVP::Patch<const char*>(0x5DDADB, "grass3_4.dff");
+			MemoryVP::Patch<uint>(0x5DDB14 + 1, 0xC03A30+4);
+			MemoryVP::Patch<uint>(0x5DDB21 + 2, 0xC03A30+8);
+			MemoryVP::Patch<uint>(0x5DDB2F + 2, 0xC03A30+12);
 		}
 
-		//if(disableHQShadows){
-			// disable stencil shadows
-			//MemoryVP::Patch<BYTE>(0x53E159, 0xC3);
-			//MemoryVP::Nop(0x53C1AB, 5);
-			// stencil???
-			MemoryVP::InjectHook(0x7113B8, &FX::GetFxQuality_stencil);
-			MemoryVP::InjectHook(0x711D95, &FX::GetFxQuality_stencil);
-			// use static ped shadows
-			//MemoryVP::Patch<WORD>(0x5E6789, 0xe990);
-			MemoryVP::InjectHook(0x5E675E, &FX::GetFxQuality_ped);
-			MemoryVP::InjectHook(0x5E676D, &FX::GetFxQuality_ped);
-			
-			MemoryVP::InjectHook(0x706BC4, &FX::GetFxQuality_ped);
-			MemoryVP::InjectHook(0x706BD3, &FX::GetFxQuality_ped);
-			// vehicle pole
-			MemoryVP::InjectHook(0x70F9B8, &FX::GetFxQuality_stencil);
-			// enable low quality car shadows
-			//MemoryVP::Nop(0x70BDAB, 6);
-			// enable low quality pole shadows
-			//MemoryVP::Nop(0x70C75A, 6);
-		//}
+		// use static ped shadows
+		MemoryVP::InjectHook(0x5E675E, &FX::GetFxQuality_ped);
+		MemoryVP::InjectHook(0x5E676D, &FX::GetFxQuality_ped);
+		MemoryVP::InjectHook(0x706BC4, &FX::GetFxQuality_ped);
+		MemoryVP::InjectHook(0x706BD3, &FX::GetFxQuality_ped);
+		// stencil???
+		MemoryVP::InjectHook(0x7113B8, &FX::GetFxQuality_stencil);
+		MemoryVP::InjectHook(0x711D95, &FX::GetFxQuality_stencil);
+		// vehicle, pole
+		MemoryVP::InjectHook(0x70F9B8, &FX::GetFxQuality_stencil);
 
-		if(disableClouds){
+		if(disableClouds)
 			// jump over cloud loop
 			MemoryVP::InjectHook(0x714145, 0x71422A, PATCH_JUMP);
-		}
 
 		if(disableGamma)
 			MemoryVP::InjectHook(0x74721C, 0x7472F3, PATCH_JUMP);
-
-		if(procObjChangeForInadequate){
-			MemoryVP::InjectHook(0x5A3C7D, mysrand);
-			MemoryVP::InjectHook(0x5A3DFB, mysrand);
-		}
 
 		if(ps2MarkerAmbient)
 			MemoryVP::InjectHook(0x722627, 0x735C40);
@@ -825,13 +863,11 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		MemoryVP::InjectHook(0x5DAE61, saveIntensity, PATCH_JUMP);
 		MemoryVP::Patch<DWORD>(0x5DAEC8, (DWORD)setTextureAndColor);
 
-		MemoryVP::InjectHook(0x5DDB47, SetCloseFarAlphaDist);
-
-		// VehiclePipeline
-		MemoryVP::InjectHook(0x5D9FE9, setVehiclePipeCB);
 		// add dual pass for PC pipeline
 		MemoryVP::InjectHook(0x5D9EEB, D3D9RenderPreLit_DUAL);
 		MemoryVP::InjectHook(0x5DA640, D3D9RenderNotLit_DUAL);
+		// give vehicle pipe to upgrade parts
+		//MemoryVP::InjectHook(0x4C88F0, 0x5DA610, PATCH_JUMP);
 
 		// postfx
 		MemoryVP::InjectHook(0x74EAA6, CPostEffects::Init, PATCH_JUMP);
@@ -873,6 +909,15 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		//MemoryVP::Patch<float*>(0x5A3CEA, (float*)&ps2randnormalize);
 		//MemoryVP::Patch<float*>(0x5A3D05, (float*)&ps2randnormalize);
 		MemoryVP::InjectHook(0x5A3C6E, floatbitpattern);
+
+		// increase multipass distance
+		static float multipassMultiplier = 100.0f;	// default 45.0
+		MemoryVP::Patch<float*>(0x73290A+2, &multipassMultiplier);
+
+		// change grass close far to ps2 values...but they appear to be handled differently?
+		MemoryVP::Patch<float>(0x5DDB3D+1, 78.0f);
+//		MemoryVP::Patch<float>(0x5DDB42+1, 5.0f);	// this is too high, grass disappears o_O
+
 
 		//void dumpMenu(void);
 		//dumpMenu();

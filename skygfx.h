@@ -1,4 +1,8 @@
 #define _CRT_SECURE_NO_WARNINGS
+#pragma warning(disable: 4244)	// int to float
+#pragma warning(disable: 4800)	// int to bool
+#pragma warning(disable: 4838)  // narrowing conversion
+
 
 #include <windows.h>
 #include <rwcore.h>
@@ -14,19 +18,26 @@
 #include "MemoryMgr.h"
 #include "Pools.h"
 
+typedef unsigned char uchar;
+typedef unsigned short ushort;
+typedef unsigned int uint;
+
 extern HMODULE dllModule;
 
 struct Config {
 	RwBool fixGrassPlacement;	// this has to stay at that offset, see fixSeed in main.cpp
-	RwBool enableHotkeys;
-	RwBool ps2Ambient, ps2ModulateWorld, ps2ModulateGrass;
+
+	int buildingPipe;
+	RwBool ps2ModulateBuilding;
+	RwBool dualPassBuilding;
+
+	RwBool ps2Ambient, ps2ModulateGrass;
 	RwBool grassAddAmbient;
 	RwBool backfaceCull;
-	RwBool dualPassWorld, dualPassDefault, dualPassGrass, dualPassVehicle, dualPassPed;
-	int vehiclePipe, worldPipe;
+	RwBool dualPassDefault, dualPassGrass, dualPassVehicle, dualPassPed;
+	int vehiclePipe;
 	int colorFilter;
 	int infraredVision, nightVision, grainFilter;
-	RwBool scaleOffsets;
 	RwBool doRadiosity;
 	int radiosityFilterPasses, radiosityRenderPasses, radiosityIntensityLimit;
 	int radiosityIntensity, radiosityFilterUCorrection, radiosityFilterVCorrection;
@@ -38,9 +49,7 @@ struct Config {
 
 	RwBool dontChangeAmbient;
 
-	float farDist, fadeDist, fadeInvDist, densityMult;
-
-	int keys[3];
+	int keys[2];
 };
 extern int numConfigs;
 extern Config *config, configs[10];
@@ -118,7 +127,7 @@ struct CPostEffects
 	static void ImmediateModeRenderStatesSet(void);
 	static void ImmediateModeRenderStatesReStore(void);
 	static void SetFilterMainColour(RwRaster *raster, RwRGBA color);
-	static void DrawQuad(float x1, float y1, float x2, float y2, char r, char g, char b, char alpha, RwRaster *ras);
+	static void DrawQuad(float x1, float y1, float x2, float y2, uchar r, uchar g, uchar b, uchar alpha, RwRaster *ras);
 	static void SpeedFX(float);
 	static void SpeedFX_Fix(float fStrength);
 
@@ -137,7 +146,7 @@ int myPluginAttach(void);
 void setVehiclePipeCB(RxPipelineNode *node, RxD3D9AllInOneRenderCallBack callback);
 void loadColorcycle(void);
 void readIni(int n);
-void SetCloseFarAlphaDist(float close, float far);
+//void SetCloseFarAlphaDist(float close, float far);
 void resetValues(void);
 void D3D9Render(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData);
 void D3D9RenderVehicleDual(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instancedData);

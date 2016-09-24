@@ -10,7 +10,7 @@ WRAPPER void CPostEffects::ImmediateModeRenderStatesStore(void) { EAXJMP(0x700CC
 WRAPPER void CPostEffects::ImmediateModeRenderStatesSet(void) { EAXJMP(0x700D70); }
 WRAPPER void CPostEffects::ImmediateModeRenderStatesReStore(void) { EAXJMP(0x700E00); }
 WRAPPER void CPostEffects::SetFilterMainColour(RwRaster *raster, RwRGBA color) { EAXJMP(0x703520); }
-WRAPPER void CPostEffects::DrawQuad(float x1, float y1, float x2, float y2, char r, char g, char b, char alpha, RwRaster *ras) { EAXJMP(0x700EC0); }
+WRAPPER void CPostEffects::DrawQuad(float x1, float y1, float x2, float y2, uchar r, uchar g, uchar b, uchar alpha, RwRaster *ras) { EAXJMP(0x700EC0); }
 WRAPPER void CPostEffects::NightVision(RwRGBA color) { EAXJMP(0x7011C0); }
 WRAPPER void CPostEffects::ColourFilter(RwRGBA rgb1, RwRGBA rgb2) { EAXJMP(0x703650); }
 float &CPostEffects::m_fNightVisionSwitchOnFXCount = *(float*)0xC40300;
@@ -81,7 +81,7 @@ CPostEffects::Radiosity_VCS(int intensityLimit, int filterPasses, int renderPass
 {
 	RwRaster *vcsBuffer1, *vcsBuffer2;
 	float radiosityColors[4];
-	RwTexture tempTexture;
+	static RwTexture *tempTexture = NULL;
 	RwRaster *camraster;
 	int width, height;
 	float uOffsets[] = { -1.0f, 1.0f, 0.0f, 0.0f };
@@ -112,8 +112,8 @@ CPostEffects::Radiosity_VCS(int intensityLimit, int filterPasses, int renderPass
 	float vMax = height / rasterHeight;
 	float xMax = -1.0f + 2*uMax;
 	float yMax = 1.0f - 2*vMax;
-	float xOffsetScale = config->scaleOffsets ? width/256.0f : 1.0f;
-	float yOffsetScale = config->scaleOffsets ? height/128.0f : 1.0f;
+	float xOffsetScale = width/256.0f;
+	float yOffsetScale = height/128.0f;
 	if(config->radiosityFilterUCorrection == 0.0f)
 		xOffsetScale = yOffsetScale = 0.0f;
 
@@ -219,8 +219,13 @@ CPostEffects::Radiosity_VCS(int intensityLimit, int filterPasses, int renderPass
 	RwCameraSetRaster(Camera, vcsBuffer2);
 	RwCameraBeginUpdate(Camera);
 
-	tempTexture.raster = vcsBuffer1;
-	RwD3D9SetTexture(&tempTexture, 0);
+	if(tempTexture == NULL){
+		tempTexture = RwTextureCreate(NULL);
+		tempTexture->filterAddressing = 0x1102;
+	}
+
+	tempTexture->raster = vcsBuffer1;
+	RwD3D9SetTexture(tempTexture, 0);
 
 	RwD3D9SetVertexDeclaration(quadVertexDecl);
 
@@ -264,8 +269,8 @@ CPostEffects::Radiosity_VCS(int intensityLimit, int filterPasses, int renderPass
 		RwD3D9DrawIndexedPrimitiveUP(D3DPT_TRIANGLELIST, 0, 6, 2, vcsIndices1, vcsVertices, sizeof(QuadVertex));
 
 		RwD3D9SetPixelShader(NULL);
-		tempTexture.raster = vcsBuffer2;
-		RwD3D9SetTexture(&tempTexture, 0);
+		tempTexture->raster = vcsBuffer2;
+		RwD3D9SetTexture(tempTexture, 0);
 		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)1);
 		RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
 		RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
@@ -279,8 +284,8 @@ CPostEffects::Radiosity_VCS(int intensityLimit, int filterPasses, int renderPass
 	RwCameraSetRaster(Camera, camraster);
 	RwCameraBeginUpdate(Camera);
 
-	tempTexture.raster = vcsBuffer2;
-	RwD3D9SetTexture(&tempTexture, 0);
+	tempTexture->raster = vcsBuffer2;
+	RwD3D9SetTexture(tempTexture, 0);
 	RwD3D9DrawIndexedPrimitiveUP(D3DPT_TRIANGLELIST, 0, 6, 2, vcsIndices1, vcsVertices+4, sizeof(QuadVertex));
 
 	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)ztest);
@@ -297,7 +302,7 @@ CPostEffects::Radiosity_PS2(int intensityLimit, int filterPasses, int renderPass
 	int width, height;
 	RwRaster *buffer1, *buffer2, *camraster;
 	float radiosityColors[4];
-	RwTexture tempTexture;
+	static RwTexture *tempTexture = NULL;
 
 	if(!config->doRadiosity)
 		return;
@@ -305,6 +310,10 @@ CPostEffects::Radiosity_PS2(int intensityLimit, int filterPasses, int renderPass
 	if(config->vcsTrails){
 		CPostEffects::Radiosity_VCS(intensityLimit, filterPasses, renderPasses, intensity);
 		return;
+	}
+	if(tempTexture == NULL){
+		tempTexture = RwTextureCreate(NULL);
+		tempTexture->filterAddressing = 0x1102;
 	}
 
 
@@ -334,8 +343,8 @@ CPostEffects::Radiosity_PS2(int intensityLimit, int filterPasses, int renderPass
 
 	float rasterWidth = RwRasterGetWidth(target1);
 	float rasterHeight = RwRasterGetHeight(target1);
-	float xOffsetScale = config->scaleOffsets ? width/640.0f : 1.0f;
-	float yOffsetScale = config->scaleOffsets ? height/480.0f : 1.0f;
+	float xOffsetScale = width/640.0f;
+	float yOffsetScale = height/480.0f;
 
 	screenVertices[0].z = 0.0f;
 	screenVertices[0].rhw = 1.0f / Camera->nearPlane;
@@ -397,8 +406,8 @@ CPostEffects::Radiosity_PS2(int intensityLimit, int filterPasses, int renderPass
 		RwCameraSetRaster(Camera, buffer2);
 		RwCameraBeginUpdate(Camera);
 
-		tempTexture.raster = buffer1;
-		RwD3D9SetTexture(&tempTexture, 0);
+		tempTexture->raster = buffer1;
+		RwD3D9SetTexture(tempTexture, 0);
 		RwD3D9DrawIndexedPrimitiveUP(D3DPT_TRIANGLELIST, 0, 6, 2, radiosityIndices, screenVertices, sizeof(ScreenVertex));
 		RwRaster *tmp = buffer1;
 		buffer1 = buffer2;
@@ -428,8 +437,8 @@ CPostEffects::Radiosity_PS2(int intensityLimit, int filterPasses, int renderPass
 	RwCameraSetRaster(Camera, camraster);
 	RwCameraBeginUpdate(Camera);
 
-	tempTexture.raster = buffer1;
-	RwD3D9SetTexture(&tempTexture, 0);
+	tempTexture->raster = buffer1;
+	RwD3D9SetTexture(tempTexture, 0);
 	RwD3D9SetPixelShader(radiosityPS);
 
 	radiosityColors[0] = intensityLimit/255.0f;
@@ -467,7 +476,7 @@ CPostEffects::ColourFilter_PS2(RwRGBA rgb1, RwRGBA rgb2)
 	int i = 0;
 
 	float leftOff, rightOff, topOff, bottomOff;
-	float scale = config->scaleOffsets ? RsGlobal->MaximumWidth/640.0f : 1.0f;
+	float scale = RsGlobal->MaximumWidth/640.0f;
 	leftOff = (float)config->offLeft*scale / 16.0f / rasterWidth;
 	rightOff = (float)config->offRight*scale / 16.0f / rasterWidth;
 	topOff = (float)config->offTop*scale / 16.0f / rasterHeight;
@@ -512,9 +521,13 @@ CPostEffects::ColourFilter_PS2(RwRGBA rgb1, RwRGBA rgb2)
 	quadVertices[i].u1 = quadVertices[i].u + rightOff;
 	quadVertices[i].v1 = quadVertices[i].v + topOff;
 	
-	RwTexture tempTexture;
-	tempTexture.raster = CPostEffects::pRasterFrontBuffer;
-	RwD3D9SetTexture(&tempTexture, 0);
+	static RwTexture *tempTexture = NULL;
+	if(tempTexture == NULL){
+		tempTexture = RwTextureCreate(NULL);
+		tempTexture->filterAddressing = 0x1102;
+	}
+	tempTexture->raster = CPostEffects::pRasterFrontBuffer;
+	RwD3D9SetTexture(tempTexture, 0);
 
 	RwD3D9SetVertexDeclaration(quadVertexDecl);
 
@@ -780,9 +793,13 @@ renderMobile(void)
 	quadVertices[i].u = uMax + halfU;
 	quadVertices[i].v = 0.0f + halfV;
 	
-	RwTexture tempTexture;
-	tempTexture.raster = CPostEffects::pRasterFrontBuffer;
-	RwD3D9SetTexture(&tempTexture, 0);
+	static RwTexture *tempTexture = NULL;
+	if(tempTexture == NULL){
+		tempTexture = RwTextureCreate(NULL);
+		tempTexture->filterAddressing = 0x1102;
+	}
+	tempTexture->raster = CPostEffects::pRasterFrontBuffer;
+	RwD3D9SetTexture(tempTexture, 0);
 
 	RwD3D9SetVertexDeclaration(quadVertexDecl);
 
@@ -820,7 +837,7 @@ WRAPPER char ReloadPlantConfig(void) { EAXJMP(0x5DD780); }
 void
 CPostEffects::ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 {
-	if(config->enableHotkeys){
+	{
 		static bool keystate = false;
 		if(GetAsyncKeyState(config->keys[0]) & 0x8000){
 			if(!keystate){
@@ -830,13 +847,13 @@ CPostEffects::ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 				else
 					config++;
 				resetValues();
-				SetCloseFarAlphaDist(3.0, 1234.0); // second value overriden
+				//SetCloseFarAlphaDist(3.0, 1234.0); // second value overriden
 			}
 		}else
 			keystate = false;
 	}
 
-	if(config->enableHotkeys){
+	{
 		static bool keystate = false;
 		if(GetAsyncKeyState(config->keys[1]) & 0x8000){
 			if(!keystate){
@@ -847,25 +864,7 @@ CPostEffects::ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 					for(int i = 1; i <= numConfigs; i++)
 						readIni(i);
 				resetValues();
-				SetCloseFarAlphaDist(3.0, 1234.0); // second value overriden
-			}
-		}else
-			keystate = false;
-	}
-
-	if(config->enableHotkeys){
-		static bool keystate = false;
-		if(GetAsyncKeyState(config->keys[2]) & 0x8000){
-			if(!keystate){
-				keystate = true;
-				if(numConfigs == 0)
-					readIni(0);
-				else
-					for(int i = 1; i <= numConfigs; i++)
-						readIni(i);
-				resetValues();
-				ReloadPlantConfig();
-				SetCloseFarAlphaDist(3.0, 1234.0); // second value overriden
+				//SetCloseFarAlphaDist(3.0, 1234.0); // second value overriden
 			}
 		}else
 			keystate = false;

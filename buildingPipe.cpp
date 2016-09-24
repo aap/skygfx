@@ -103,7 +103,7 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 		float colorScalePS;
 		colorScalePS = dnShaderVars.colorScale = 1.0f;
 		if(flags & (rxGEOMETRY_TEXTURED2 | rxGEOMETRY_TEXTURED)){
-			colorScalePS = dnShaderVars.colorScale = config->ps2ModulateWorld ? 255.0f/128.0f : 1.0f;
+			colorScalePS = dnShaderVars.colorScale = config->ps2ModulateBuilding ? 255.0f/128.0f : 1.0f;
 			RwD3D9SetTexture(material->texture ? material->texture : gpWhiteTexture, 0);
 		}else
 			RwD3D9SetTexture(gpWhiteTexture, 0);
@@ -136,10 +136,10 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 		}else
 			color = pAmbient->color;
 		RwD3D9SetVertexShaderConstant(LOC_ambientLight, (void*)&color, 1);
-		surfProps[0] = lighting || config->worldPipe == 0 ? material->surfaceProps.ambient : 0.0f;
+		surfProps[0] = lighting || config->buildingPipe == 0 ? material->surfaceProps.ambient : 0.0f;
 		RwD3D9SetVertexShaderConstant(LOC_surfaceProps, &surfProps, 1);
 
-		dnShaderVars.reflSwitch = 1 + config->worldPipe;
+		dnShaderVars.reflSwitch = 1 + config->buildingPipe;
 		RwD3D9SetVertexShaderConstant(LOC_shaderVars, (void*)&dnShaderVars, 1);
 
 		RwD3D9SetVertexShader(DNPipeVS);
@@ -147,7 +147,7 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 
 		// this takes the texture into account, somehow....
 		RwD3D9GetRenderState(D3DRS_ALPHABLENDENABLE, &hasAlpha);
-		if(hasAlpha && config->dualPassWorld){
+		if(hasAlpha && config->dualPassBuilding){
 			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)128);
 			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONGREATEREQUAL);
 			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
