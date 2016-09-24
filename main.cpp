@@ -914,6 +914,14 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		static float multipassMultiplier = 100.0f;	// default 45.0
 		MemoryVP::Patch<float*>(0x73290A+2, &multipassMultiplier);
 
+		// Get rid of the annoying dotproduct check in visibility renderCBs
+		// Does it make any sense to compare the dot product against a distance?
+		MemoryVP::Nop(0x733313, 2);	// VehicleHiDetailCB
+		MemoryVP::Nop(0x73405A, 2);	// VehicleHiDetailAlphaCB
+		MemoryVP::Nop(0x733403, 2);	// TrainHiDetailCB
+		MemoryVP::Nop(0x73431A, 2);	// TrainHiDetailAlphaCB
+		MemoryVP::Nop(0x73444A, 2);	// VehicleHiDetailAlphaCB_BigVehicle
+
 		// change grass close far to ps2 values...but they appear to be handled differently?
 		MemoryVP::Patch<float>(0x5DDB3D+1, 78.0f);
 //		MemoryVP::Patch<float>(0x5DDB42+1, 5.0f);	// this is too high, grass disappears o_O
