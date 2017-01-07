@@ -74,7 +74,7 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB(RwResEntry *repEntry, void *object
 	RwBool lighting;
 	RwInt32	numMeshes;
 	RwBool notLit;
-	CustomEnvMapPipeMaterialData *envData;
+	CustomEnvMapPipeMaterialData *envData = nullptr;
 
 	RwD3D9GetRenderState(D3DRS_LIGHTING, &lighting);
 	if(lighting || flags & rpGEOMETRYPRELIT){
