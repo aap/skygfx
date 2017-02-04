@@ -21,6 +21,14 @@ int &colourBottomVOffset = *(int*)0x8D515C;
 float *gfLaRiotsLightMult = (float*)0x8CD060;
 float *ambientColors = (float*)0xB7C4A0;
 
+extern "C" {
+__declspec(dllexport) Config*
+GetConfig(void)
+{
+	return config;
+}
+}
+
 void
 D3D9Render(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData)
 {
@@ -268,7 +276,9 @@ readIni(int n)
 		{"PS2",     0},
 		{"PC",      1},
 		{"Mobile",  2},
-		{"None",    3},
+		{"III",     3},
+		{"VC",      4},
+		{"None",    5},
 		{"",        1},
 	};
 	static StrAssoc ps2pcMap[] = {
@@ -740,10 +750,10 @@ InjectDelayedPatches()
 			readIni(1);
 		// only load one ini for now, others are loaded later by readInis()
 
-		if(usePCTimecyc){
+	//	if(usePCTimecyc){
 			MemoryVP::Nop(0x5BBF6F, 2);
 			MemoryVP::Nop(0x5BBF83, 2);
-		}
+	//	}
 
 		// custom building pipeline
 		if(config->buildingPipe >= 0){

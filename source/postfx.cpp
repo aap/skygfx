@@ -37,6 +37,7 @@ struct ScreenVertex
 };
 
 void *postfxVS, *colorFilterPS, *radiosityPS, *grainPS;
+void *iiiTrailsPS, *vcTrailsPS;
 void *gradingPS;
 void *quadVertexDecl, *screenVertexDecl;
 RwRect smallRect;
@@ -465,7 +466,7 @@ CPostEffects::Radiosity_PS2(int intensityLimit, int filterPasses, int renderPass
 }
 
 void
-CPostEffects::ColourFilter_PS2(RwRGBA rgb1, RwRGBA rgb2)
+CPostEffects::ColourFilter_Generic(RwRGBA rgb1, RwRGBA rgb2, void *ps)
 {
 	float rasterWidth = RwRasterGetWidth(CPostEffects::pRasterFrontBuffer);
 	float rasterHeight = RwRasterGetHeight(CPostEffects::pRasterFrontBuffer);
@@ -532,7 +533,7 @@ CPostEffects::ColourFilter_PS2(RwRGBA rgb1, RwRGBA rgb2)
 	RwD3D9SetVertexDeclaration(quadVertexDecl);
 
 	RwD3D9SetVertexShader(postfxVS);
-	RwD3D9SetPixelShader(colorFilterPS);
+	RwD3D9SetPixelShader(ps);
 
 	RwRGBAReal color, color2;
 	RwRGBARealFromRwRGBA(&color, &rgb1);
@@ -870,12 +871,18 @@ CPostEffects::ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 			keystate = false;
 	}
 
-	if(config->colorFilter == 0)
-		CPostEffects::ColourFilter_PS2(rgb1, rgb2);
-	else if(config->colorFilter == 1)
-		CPostEffects::ColourFilter(rgb1, rgb2);
-	else if(config->colorFilter == 2)
-		renderMobile();
+	switch(config->colorFilter){
+	case 0:	CPostEffects::ColourFilter_Generic(rgb1, rgb2, colorFilterPS);
+		break;
+	case 1:	CPostEffects::ColourFilter(rgb1, rgb2);
+		break;
+	case 2:	renderMobile();
+		break;
+	case 3:	CPostEffects::ColourFilter_Generic(rgb1, rgb2, iiiTrailsPS);
+		break;
+	case 4:	CPostEffects::ColourFilter_Generic(rgb1, rgb2, vcTrailsPS);
+		break;
+	}
 
 	//static int doramp = 0;
 	//{
@@ -893,43 +900,39 @@ CPostEffects::ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 }
 
 void
+makePS(int res, void **sh)
+{
+	HRSRC resource = FindResource(dllModule, MAKEINTRESOURCE(res), RT_RCDATA);
+	RwUInt32 *shader = (RwUInt32*)LoadResource(dllModule, resource);
+	RwD3D9CreatePixelShader(shader, sh);
+	FreeResource(shader);
+}
+
+void
+makeVS(int res, void **sh)
+{
+	HRSRC resource = FindResource(dllModule, MAKEINTRESOURCE(res), RT_RCDATA);
+	RwUInt32 *shader = (RwUInt32*)LoadResource(dllModule, resource);
+	RwD3D9CreateVertexShader(shader, sh);
+	FreeResource(shader);
+}
+
+void
 CPostEffects::Init(void)
 {
 	MemoryVP::InjectHook(0x7FB824, Im2dSetPixelShader_hook);
 
 	grainRaster = RwRasterCreate(64, 64, 32, 0x504);
 
-	HRSRC resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_POSTFXVS), RT_RCDATA);
-	RwUInt32 *shader = (RwUInt32*)LoadResource(dllModule, resource);
-	RwD3D9CreateVertexShader(shader, &postfxVS);
-	FreeResource(shader);
-
-	resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_FILTERPS), RT_RCDATA);
-	shader = (RwUInt32*)LoadResource(dllModule, resource);
-	RwD3D9CreatePixelShader(shader, &colorFilterPS);
-	FreeResource(shader);
-
-	resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_RADIOSITYPS), RT_RCDATA);
-	shader = (RwUInt32*)LoadResource(dllModule, resource);
-	RwD3D9CreatePixelShader(shader, &radiosityPS);
-	FreeResource(shader);
-
-	resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_GRAINPS), RT_RCDATA);
-	shader = (RwUInt32*)LoadResource(dllModule, resource);
-	RwD3D9CreatePixelShader(shader, &grainPS);
-	FreeResource(shader);
-
-	if(simplePS == NULL){
-		resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_SIMPLEPS), RT_RCDATA);
-		shader = (RwUInt32*)LoadResource(dllModule, resource);
-		RwD3D9CreatePixelShader(shader, &simplePS);
-		FreeResource(shader);
-	}
-
-	resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_GRADINGPS), RT_RCDATA);
-	shader = (RwUInt32*)LoadResource(dllModule, resource);
-	RwD3D9CreatePixelShader(shader, &gradingPS);
-	FreeResource(shader);
+	makeVS(IDR_POSTFXVS, &postfxVS);
+	makePS(IDR_FILTERPS, &colorFilterPS);
+	makePS(IDR_IIITRAILSPS, &iiiTrailsPS);
+	makePS(IDR_VCTRAILSPS, &vcTrailsPS);
+	makePS(IDR_RADIOSITYPS, &radiosityPS);
+	makePS(IDR_GRAINPS, &grainPS);
+	makePS(IDR_GRADINGPS, &gradingPS);
+	if(simplePS == NULL)
+		makePS(IDR_SIMPLEPS, &simplePS);
 
 	static const D3DVERTEXELEMENT9 vertexElements[] =
 	{

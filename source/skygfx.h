@@ -119,7 +119,7 @@ struct CPostEffects
 	static void Grain(int strength, bool generate);
 	static void Grain_PS2(int strength, bool generate);
 	static void ColourFilter(RwRGBA rgb1, RwRGBA rgb2);
-	static void ColourFilter_PS2(RwRGBA rgb1, RwRGBA rgb2);
+	static void ColourFilter_Generic(RwRGBA rgb1, RwRGBA rgb2, void *ps);
 	static void ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2);
 	static void SetFilterMainColour_PS2(RwRaster *raster, RwRGBA color);
 	static void Init(void);
