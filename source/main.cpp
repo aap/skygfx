@@ -880,7 +880,7 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		//MemoryVP::InjectHook(0x4C88F0, 0x5DA610, PATCH_JUMP);
 
 		// postfx
-		MemoryVP::InjectHook(0x704696, CPostEffects::Init, PATCH_JUMP); //address changed to CPostEffects::Initialise(void)
+		MemoryVP::InjectHook(0x5BD7AE, CPostEffects::Init, PATCH_JUMP); //address changed to CGame::InitialiseRenderWare, partially overwrites ReadPlayerCoordsFile()
 		MemoryVP::InjectHook(0x704D1E, CPostEffects::ColourFilter_switch);
 		MemoryVP::InjectHook(0x704D5D, CPostEffects::Radiosity_PS2);
 		MemoryVP::InjectHook(0x704FB3, CPostEffects::Radiosity_PS2);
