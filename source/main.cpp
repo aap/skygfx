@@ -2,10 +2,11 @@
 #include "ini_parser.hpp"
 
 HMODULE dllModule;
+char asipath[MAX_PATH];
 
 int numConfigs;
 Config *config, configs[10];
-bool ps2grassFiles, usePCTimecyc, disableClouds, disableGamma, ps2MarkerAmbient;
+bool ps2grassFiles, usePCTimecyc, disableClouds, disableGamma, ps2MarkerAmbient, neoWaterDrops;
 int original_bRadiosity = 0;
 
 void *grassPixelShader;
@@ -137,7 +138,7 @@ BOOL FileExists(LPCTSTR szPath)
 {
 	DWORD dwAttrib = GetFileAttributes(szPath);
 	return dwAttrib != INVALID_FILE_ATTRIBUTES && 
-	       !(dwAttrib & FILE_ATTRIBUTE_DIRECTORY);
+		   !(dwAttrib & FILE_ATTRIBUTE_DIRECTORY);
 }
 
 struct StrAssoc
@@ -200,6 +201,10 @@ readIni(int n)
 {
 	int tmpint;
 	char modulePath[MAX_PATH];
+	GetModuleFileName(dllModule, modulePath, MAX_PATH);
+	strncpy(asipath, modulePath, MAX_PATH);
+	char *p = strrchr(asipath, '\\');
+	if (p) p[1] = '\0';
 
 	GetModuleFileName(dllModule, modulePath, MAX_PATH);
 	size_t nLen = strlen(modulePath);
@@ -317,6 +322,8 @@ readIni(int n)
 	c->trailsIntensity = readint(cfg.get("SkyGfx", "trailsIntensity", ""), 38);
 
 	c->dontChangeAmbient = readint(cfg.get("SkyGfx", "dontChangeAmbient", ""), 0);
+
+	neoWaterDrops = readint(cfg.get("SkyGfx", "neoWaterDrops", ""), 1);
 }
 
 RpAtomic *(*plantTab0)[4] = (RpAtomic *(*)[4])0xC039F0;
@@ -801,6 +808,11 @@ InjectDelayedPatches()
 
 		if(ps2MarkerAmbient)
 			MemoryVP::InjectHook(0x722627, 0x735C40);
+
+		extern void hookWaterDrops(void);
+		if (neoWaterDrops)
+			hookWaterDrops();
+
 		return FALSE;
 	}
 	return TRUE;
