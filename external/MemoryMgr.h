@@ -23,6 +23,13 @@ inline AT DynBaseAddress(AT address)
 	return (AT)GetModuleHandle(nullptr) - 0x400000 + address;
 }
 
+#define PTRFROMCALL(addr) (uint32_t)(*(uint32_t*)((uint32_t)addr+1) + (uint32_t)addr + 5)
+#define INTERCEPT(saved, func, a) \
+{ \
+	saved = PTRFROMCALL(a); \
+	Memory::InjectHook(a, func); \
+}
+
 namespace Memory
 {
 	template<typename T, typename AT>
@@ -55,6 +62,22 @@ namespace Memory
 		}
 
 		*(ptrdiff_t*)((DWORD)address + 1) = dwHook - (DWORD)address - 5;
+	}
+	inline void ExtractCall(void *dst, uintptr_t a)
+	{
+		*(uintptr_t*)dst = (uintptr_t)(*(uintptr_t*)(a + 1) + a + 5);
+	}
+	template<typename T>
+	inline void InterceptCall(void *dst, T func, uintptr_t a)
+	{
+		ExtractCall(dst, a);
+		InjectHook(a, func);
+	}
+	template<typename T>
+	inline void InterceptVmethod(void *dst, T func, uintptr_t a)
+	{
+		*(uintptr_t*)dst = *(uintptr_t*)a;
+		Patch(a, func);
 	}
 };
 

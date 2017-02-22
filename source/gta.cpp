@@ -121,3 +121,9 @@ WRAPPER void SetPipelineID(RpAtomic*, unsigned int it) { EAXJMP(0x72FC50); }
 WRAPPER RpAtomic *AtomicDefaultRenderCallBack(RpAtomic*) { EAXJMP(0x7491C0); };
 WRAPPER void CCustomCarEnvMapPipeline__CustomPipeRenderCB_exe(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags) { EAXJMP(0x5D9900) };
 WRAPPER void GTAfree(void *data) { EAXJMP(0x82413F); }
+
+static uint32_t RwV3dLength_A = (uint32_t)(0x7EDAC0);
+WRAPPER RwReal RwV3dLength(const RwV3d*) { VARJMP(RwV3dLength_A); }
+static uint32_t RwD3D9SetStreamSource_A = (uint32_t)(0x7FA030);
+WRAPPER void RwD3D9SetStreamSource(RwUInt32, void*, RwUInt32, RwUInt32) { VARJMP(RwD3D9SetStreamSource_A); }
+WRAPPER void RwD3D9SetFVF(RwUInt32) { EAXJMP(0x7F9F30); }
