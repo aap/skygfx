@@ -74,9 +74,9 @@ neoInit(void)
 
 INJECTRESET(1)
 INJECTRESET(2)
-INJECTRESET(3)
-INJECTRESET(4)
-INJECTRESET(5)
+//INJECTRESET(3)
+//INJECTRESET(4)
+//INJECTRESET(5)
 
 //addr splashbreak;
 //void __declspec(naked)
@@ -91,7 +91,6 @@ INJECTRESET(5)
 //	}
 //}
 
-// ADDRESS
 static addr CMotionBlurStreaksRender_A;
 WRAPPER void CMotionBlurStreaksRender(void) { VARJMP(CMotionBlurStreaksRender_A); }
 
@@ -110,10 +109,11 @@ CMotionBlurStreaksRender_hook(void)
 void
 hookWaterDrops(void)
 {
-	// ADDRESSES
-	Memory::InterceptCall(&CMotionBlurStreaksRender_A, CMotionBlurStreaksRender_hook, 0x726AD0);
-	//INTERCEPT(reset_call_1, reset_hook_1, AddressByVersion<addr>(0x48C1AB, 0, 0, 0x4A4DD6, 0, 0));
-	//INTERCEPT(reset_call_2, reset_hook_2, AddressByVersion<addr>(0x48C530, 0, 0, 0x4A48EA, 0, 0));
+	// do this some other place!
+	InterceptCall(&CMotionBlurStreaksRender_A, CMotionBlurStreaksRender_hook, 0x726AD0);
+
+	INTERCEPT(reset_call_1, reset_hook_1, 0x5BA2C5);	// CGame::Init2
+	INTERCEPT(reset_call_2, reset_hook_2, 0x53BD92);	// CGame::ReInitGameObjectVariables
 	//INTERCEPT(reset_call_3, reset_hook_3, AddressByVersion<addr>(0x42155D, 0, 0, 0x42BCD6, 0, 0));
 	//INTERCEPT(reset_call_4, reset_hook_4, AddressByVersion<addr>(0x42177A, 0, 0, 0x42C0BC, 0, 0));
 	//INTERCEPT(reset_call_5, reset_hook_5, AddressByVersion<addr>(0x421926, 0, 0, 0x42C318, 0, 0));
@@ -121,7 +121,6 @@ hookWaterDrops(void)
 	//INTERCEPT(splashbreak, splashhook, AddressByVersion<addr>(0x4BC7D0, 0, 0, 0x4E8721, 0, 0));
 }
 
-// ADDRESS
 uchar *TheCamera = (uchar*)0xB6F028;
 
 // Not all of these are implemented in all games, but wth
@@ -218,7 +217,6 @@ struct CPad
 	bool GetLookRight(void);
 };
 
-// ADDRESS
 static uint32_t GetPad_A = 0x53FB70;
 WRAPPER CPad *CPad::GetPad(int id) { VARJMP(GetPad_A); }
 static uint32_t GetLookBehindForCar_A = 0x53FE70;
@@ -241,7 +239,6 @@ WRAPPER bool CPad::GetLookRight(void) { VARJMP(GetLookRight_A); }
 
 extern IDirect3DDevice9 *&d3d9device;
 
-// ADDRESS
 RwCamera *&rwcam = *(RwCamera**)(0xC1703C);
 extern float &CTimer__ms_fTimeStep;
 float &CWeather__Rain = *(float*)(0xC81324);

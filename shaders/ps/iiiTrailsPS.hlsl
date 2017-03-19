@@ -5,13 +5,6 @@ float4 main(uniform sampler2D Diffuse : register(s0),
             in float2 Tex0 : TEXCOORD0,
             in float2 Tex1 : TEXCOORD1) : COLOR0
 {
-	// GTA III tint:
-//	float4 color = tex2D(Diffuse, Tex0);
-//	return RGB1;
-//	RGB1 *= 0.6;
-//	color.rgb = color*(1.0-RGB1.a) + RGB1.rgb*RGB1.a;
-//	return float4(color.rgb, 1.0);
-
 	// GTA III real trails:
 	float4 dst = tex2D(Diffuse, Tex0);
 	float4 prev = dst;

@@ -118,9 +118,9 @@ resetValues(void)
 	// night vision ambient green
 	// not if this is the correct switch, maybe ps2ModulateWorld?
 	if(config->nightVision == 0)
-		MemoryVP::Patch<float>(0x735F8B, 0.4f);
+		Patch<float>(0x735F8B, 0.4f);
 	else
-		MemoryVP::Patch<float>(0x735F8B, 1.0f);
+		Patch<float>(0x735F8B, 1.0f);
 
 	*(int*)0x8D37D0 = config->detailedWaterDist;
 }
@@ -432,9 +432,9 @@ writedffs(void)
 	if(done)
 		return;
 
-	MemoryVP::InjectHook(0x5D6DC0, nullsize, PATCH_JUMP);
-	MemoryVP::InjectHook(0x59D0F0, nullsize, PATCH_JUMP);
-	MemoryVP::InjectHook(0x72FBC0, nullsize, PATCH_JUMP);
+	InjectHook(0x5D6DC0, nullsize, PATCH_JUMP);
+	InjectHook(0x59D0F0, nullsize, PATCH_JUMP);
+	InjectHook(0x72FBC0, nullsize, PATCH_JUMP);
 
 	done++;
 	RpClump *clump = readclump("TEST\\player.dff");
@@ -757,57 +757,57 @@ InjectDelayedPatches()
 			readIni(1);
 		// only load one ini for now, others are loaded later by readInis()
 
-	//	if(usePCTimecyc){
-			MemoryVP::Nop(0x5BBF6F, 2);
-			MemoryVP::Nop(0x5BBF83, 2);
-	//	}
+		if(usePCTimecyc){
+			Nop(0x5BBF6F, 2);
+			Nop(0x5BBF83, 2);
+		}
 
 		// custom building pipeline
 		if(config->buildingPipe >= 0){
-			MemoryVP::InjectHook(0x5D7100, CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2);
-			MemoryVP::InjectHook(0x5D7D90, CCustomBuildingPipeline__CreateCustomObjPipe_PS2);
-			MemoryVP::Patch<BYTE>(0x5D7200, 0xC3);	// disable interpolation
+			InjectHook(0x5D7100, CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2);
+			InjectHook(0x5D7D90, CCustomBuildingPipeline__CreateCustomObjPipe_PS2);
+			Patch<BYTE>(0x5D7200, 0xC3);	// disable interpolation
 		}
 
 		// custom vehicle pipeline
 		if(config->vehiclePipe >= 0)
-			MemoryVP::InjectHook(0x5D9FE9, setVehiclePipeCB);
+			InjectHook(0x5D9FE9, setVehiclePipeCB);
 
 		if(ps2grassFiles){
-			MemoryVP::Patch<const char*>(0x5DDA87, "grass2_1.dff");
-			MemoryVP::Patch<const char*>(0x5DDA8F, "grass2_2.dff");
-			MemoryVP::Patch<const char*>(0x5DDA97, "grass2_3.dff");
-			MemoryVP::Patch<const char*>(0x5DDA9F, "grass2_4.dff");
+			Patch<const char*>(0x5DDA87, "grass2_1.dff");
+			Patch<const char*>(0x5DDA8F, "grass2_2.dff");
+			Patch<const char*>(0x5DDA97, "grass2_3.dff");
+			Patch<const char*>(0x5DDA9F, "grass2_4.dff");
 
-			MemoryVP::Patch<const char*>(0x5DDAC3, "grass3_1.dff");
-			MemoryVP::Patch<const char*>(0x5DDACB, "grass3_2.dff");
-			MemoryVP::Patch<const char*>(0x5DDAD3, "grass3_3.dff");
-			MemoryVP::Patch<const char*>(0x5DDADB, "grass3_4.dff");
-			MemoryVP::Patch<uint>(0x5DDB14 + 1, 0xC03A30+4);
-			MemoryVP::Patch<uint>(0x5DDB21 + 2, 0xC03A30+8);
-			MemoryVP::Patch<uint>(0x5DDB2F + 2, 0xC03A30+12);
+			Patch<const char*>(0x5DDAC3, "grass3_1.dff");
+			Patch<const char*>(0x5DDACB, "grass3_2.dff");
+			Patch<const char*>(0x5DDAD3, "grass3_3.dff");
+			Patch<const char*>(0x5DDADB, "grass3_4.dff");
+			Patch<uint>(0x5DDB14 + 1, 0xC03A30+4);
+			Patch<uint>(0x5DDB21 + 2, 0xC03A30+8);
+			Patch<uint>(0x5DDB2F + 2, 0xC03A30+12);
 		}
 
 		// use static ped shadows
-		MemoryVP::InjectHook(0x5E675E, &FX::GetFxQuality_ped);
-		MemoryVP::InjectHook(0x5E676D, &FX::GetFxQuality_ped);
-		MemoryVP::InjectHook(0x706BC4, &FX::GetFxQuality_ped);
-		MemoryVP::InjectHook(0x706BD3, &FX::GetFxQuality_ped);
+		InjectHook(0x5E675E, &FX::GetFxQuality_ped);
+		InjectHook(0x5E676D, &FX::GetFxQuality_ped);
+		InjectHook(0x706BC4, &FX::GetFxQuality_ped);
+		InjectHook(0x706BD3, &FX::GetFxQuality_ped);
 		// stencil???
-		MemoryVP::InjectHook(0x7113B8, &FX::GetFxQuality_stencil);
-		MemoryVP::InjectHook(0x711D95, &FX::GetFxQuality_stencil);
+		InjectHook(0x7113B8, &FX::GetFxQuality_stencil);
+		InjectHook(0x711D95, &FX::GetFxQuality_stencil);
 		// vehicle, pole
-		MemoryVP::InjectHook(0x70F9B8, &FX::GetFxQuality_stencil);
+		InjectHook(0x70F9B8, &FX::GetFxQuality_stencil);
 
 		if(disableClouds)
 			// jump over cloud loop
-			MemoryVP::InjectHook(0x714145, 0x71422A, PATCH_JUMP);
+			InjectHook(0x714145, 0x71422A, PATCH_JUMP);
 
 		if(disableGamma)
-			MemoryVP::InjectHook(0x74721C, 0x7472F3, PATCH_JUMP);
+			InjectHook(0x74721C, 0x7472F3, PATCH_JUMP);
 
 		if(ps2MarkerAmbient)
-			MemoryVP::InjectHook(0x722627, 0x735C40);
+			InjectHook(0x722627, 0x735C40);
 
 		extern void hookWaterDrops(void);
 		if (neoWaterDrops)
@@ -855,6 +855,15 @@ CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect(float x, float y, float z, flo
 	CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect_orig(x, y, z, a4, a5, r, g, b, f, a10, a11, alpha);
 }
 
+struct CVector { float x, y, z; };
+WRAPPER void CWaterLevel__CalculateWavesForCoordinate(int x, int y, float a3, float a4, float *z, float *colorMult, float *a7, CVector *vecnormal){ EAXJMP(0x6E6EF0); }
+void
+CWaterLevel__CalculateWavesForCoordinate_hook(int x, int y, float a3, float a4, float *z, float *colorMult, float *a7, CVector *vecnormal)
+{
+	CWaterLevel__CalculateWavesForCoordinate(x, y, a3, a4, z, colorMult, a7, vecnormal);
+	*colorMult = 0.577f;
+}
+
 BOOL WINAPI
 DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 {
@@ -873,97 +882,117 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		}
 
 		IsAlreadyRunning = (BOOL(*)())(*(int*)(0x74872D+1) + 0x74872D + 5);
-		MemoryVP::InjectHook(0x74872D, InjectDelayedPatches);
+		InjectHook(0x74872D, InjectDelayedPatches);
 
-		MemoryVP::InjectHook(0x5BCF14, afterStreamIni, PATCH_JUMP);
+		InjectHook(0x5BCF14, afterStreamIni, PATCH_JUMP);
 
-		MemoryVP::InjectHook(0x7491C0, myDefaultCallback, PATCH_JUMP);
+		InjectHook(0x7491C0, myDefaultCallback, PATCH_JUMP);
 
-		MemoryVP::InjectHook(0x5BF8EA, CPlantMgr_Initialise);
-		MemoryVP::InjectHook(0x756DFE, rxD3D9DefaultRenderCallback_Hook, PATCH_JUMP);
-		MemoryVP::InjectHook(0x5DADB7, fixSeed, PATCH_JUMP);
-		MemoryVP::InjectHook(0x5DAE61, saveIntensity, PATCH_JUMP);
-		MemoryVP::Patch<DWORD>(0x5DAEC8, (DWORD)setTextureAndColor);
+		InjectHook(0x5BF8EA, CPlantMgr_Initialise);
+		InjectHook(0x756DFE, rxD3D9DefaultRenderCallback_Hook, PATCH_JUMP);
+		InjectHook(0x5DADB7, fixSeed, PATCH_JUMP);
+		InjectHook(0x5DAE61, saveIntensity, PATCH_JUMP);
+		Patch<DWORD>(0x5DAEC8, (DWORD)setTextureAndColor);
 
 		// add dual pass for PC pipeline
-		MemoryVP::InjectHook(0x5D9EEB, D3D9RenderPreLit_DUAL);
-		MemoryVP::InjectHook(0x5DA640, D3D9RenderNotLit_DUAL);
+		InjectHook(0x5D9EEB, D3D9RenderPreLit_DUAL);
+		InjectHook(0x5DA640, D3D9RenderNotLit_DUAL);
 		// give vehicle pipe to upgrade parts
-		//MemoryVP::InjectHook(0x4C88F0, 0x5DA610, PATCH_JUMP);
+		//InjectHook(0x4C88F0, 0x5DA610, PATCH_JUMP);
 
 		// postfx
-		MemoryVP::InjectHook(0x5BD7AE, CPostEffects::Init, PATCH_JUMP); //address changed to CGame::InitialiseRenderWare, partially overwrites ReadPlayerCoordsFile()
-		MemoryVP::InjectHook(0x704D1E, CPostEffects::ColourFilter_switch);
-		MemoryVP::InjectHook(0x704D5D, CPostEffects::Radiosity_PS2);
-		MemoryVP::InjectHook(0x704FB3, CPostEffects::Radiosity_PS2);
+		InjectHook(0x5BD7AE, CPostEffects::Init, PATCH_JUMP); // ??? why not CPostEffects::Initialise? address changed to CGame::InitialiseRenderWare, partially overwrites ReadPlayerCoordsFile()
+		InjectHook(0x704D1E, CPostEffects::ColourFilter_switch);
+		InjectHook(0x704D5D, CPostEffects::Radiosity_PS2);
+		InjectHook(0x704FB3, CPostEffects::Radiosity_PS2);
 		// fix speedfx
-		MemoryVP::InjectHook(0x704E8A, CPostEffects::SpeedFX_Fix);
+		InjectHook(0x704E8A, CPostEffects::SpeedFX_Fix);
 
 		// infrared vision
-		MemoryVP::InjectHook(0x704F4B, CPostEffects::InfraredVision_PS2);
-		MemoryVP::InjectHook(0x704F59, CPostEffects::Grain_PS2);
+		InjectHook(0x704F4B, CPostEffects::InfraredVision_PS2);
+		InjectHook(0x704F59, CPostEffects::Grain_PS2);
 		// night vision
-		MemoryVP::InjectHook(0x704EDA, CPostEffects::NightVision_PS2);
-		MemoryVP::InjectHook(0x704EE8, CPostEffects::Grain_PS2);
+		InjectHook(0x704EDA, CPostEffects::NightVision_PS2);
+		InjectHook(0x704EE8, CPostEffects::Grain_PS2);
 		// TODO: rain grain @ 0x705078
-		MemoryVP::InjectHook(0x705091, CPostEffects::Grain_PS2);
+		InjectHook(0x705091, CPostEffects::Grain_PS2);
 
-		MemoryVP::InjectHook(0x53DFDD, CRenderer__RenderEverythingBarRoads);
-		MemoryVP::InjectHook(0x53DD27, CRenderer__RenderEverythingBarRoads); // unused?
+		InjectHook(0x53DFDD, CRenderer__RenderEverythingBarRoads);
+		InjectHook(0x53DD27, CRenderer__RenderEverythingBarRoads); // unused?
 
 		// fix pointlight fog
-		MemoryVP::InjectHook(0x700B6B, CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect);
+		InjectHook(0x700B6B, CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect);
 
-		MemoryVP::InjectHook(0x44E82E, ps2rand);
-		MemoryVP::InjectHook(0x44ECEE, ps2rand);
-		MemoryVP::InjectHook(0x42453B, ps2rand);
-		MemoryVP::InjectHook(0x42454D, ps2rand);
+		InjectHook(0x44E82E, ps2rand);
+		InjectHook(0x44ECEE, ps2rand);
+		InjectHook(0x42453B, ps2rand);
+		InjectHook(0x42454D, ps2rand);
 
-		MemoryVP::InjectHook(0x53D903, myPluginAttach);
+		InjectHook(0x53D903, myPluginAttach);
 
-		//MemoryVP::InjectHook(0x5A3C7D, ps2srand);
-		//MemoryVP::InjectHook(0x5A3DFB, ps2srand);
-		//MemoryVP::InjectHook(0x5A3C75, ps2rand);
-		//MemoryVP::InjectHook(0x5A3CB9, ps2rand);
-		//MemoryVP::InjectHook(0x5A3CDB, ps2rand);
-		//MemoryVP::InjectHook(0x5A3CF2, ps2rand);
-		//MemoryVP::Patch<float*>(0x5A3CC8, (float*)&ps2randnormalize);
-		//MemoryVP::Patch<float*>(0x5A3CEA, (float*)&ps2randnormalize);
-		//MemoryVP::Patch<float*>(0x5A3D05, (float*)&ps2randnormalize);
-		MemoryVP::InjectHook(0x5A3C6E, floatbitpattern);
+		//InjectHook(0x5A3C7D, ps2srand);
+		//InjectHook(0x5A3DFB, ps2srand);
+		//InjectHook(0x5A3C75, ps2rand);
+		//InjectHook(0x5A3CB9, ps2rand);
+		//InjectHook(0x5A3CDB, ps2rand);
+		//InjectHook(0x5A3CF2, ps2rand);
+		//Patch<float*>(0x5A3CC8, (float*)&ps2randnormalize);
+		//Patch<float*>(0x5A3CEA, (float*)&ps2randnormalize);
+		//Patch<float*>(0x5A3D05, (float*)&ps2randnormalize);
+		InjectHook(0x5A3C6E, floatbitpattern);
 
 		// increase multipass distance
 		static float multipassMultiplier = 100.0f;	// default 45.0
-		MemoryVP::Patch<float*>(0x73290A+2, &multipassMultiplier);
+		Patch<float*>(0x73290A+2, &multipassMultiplier);
 
 		// Get rid of the annoying dotproduct check in visibility renderCBs
 		// Does it make any sense to compare the dot product against a distance?
-		MemoryVP::Nop(0x733313, 2);	// VehicleHiDetailCB
-		MemoryVP::Nop(0x73405A, 2);	// VehicleHiDetailAlphaCB
-		MemoryVP::Nop(0x733403, 2);	// TrainHiDetailCB
-		MemoryVP::Nop(0x73431A, 2);	// TrainHiDetailAlphaCB
-		MemoryVP::Nop(0x73444A, 2);	// VehicleHiDetailAlphaCB_BigVehicle
+		Nop(0x733313, 2);	// VehicleHiDetailCB
+		Nop(0x73405A, 2);	// VehicleHiDetailAlphaCB
+		Nop(0x733403, 2);	// TrainHiDetailCB
+		Nop(0x73431A, 2);	// TrainHiDetailAlphaCB
+		Nop(0x73444A, 2);	// VehicleHiDetailAlphaCB_BigVehicle
 
 		// change grass close far to ps2 values...but they appear to be handled differently?
-		MemoryVP::Patch<float>(0x5DDB3D+1, 78.0f);
-//		MemoryVP::Patch<float>(0x5DDB42+1, 5.0f);	// this is too high, grass disappears o_O
+		Patch<float>(0x5DDB3D+1, 78.0f);
+//		Patch<float>(0x5DDB42+1, 5.0f);	// this is too high, grass disappears o_O
 
 
 		//void dumpMenu(void);
 		//dumpMenu();
 		
-		//MemoryVP::InjectHook(0x5A3C7D, mysrand);
-		//MemoryVP::InjectHook(0x5A3DFB, mysrand);
-		//MemoryVP::InjectHook(0x5A3C75, ps2rand);
+		//InjectHook(0x5A3C7D, mysrand);
+		//InjectHook(0x5A3DFB, mysrand);
+		//InjectHook(0x5A3C75, ps2rand);
 
-//		MemoryVP::Nop(0x748054, 10);
-///		MemoryVP::Nop(0x748063, 5);
-//		MemoryVP::Nop(0x747FB0, 10);
-//		MemoryVP::Nop(0x748A87, 12);
-//		MemoryVP::InjectHook(0x747F98, 0x748446, PATCH_JUMP);
+//		Nop(0x748054, 10);
+///		Nop(0x748063, 5);
+//		Nop(0x747FB0, 10);
+//		Nop(0x748A87, 12);
+//		InjectHook(0x747F98, 0x748446, PATCH_JUMP);
 
-//		MemoryVP::Nop(0x6EFC9B, 5);
-//		MemoryVP::Nop(0x6EFE4C, 5);
+
+
+		// Water tests
+//		Nop(0x6EFC9B, 5);	// disable CWaterLevel::RenderWaterTriangle
+		//Nop(0x6EFE4C, 5);	// disable CWaterLevel::RenderWaterRectangle
+//		Nop(0x6F004E, 5);	// disable CWaterLevel::RenderWaterRectangle outside
+	//	Nop(0x6ECED8, 5);	// disable CWaterLevel::RenderFlatWaterRectangle
+	//	Nop(0x6ECE15, 5);	// disable CWaterLevel::RenderFlatWaterRectangle
+	//	Nop(0x6ECD69, 5);	// disable CWaterLevel::RenderHighDetailWaterRectangle
+
+	//	Nop(0x6EC509, 5);	// disable CWaterLevel::RenderFlatWaterRectangle_OneLayer
+//		Nop(0x6EC5B8, 5);	// disable CWaterLevel::RenderFlatWaterRectangle_OneLayer
+	//	Nop(0x6EBA1D, 5);	// disable CWaterLevel::RenderHighDetailWaterRectangle_OneLayer
+//		Nop(0x6EBAF8, 5);	// disable CWaterLevel::RenderHighDetailWaterRectangle_OneLayer
+
+	//	InjectHook(0x6E9760, CWaterLevel__CalculateWavesForCoordinate_hook);
+	//	InjectHook(0x6E8CB8, CWaterLevel__CalculateWavesForCoordinate_hook);
+
+		// High detail water color multiplier is multiplied by 0.65 and added to 0.27, why?
+		// Removing this silly calculation seems to work better.
+		Nop(0x6E716B, 6);
+		Nop(0x6E7176, 6);
 	}
 
 	return TRUE;

@@ -920,7 +920,7 @@ makeVS(int res, void **sh)
 void
 CPostEffects::Init(void)
 {
-	MemoryVP::InjectHook(0x7FB824, Im2dSetPixelShader_hook);
+	InjectHook(0x7FB824, Im2dSetPixelShader_hook);
 
 	grainRaster = RwRasterCreate(64, 64, 32, 0x504);
 

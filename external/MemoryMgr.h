@@ -27,132 +27,73 @@ inline AT DynBaseAddress(AT address)
 #define INTERCEPT(saved, func, a) \
 { \
 	saved = PTRFROMCALL(a); \
-	Memory::InjectHook(a, func); \
+	InjectHook(a, func); \
 }
 
-namespace Memory
+template<typename T, typename AT>
+inline void		Patch(AT address, T value)
 {
-	template<typename T, typename AT>
-	inline void		Patch(AT address, T value)
-	{*(T*)address = value; }
+	DWORD		dwProtect[2];
+	VirtualProtect((void*)address, sizeof(T), PAGE_EXECUTE_READWRITE, &dwProtect[0]);
+	*(T*)address = value;
+	VirtualProtect((void*)address, sizeof(T), dwProtect[0], &dwProtect[1]);
+}
 
-	template<typename AT>
-	inline void		Nop(AT address, unsigned int nCount)
-	// TODO: Finish multibyte nops
-	{ memset((void*)address, 0x90, nCount); }
-
-	template<typename AT, typename HT>
-	inline void		InjectHook(AT address, HT hook, unsigned int nType=PATCH_NOTHING)
-	{
-		DWORD		dwHook;
-		_asm
-		{
-			mov		eax, hook
-			mov		dwHook, eax
-		}
-
-		switch ( nType )
-		{
-		case PATCH_JUMP:
-			*(BYTE*)address = 0xE9;
-			break;
-		case PATCH_CALL:
-			*(BYTE*)address = 0xE8;
-			break;
-		}
-
-		*(ptrdiff_t*)((DWORD)address + 1) = dwHook - (DWORD)address - 5;
-	}
-	inline void ExtractCall(void *dst, uintptr_t a)
-	{
-		*(uintptr_t*)dst = (uintptr_t)(*(uintptr_t*)(a + 1) + a + 5);
-	}
-	template<typename T>
-	inline void InterceptCall(void *dst, T func, uintptr_t a)
-	{
-		ExtractCall(dst, a);
-		InjectHook(a, func);
-	}
-	template<typename T>
-	inline void InterceptVmethod(void *dst, T func, uintptr_t a)
-	{
-		*(uintptr_t*)dst = *(uintptr_t*)a;
-		Patch(a, func);
-	}
-};
-
-namespace MemoryVP
+template<typename AT>
+inline void		Nop(AT address, unsigned int nCount)
 {
-	template<typename T, typename AT>
-	inline void		Patch(AT address, T value)
+	DWORD		dwProtect[2];
+	VirtualProtect((void*)address, nCount, PAGE_EXECUTE_READWRITE, &dwProtect[0]);
+	memset((void*)address, 0x90, nCount);
+	VirtualProtect((void*)address, nCount, dwProtect[0], &dwProtect[1]);
+}
+
+template<typename AT, typename HT>
+inline void		InjectHook(AT address, HT hook, unsigned int nType=PATCH_NOTHING)
+{
+	DWORD		dwProtect[2];
+	switch ( nType )
 	{
-		DWORD		dwProtect[2];
-		VirtualProtect((void*)address, sizeof(T), PAGE_EXECUTE_READWRITE, &dwProtect[0]);
-		*(T*)address = value;
-		VirtualProtect((void*)address, sizeof(T), dwProtect[0], &dwProtect[1]);
+	case PATCH_JUMP:
+		VirtualProtect((void*)address, 5, PAGE_EXECUTE_READWRITE, &dwProtect[0]);
+		*(BYTE*)address = 0xE9;
+		break;
+	case PATCH_CALL:
+		VirtualProtect((void*)address, 5, PAGE_EXECUTE_READWRITE, &dwProtect[0]);
+		*(BYTE*)address = 0xE8;
+		break;
+	default:
+		VirtualProtect((void*)((DWORD)address + 1), 4, PAGE_EXECUTE_READWRITE, &dwProtect[0]);
+		break;
+	}
+	DWORD		dwHook;
+	_asm
+	{
+		mov		eax, hook
+		mov		dwHook, eax
 	}
 
-	template<typename AT>
-	inline void		Nop(AT address, unsigned int nCount)
-	{
-		DWORD		dwProtect[2];
-		VirtualProtect((void*)address, nCount, PAGE_EXECUTE_READWRITE, &dwProtect[0]);
-		memset((void*)address, 0x90, nCount);
-		VirtualProtect((void*)address, nCount, dwProtect[0], &dwProtect[1]);
-	}
-
-	template<typename AT, typename HT>
-	inline void		InjectHook(AT address, HT hook, unsigned int nType=PATCH_NOTHING)
-	{
-		DWORD		dwProtect[2];
-		switch ( nType )
-		{
-		case PATCH_JUMP:
-			VirtualProtect((void*)address, 5, PAGE_EXECUTE_READWRITE, &dwProtect[0]);
-			*(BYTE*)address = 0xE9;
-			break;
-		case PATCH_CALL:
-			VirtualProtect((void*)address, 5, PAGE_EXECUTE_READWRITE, &dwProtect[0]);
-			*(BYTE*)address = 0xE8;
-			break;
-		default:
-			VirtualProtect((void*)((DWORD)address + 1), 4, PAGE_EXECUTE_READWRITE, &dwProtect[0]);
-			break;
-		}
-		DWORD		dwHook;
-		_asm
-		{
-			mov		eax, hook
-			mov		dwHook, eax
-		}
-
-		*(ptrdiff_t*)((DWORD)address + 1) = (DWORD)dwHook - (DWORD)address - 5;
-		if ( nType == PATCH_NOTHING )
-			VirtualProtect((void*)((DWORD)address + 1), 4, dwProtect[0], &dwProtect[1]);
-		else
-			VirtualProtect((void*)address, 5, dwProtect[0], &dwProtect[1]);
-	}
-
-	namespace DynBase
-	{
-		template<typename T, typename AT>
-		inline void		Patch(AT address, T value)
-		{
-			MemoryVP::Patch(DynBaseAddress(address), value);
-		}
-
-		template<typename AT>
-		inline void		Nop(AT address, unsigned int nCount)
-		{
-			MemoryVP::Nop(DynBaseAddress(address), nCount);
-		}
-
-		template<typename AT, typename HT>
-		inline void		InjectHook(AT address, HT hook, unsigned int nType=PATCH_NOTHING)
-		{
-			MemoryVP::InjectHook(DynBaseAddress(address), hook, nType);
-		}
-	};
-};
+	*(ptrdiff_t*)((DWORD)address + 1) = (DWORD)dwHook - (DWORD)address - 5;
+	if ( nType == PATCH_NOTHING )
+		VirtualProtect((void*)((DWORD)address + 1), 4, dwProtect[0], &dwProtect[1]);
+	else
+		VirtualProtect((void*)address, 5, dwProtect[0], &dwProtect[1]);
+}
+inline void ExtractCall(void *dst, uintptr_t a)
+{
+	*(uintptr_t*)dst = (uintptr_t)(*(uintptr_t*)(a + 1) + a + 5);
+}
+template<typename T>
+inline void InterceptCall(void *dst, T func, uintptr_t a)
+{
+	ExtractCall(dst, a);
+	InjectHook(a, func);
+}
+template<typename T>
+inline void InterceptVmethod(void *dst, T func, uintptr_t a)
+{
+	*(uintptr_t*)dst = *(uintptr_t*)a;
+	Patch(a, func);
+}
 
 #endif
