@@ -17,54 +17,6 @@ WRAPPER RwBool RwStreamClose(RwStream* stream, void* pData) { EAXJMP(0x7ECE20); 
 WRAPPER RwTexDictionary* RwTexDictionarySetCurrent(RwTexDictionary* pDict) { EAXJMP(0x7F3A70); }
 WRAPPER RwTexture* RwTextureRead(const char *name, const char *maskName) { EAXJMP(0x7F3AC0); }
 
-char*
-getpath(char *path)
-{
-	static char tmppath[MAX_PATH];
-	FILE *f;
-
-	f = fopen(path, "r");
-	if (f) {
-		fclose(f);
-		return path;
-	}
-	extern char asipath[];
-	strncpy(tmppath, asipath, MAX_PATH);
-	strcat(tmppath, path);
-	f = fopen(tmppath, "r");
-	if (f) {
-		fclose(f);
-		return tmppath;
-	}
-	return NULL;
-}
-
-RwTexDictionary *neoTxd;
-
-void
-neoInit(void)
-{
-
-	char *path = getpath("\\neo.txd");
-	if (path == NULL) {
-		MessageBox(NULL, "Couldn't load 'neo.txd'", "Error", MB_ICONERROR | MB_OK);
-		exit(0);
-	}
-	RwStream *stream = RwStreamOpen(rwSTREAMFILENAME, rwSTREAMREAD, path);
-	if (RwStreamFindChunk(stream, rwID_TEXDICTIONARY, NULL, NULL))
-		neoTxd = RwTexDictionaryStreamRead(stream);
-	RwStreamClose(stream, NULL);
-	if (neoTxd == NULL) {
-		MessageBox(NULL, "Couldn't find Tex Dictionary inside 'neo.txd'", "Error", MB_ICONERROR | MB_OK);
-		exit(0);
-	}
-	// we can just set this to current because we're executing before CGame::Initialise
-	// which sets up "generic" as the current TXD
-	RwTexDictionarySetCurrent(neoTxd);
-
-	WaterDrops::ms_maskTex = RwTextureRead("dropmask", NULL);
-}
-
 #define INJECTRESET(x) \
 	addr reset_call_##x; \
 	void reset_hook_##x(void){ \
@@ -97,10 +49,6 @@ WRAPPER void CMotionBlurStreaksRender(void) { VARJMP(CMotionBlurStreaksRender_A)
 void
 CMotionBlurStreaksRender_hook(void)
 {
-	static bool neo = false;
-	if (!neo)
-		neoInit();
-
 	CMotionBlurStreaksRender();
 	WaterDrops::Process();
 	WaterDrops::Render();

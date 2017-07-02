@@ -127,3 +127,16 @@ WRAPPER RwReal RwV3dLength(const RwV3d*) { VARJMP(RwV3dLength_A); }
 static uint32_t RwD3D9SetStreamSource_A = (uint32_t)(0x7FA030);
 WRAPPER void RwD3D9SetStreamSource(RwUInt32, void*, RwUInt32, RwUInt32) { VARJMP(RwD3D9SetStreamSource_A); }
 WRAPPER void RwD3D9SetFVF(RwUInt32) { EAXJMP(0x7F9F30); }
+
+WRAPPER RwMatrix *RwMatrixCreate(void) { EAXJMP(0x7F2A50); }
+WRAPPER RwMatrix *RwMatrixInvert(RwMatrix*, const RwMatrix*) { EAXJMP(0x7F2070); }
+WRAPPER RwMatrix *RwMatrixUpdate(RwMatrix* matrix) { EAXJMP(0x7F18A0); }
+WRAPPER RwFrame *RwFrameTransform(RwFrame*, const RwMatrix*, RwOpCombineType) { EAXJMP(0x7F0F70); }
+WRAPPER RwFrame *RwFrameCreate(void) { EAXJMP(0x7F0410); }
+WRAPPER void _rwObjectHasFrameSetFrame(void*, RwFrame*) { EAXJMP(0x804EF0); }
+WRAPPER RwCamera *RwCameraClear(RwCamera*, RwRGBA*, RwInt32) { EAXJMP(0x7EE340); }
+WRAPPER RwCamera *RwCameraCreate(void) { EAXJMP(0x7EE4F0); }
+WRAPPER RwCamera *RwCameraSetViewWindow(RwCamera*, const RwV2d*) { EAXJMP(0x7EE410); }
+WRAPPER RwCamera *RwCameraSetNearClipPlane(RwCamera*, RwReal) { EAXJMP(0x7EE1D0); }
+WRAPPER RwCamera *RwCameraSetFarClipPlane(RwCamera*, RwReal) { EAXJMP(0x7EE2A0); }
+WRAPPER RpWorld *RpWorldAddCamera(RpWorld*, RwCamera*) { EAXJMP(0x750F20); }

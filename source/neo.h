@@ -1,5 +1,110 @@
 extern RwTexDictionary *neoTxd;
 
+void RwToD3DMatrix(void *d3d, RwMatrix *rw);
+void MakeProjectionMatrix(void *d3d, RwCamera *cam, float nbias = 0.0f, float fbias = 0.0f);
+
+#define NUMWEATHERS 23
+
+struct Color
+{
+	float r, g, b, a;
+	Color(void) {}
+	Color(float r, float g, float b, float a) : r(r), g(g), b(b), a(a) {}
+};
+
+class InterpolatedValue
+{
+public:
+	virtual void Read(char *s, int line, int field) = 0;
+};
+
+class InterpolatedFloat : public InterpolatedValue
+{
+public:
+	float data[24][NUMWEATHERS];
+	float curInterpolator;
+	float curVal;
+
+	InterpolatedFloat(float init);
+	void Read(char *s, int line, int field);
+	float Get(void);
+};
+
+class InterpolatedColor : public InterpolatedValue
+{
+public:
+	Color data[24][NUMWEATHERS];
+	float curInterpolator;
+	Color curVal;
+
+	InterpolatedColor(const Color &init);
+	void Read(char *s, int line, int field);
+	Color Get(void);
+};
+
+class InterpolatedLight : public InterpolatedColor
+{
+public:
+	InterpolatedLight(const Color &init) : InterpolatedColor(init) {}
+	void Read(char *s, int line, int field);
+};
+
+void neoReadWeatherTimeBlock(FILE *file, InterpolatedValue *interp);
+
+class CustomPipe
+{
+public:
+	RxPipeline *rwPipeline;
+	RxD3D9AllInOneRenderCallBack originalRenderCB;
+	void CreateRwPipeline(void);
+	void SetRenderCallback(RxD3D9AllInOneRenderCallBack);
+	void Attach(RpAtomic *atomic);
+	static RpAtomic *setatomicCB(RpAtomic *atomic, void *data);
+};
+
+#define ONCE do{ static int once = 0; assert(once == 0); once = 1; }while(0);
+
+void UploadZero(int loc);
+void UploadLightColor(RpLight *light, int loc);
+void UploadLightDirection(RpLight *light, int loc);
+void UploadLightDirectionInv(RpLight *light, int loc);
+
+void hookWaterDrops(void);
+void neoCarPipeInit(void);
+void neoInit(void);
+
+class CarPipe : public CustomPipe
+{
+	void CreateShaders(void);
+	static void LoadTweakingTable(void);
+
+	static void MakeScreenQuad(void);
+	static void MakeQuadTexCoords(bool textureSpace);
+	static void RenderReflectionScene(void);
+public:
+	static InterpolatedFloat fresnel;
+	static InterpolatedFloat power;
+	static InterpolatedLight diffColor;
+	static InterpolatedLight specColor;
+	static void *vertexShaderPass1;
+	static void *vertexShaderPass2;
+	// reflection map
+	static RwCamera *reflectionCam;
+	static RwTexture *reflectionMask;
+	static RwTexture *reflectionTex;
+	static RwIm2DVertex screenQuad[4];
+	static RwImVertexIndex screenindices[6];
+
+	CarPipe(void);
+	void Init(void);
+	static void RenderEnvTex(void);
+	static void SetupEnvMap(void);
+	static void RenderCallback(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags);
+	static void ShaderSetup(RwMatrix *world);
+	static void DiffusePass(RxD3D9ResEntryHeader *header);
+	static void SpecularPass(RxD3D9ResEntryHeader *header);
+};
+
 /*
  * neo water drops
  */

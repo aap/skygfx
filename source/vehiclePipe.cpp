@@ -1,4 +1,5 @@
 #include "skygfx.h"
+#include "neo.h"
 
 static void *vehiclePipeVS, *ps2CarFxVS;
 void *vehiclePipePS, *ps2CarFxPS;	// reused by the building pipeline
@@ -64,21 +65,6 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 	float envSwitch;
 	D3DMATRIX worldMat, worldITMat, viewMat, projMat;
 	int pcTrans = 0;
-
-	switch(config->vehiclePipe){
-	case 1:
-		CCustomCarEnvMapPipeline__CustomPipeRenderCB_exe(repEntry, object, type, flags);
-		return;
-	case 2:
-		CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(repEntry, object, type, flags);
-		return;
-	case 3:
-		CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(repEntry, object, type, flags);
-		return;
-	case 4:
-		CCustomCarEnvMapPipeline__CustomPipeRenderCB_VCS(repEntry, object, type, flags);
-		return;
-	}
 
 	atomic = (RpAtomic*)object;
 
@@ -738,6 +724,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *ob
 	RwD3D9SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_DISABLE);
 }
 
+#if 0
 RwTexture *vcsReflTex;
 
 void
@@ -877,11 +864,37 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_VCS(RwResEntry *repEntry, void *obj
 	RwD3D9SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, 1);
 	RwD3D9SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_DISABLE);
 }
+#endif
+
+void
+CCustomCarEnvMapPipeline__CustomPipeRenderCB_Switch(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
+{
+	switch(config->vehiclePipe){
+	case 0:
+		CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(repEntry, object, type, flags);
+		return;
+	case 1:
+		CCustomCarEnvMapPipeline__CustomPipeRenderCB_exe(repEntry, object, type, flags);
+		return;
+	case 2:
+		CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(repEntry, object, type, flags);
+		return;
+	case 3:
+		CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(repEntry, object, type, flags);
+		return;
+//	case 4:
+//		CCustomCarEnvMapPipeline__CustomPipeRenderCB_VCS(repEntry, object, type, flags);
+//		return;
+	case 5:
+		CarPipe::RenderCallback(repEntry, object, type, flags);
+		return;
+	}
+}
 
 void
 setVehiclePipeCB(RxPipelineNode *node, RxD3D9AllInOneRenderCallBack callback)
 {
-	vcsReflTex = RwTextureCreate(reflTex);
+//	vcsReflTex = RwTextureCreate(reflTex);
 
 	HRSRC resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_VEHICLEVS), RT_RCDATA);
 	RwUInt32 *shader = (RwUInt32*)LoadResource(dllModule, resource);
@@ -932,5 +945,5 @@ setVehiclePipeCB(RxPipelineNode *node, RxD3D9AllInOneRenderCallBack callback)
 	RwD3D9CreateVertexShader(shader, &xboxCarVS);
 	FreeResource(shader);
 
-	RxD3D9AllInOneSetRenderCallBack(node, CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2);
+	RxD3D9AllInOneSetRenderCallBack(node, CCustomCarEnvMapPipeline__CustomPipeRenderCB_Switch);
 }

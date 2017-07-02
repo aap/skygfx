@@ -50,9 +50,13 @@ struct Config {
 	RwBool dontChangeAmbient;
 
 	int keys[2];
+
+	float neoSpecMult;
 };
 extern int numConfigs;
 extern Config *config, configs[10];
+
+extern int envMapSize;
 
 struct CustomEnvMapPipeMaterialData
 {
@@ -139,6 +143,8 @@ struct CPostEffects
 	static float &m_fNightVisionSwitchOnFXCount;
 	static bool &m_bInfraredVision;
 };
+
+char *getpath(char *path);
 
 RxPipeline *CCustomBuildingPipeline__CreateCustomObjPipe_PS2(void);
 RxPipeline *CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2(void);

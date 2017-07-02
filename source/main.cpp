@@ -1,4 +1,5 @@
 #include "skygfx.h"
+#include "neo.h"
 #include "ini_parser.hpp"
 
 HMODULE dllModule;
@@ -28,6 +29,28 @@ GetConfig(void)
 {
 	return config;
 }
+}
+
+char*
+getpath(char *path)
+{
+	static char tmppath[MAX_PATH];
+	FILE *f;
+
+	f = fopen(path, "r");
+	if (f) {
+		fclose(f);
+		return path;
+	}
+	extern char asipath[];
+	strncpy(tmppath, asipath, MAX_PATH);
+	strcat(tmppath, path);
+	f = fopen(tmppath, "r");
+	if (f) {
+		fclose(f);
+		return tmppath;
+	}
+	return NULL;
 }
 
 void
@@ -196,6 +219,16 @@ readint(const std::string &s, int default = 0)
 	}
 }
 
+int
+readfloat(const std::string &s, float default = 0)
+{
+	try{
+		return std::stof(s);
+	}catch(...){
+		return default;
+	}
+}
+
 void
 readIni(int n)
 {
@@ -248,11 +281,17 @@ readIni(int n)
 		{"PC",      1},
 		{"Xbox",    2},
 		{"Spec",    3},
-		{"VCS",     4},
+//		{"VCS",     4},
+		{"Neo",     5},
 		{"",       -1},
 	};
 	c->vehiclePipe = StrAssoc::get(vehPipeMap, cfg.get("SkyGfx", "vehiclePipe", "").c_str());
 	c->dualPassVehicle = readint(cfg.get("SkyGfx", "dualPassVehicle", ""), dualPass);
+	c->neoSpecMult = readfloat(cfg.get("SkyGfx", "neoSpecMult", ""), 3.75);
+	envMapSize = readint(cfg.get("SkyGfx", "neoEnvMapSize", ""), 128);
+	int i = 1;
+	while(i < envMapSize) i *= 2;
+	envMapSize = i;
 
 	c->ps2ModulateGrass = readint(cfg.get("SkyGfx", "ps2ModulateGrass", ""), ps2Modulate);
 	c->dualPassGrass = readint(cfg.get("SkyGfx", "dualPassGrass", ""), dualPass);
@@ -323,7 +362,7 @@ readIni(int n)
 
 	c->dontChangeAmbient = readint(cfg.get("SkyGfx", "dontChangeAmbient", ""), 0);
 
-	neoWaterDrops = readint(cfg.get("SkyGfx", "neoWaterDrops", ""), 1);
+	neoWaterDrops = readint(cfg.get("SkyGfx", "neoWaterDrops", ""), 0);
 }
 
 RpAtomic *(*plantTab0)[4] = (RpAtomic *(*)[4])0xC039F0;
@@ -497,6 +536,7 @@ myDefaultCallback(RpAtomic *atomic)
 			dodual = 1;
 	}else if(pipe == skinPipe && config->dualPassPed)
 		dodual = 1;
+/*
 //	if(pipe == CCustomCarEnvMapPipeline__ObjPipeline && !reflTexDone){
 	if(pipe == skinPipe && !reflTexDone){
 		if(config->vehiclePipe == 4){
@@ -508,6 +548,7 @@ myDefaultCallback(RpAtomic *atomic)
 		}
 		reflTexDone = TRUE;
 	}
+*/
 	if(dodual){
 		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, (void*)&alphatest);
 		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)&alpharef);
@@ -677,6 +718,7 @@ CPlantMgr_Initialise(void)
 	return ret;
 }
 
+/*
 WRAPPER void CRenderer__RenderEverythingBarRoads_orig(void) { EAXJMP(0x553AA0); }
 
 void CRenderer__RenderEverythingBarRoads(void)
@@ -685,6 +727,7 @@ void CRenderer__RenderEverythingBarRoads(void)
 	CRenderer__RenderEverythingBarRoads_orig();
 	reflTexDone = TRUE;
 }
+*/
 
 struct FX
 {
@@ -742,6 +785,16 @@ mysrand(unsigned int seed)
 //	gtasrand(seed);
 }
 
+void (*InitialiseGame)(void);
+void
+InitialiseGame_hook(void)
+{
+	ONCE;
+	neoInit();
+	InitialiseGame();
+}
+
+
 static BOOL (*IsAlreadyRunning)();
 
 BOOL
@@ -756,6 +809,8 @@ InjectDelayedPatches()
 		else
 			readIni(1);
 		// only load one ini for now, others are loaded later by readInis()
+
+		InterceptCall(&InitialiseGame, InitialiseGame_hook, 0x748CFB);
 
 		if(usePCTimecyc){
 			Nop(0x5BBF6F, 2);
@@ -809,8 +864,7 @@ InjectDelayedPatches()
 		if(ps2MarkerAmbient)
 			InjectHook(0x722627, 0x735C40);
 
-		extern void hookWaterDrops(void);
-		if (neoWaterDrops)
+		if(neoWaterDrops)
 			hookWaterDrops();
 
 		return FALSE;
@@ -917,8 +971,8 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		// TODO: rain grain @ 0x705078
 		InjectHook(0x705091, CPostEffects::Grain_PS2);
 
-		InjectHook(0x53DFDD, CRenderer__RenderEverythingBarRoads);
-		InjectHook(0x53DD27, CRenderer__RenderEverythingBarRoads); // unused?
+//		InjectHook(0x53DFDD, CRenderer__RenderEverythingBarRoads);
+//		InjectHook(0x53DD27, CRenderer__RenderEverythingBarRoads); // unused?
 
 		// fix pointlight fog
 		InjectHook(0x700B6B, CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect);
@@ -942,7 +996,7 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		InjectHook(0x5A3C6E, floatbitpattern);
 
 		// increase multipass distance
-		static float multipassMultiplier = 100.0f;	// default 45.0
+		static float multipassMultiplier = 1000.0f;	// default 45.0
 		Patch<float*>(0x73290A+2, &multipassMultiplier);
 
 		// Get rid of the annoying dotproduct check in visibility renderCBs
@@ -993,6 +1047,12 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		// Removing this silly calculation seems to work better.
 		Nop(0x6E716B, 6);
 		Nop(0x6E7176, 6);
+
+
+		// Cloud tests
+		//Nop(0x53E1AF, 5);	// CClouds::MovingFogRender
+		//Nop(0x53E1B4, 5);	// CClouds::VolumetricCloudsRender
+		//Nop(0x53E121, 5);	// CClouds::RenderBottomFromHeight
 	}
 
 	return TRUE;
