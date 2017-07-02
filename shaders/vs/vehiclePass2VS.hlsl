@@ -21,10 +21,10 @@ float3      ambient     : register(c15);
 float4	    matCol      : register(c16);
 float3      directCol   : register(c17);
 float3      lightDir[4] : register(c18);
-float3      lightCol[4] : register(c22);
+float3      lightCol[4] : register(c24);
 
-float3	    directSpec  : register(c26);
-float4	    reflProps   : register(c27);
+float3	    directSpec  : register(c30);
+float4	    reflProps   : register(c31);
 
 float
 specTerm(float3 N, float3 L, float3 V, float power)

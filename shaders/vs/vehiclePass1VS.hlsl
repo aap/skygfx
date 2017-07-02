@@ -22,11 +22,11 @@ float3      directDir   : register(c13);
 float3      ambient     : register(c15);
 float4	    matCol      : register(c16);
 float3      directCol   : register(c17);
-float3      lightDir[4] : register(c18);
-float3      lightCol[4] : register(c22);
+float3      lightDir[6] : register(c18);
+float3      lightCol[6] : register(c24);
 
-float4	    directSpec  : register(c26);
-float4	    reflProps   : register(c27);
+float4	    directSpec  : register(c30);
+float4	    reflProps   : register(c31);
 
 VS_OUTPUT
 main(in VS_INPUT In)
@@ -40,7 +40,7 @@ main(in VS_INPUT In)
 
 	float3 c = saturate(dot(N, -directDir));
 	c += ambient;
-	for(int i = 0; i < 4; i++)
+	for(int i = 0; i < 6; i++)
 		c += lightCol[i]*saturate(dot(N, -lightDir[i]));
 	Out.color = float4(saturate(c), 1.0f)*matCol;
 

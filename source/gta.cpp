@@ -12,8 +12,8 @@ D3DLIGHT9 &gCarEnvMapLight = *(D3DLIGHT9*)0xC02CB0;
 char &doRadiosity = *(char*)0xC402CC;
 
 RwTexture *&gpWhiteTexture = *(RwTexture**)0xB4E3EC;
-RwBool reflTexDone;
-RwRaster *reflTex;
+//RwBool reflTexDone;
+//RwRaster *reflTex;
 
 void **rwengine = *(void***)0x58FFC0;
 RwInt32 &CCustomCarEnvMapPipeline__ms_envMapPluginOffset = *(RwInt32*)0x8D12C4;

@@ -41,7 +41,7 @@ struct Config {
 	RwBool backfaceCull;
 	RwBool dualPassDefault, dualPassGrass, dualPassVehicle, dualPassPed;
 	int vehiclePipe;
-	float neoSpecMult;
+	float neoShininess;
 	int colorFilter;
 	int infraredVision, nightVision, grainFilter;
 	RwBool doRadiosity;

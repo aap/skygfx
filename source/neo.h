@@ -100,9 +100,9 @@ public:
 	static void RenderEnvTex(void);
 	static void SetupEnvMap(void);
 	static void RenderCallback(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags);
-	static void ShaderSetup(RwMatrix *world);
-	static void DiffusePass(RxD3D9ResEntryHeader *header);
-	static void SpecularPass(RxD3D9ResEntryHeader *header);
+	static void ShaderSetup(RpAtomic *atomic);
+	static void DiffusePass(RxD3D9ResEntryHeader *header, RpAtomic *atomic);
+	static void SpecularPass(RxD3D9ResEntryHeader *header, RpAtomic *atomic);
 };
 
 /*

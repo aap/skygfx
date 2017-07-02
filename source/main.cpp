@@ -7,7 +7,7 @@ char asipath[MAX_PATH];
 
 int numConfigs;
 Config *config, configs[10];
-bool ps2grassFiles, usePCTimecyc, disableClouds, disableGamma, ps2MarkerAmbient, neoWaterDrops;
+bool ps2grassFiles, usePCTimecyc, disableClouds, disableGamma, ps2MarkerAmbient, neoWaterDrops, transparentLockon;
 int original_bRadiosity = 0;
 
 void *grassPixelShader;
@@ -219,7 +219,7 @@ readint(const std::string &s, int default = 0)
 	}
 }
 
-int
+float
 readfloat(const std::string &s, float default = 0)
 {
 	try{
@@ -287,7 +287,7 @@ readIni(int n)
 	};
 	c->vehiclePipe = StrAssoc::get(vehPipeMap, cfg.get("SkyGfx", "vehiclePipe", "").c_str());
 	c->dualPassVehicle = readint(cfg.get("SkyGfx", "dualPassVehicle", ""), dualPass);
-	c->neoSpecMult = readfloat(cfg.get("SkyGfx", "neoSpecMult", ""), 3.75);
+	c->neoShininess = readfloat(cfg.get("SkyGfx", "neoShininess", ""), 0.75);
 	envMapSize = readint(cfg.get("SkyGfx", "neoEnvMapSize", ""), 128);
 	int i = 1;
 	while(i < envMapSize) i *= 2;
@@ -316,6 +316,7 @@ readIni(int n)
 	ps2MarkerAmbient = readint(cfg.get("SkyGfx", "ps2MarkerAmbient", ""), 0);
 	disableGamma = readint(cfg.get("SkyGfx", "disableGamma", ""), 0);
 	c->detailedWaterDist = readint(cfg.get("SkyGfx", "detailedWaterDist", ""), 48);
+	transparentLockon = readint(cfg.get("SkyGfx", "transparentLockon", ""), 0);
 
 	static StrAssoc colorFilterMap[] = {
 		{"PS2",     0},
@@ -927,14 +928,23 @@ InjectDelayedPatches()
 		if(disableGamma)
 			InjectHook(0x74721C, 0x7472F3, PATCH_JUMP);
 
+		// call ReSetAmbientAndDirectionalColours instead of SetBrightMarkerColours
+		// this is wrong but ps2 lighting is weird
 		if(ps2MarkerAmbient)
 			InjectHook(0x722627, 0x735C40);
 
 		if(neoWaterDrops)
 			hookWaterDrops();
 
+		// sun glare on cars
 		if(config->doglare >= 0)
 			InjectHook(0x6ABCFD, doglare, PATCH_JUMP);
+
+		// remove black background of lockon siphon
+		if(transparentLockon > 0){
+			InjectHook(0x742E33, 0x742EC1, PATCH_JUMP);
+			InjectHook(0x742FE0, 0x743085, PATCH_JUMP);
+		}
 
 		return FALSE;
 	}
@@ -994,7 +1004,9 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		// night vision
 		InjectHook(0x704EDA, CPostEffects::NightVision_PS2);
 		InjectHook(0x704EE8, CPostEffects::Grain_PS2);
-		// TODO: rain grain @ 0x705078
+		// rain
+		InjectHook(0x705078, CPostEffects::Grain_PS2);
+		// unused
 		InjectHook(0x705091, CPostEffects::Grain_PS2);
 
 // was used for "VCS" reflections

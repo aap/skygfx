@@ -680,6 +680,20 @@ CPostEffects::NightVision_PS2(RwRGBA color)
 	CPostEffects::SetFilterMainColour_PS2(visionRaster, color);
 }
 
+
+// VU style random number generator -- taken from pcsx2
+uint R;
+void vrinit(uint x){ R = 0x3F800000 | x & 0x007FFFFF; }
+void vradvance(void){
+	int x = (R >> 4) & 1;
+	int y = (R >> 22) & 1;
+	R <<= 1;
+	R ^= x ^ y;
+	R = (R&0x7fffff)|0x3f800000;
+}
+inline uint vrget(void){ return R; }
+inline uint vrnext(void){ vradvance(); return R; }
+
 void
 CPostEffects::Grain_PS2(int strength, bool generate)
 {
@@ -690,13 +704,14 @@ CPostEffects::Grain_PS2(int strength, bool generate)
 
 	if(generate){
 		RwUInt8 *pixels = RwRasterLock(grainRaster, 0, 1);
-		srand(rand());
+		vrinit(rand());
+		int x = vrget();
 		for(int i = 0; i < 64*64; i++){
-			int x = rand();
 			*pixels++ = x;
 			*pixels++ = x;
 			*pixels++ = x;
 			*pixels++ = x & strength;
+			x = vrnext();
 		}
 		RwRasterUnlock(grainRaster);
 	}
@@ -963,10 +978,10 @@ CPostEffects::Init(void)
 	smallRect.w = Camera->frameBuffer->width/4;
 	smallRect.h = Camera->frameBuffer->height/4;
 
-//	reflTex = RwRasterCreate(128, 128, 0, 5);
-	reflTex = RwRasterCreate(CPostEffects::pRasterFrontBuffer->width, CPostEffects::pRasterFrontBuffer->height, 0, 5);
-	vcsRect.x = 0;
-	vcsRect.y = 0;
+////	reflTex = RwRasterCreate(128, 128, 0, 5);
+//	reflTex = RwRasterCreate(CPostEffects::pRasterFrontBuffer->width, CPostEffects::pRasterFrontBuffer->height, 0, 5);
+//	vcsRect.x = 0;
+//	vcsRect.y = 0;
 }
 
 

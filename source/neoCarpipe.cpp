@@ -12,18 +12,10 @@ enum {
 	LOC_matCol      = 16,
 	LOC_directCol   = 17,
 	LOC_lightDir    = 18,
-	LOC_lightCol    = 22,
+	LOC_lightCol    = 24,
 
-	LOC_directSpec  = 26,	// for carpipe
-	LOC_reflProps   = 27,
-
-	LOC_gloss2	= 28,
-	LOC_gloss3	= 29,
-
-	LOC_rampStart   = 36,	// for rim pipe
-	LOC_rampEnd     = 37,
-	LOC_rim         = 38,
-	LOC_viewVec     = 41,
+	LOC_directSpec  = 30,	// for carpipe
+	LOC_reflProps   = 31,
 };
 
 
@@ -288,8 +280,9 @@ UploadLightColorWithSpecular(RpLight *light, int loc)
 }
 
 void
-CarPipe::ShaderSetup(RwMatrix *world)
+CarPipe::ShaderSetup(RpAtomic *atomic)
 {
+	RwMatrix *world = RwFrameGetLTM(RpAtomicGetFrame(atomic));
 	DirectX::XMMATRIX worldMat, viewMat, projMat, texMat;
 	RwCamera *cam = (RwCamera*)RWSRCGLOBAL(curCamera);
 
@@ -310,37 +303,53 @@ CarPipe::ShaderSetup(RwMatrix *world)
 	RwMatrix *camfrm = RwFrameGetLTM(RwCameraGetFrame(cam));
 	RwD3D9SetVertexShaderConstant(LOC_eye, (void*)RwMatrixGetPos(camfrm), 1);
 
-	if(pAmbient)
-		UploadLightColorWithSpecular(pAmbient, LOC_ambient);
-	else
-		UploadZero(LOC_ambient);
-	if(pDirect){
-		UploadLightColorWithSpecular(pDirect, LOC_directCol);
-		UploadLightDirection(pDirect, LOC_directDir);
-	}else{
-		UploadZero(LOC_directCol);
-		UploadZero(LOC_directDir);
-	}
-	for(int i = 0 ; i < 4; i++)
-		if(pExtraDirectionals[i]){
-			UploadLightDirection(pExtraDirectionals[i], LOC_lightDir+i);
-			UploadLightColorWithSpecular(pExtraDirectionals[i], LOC_lightCol+i);
-		}else{
-			UploadZero(LOC_lightDir+i);
-			UploadZero(LOC_lightCol+i);
+	if(CVisibilityPlugins__GetAtomicId(atomic) & 0x4000){
+		RwRGBAReal c = { 0.0f, 0.0f, 0.0f, 0.0f };
+		RwD3D9SetVertexShaderConstant(LOC_directCol,(void*)&c,1);
+		RwD3D9SetVertexShaderConstant(LOC_directDir,(void*)&c,1);
+		for(int i = 0; i < 6; i++){
+			RwD3D9SetVertexShaderConstant(LOC_lightCol+i,(void*)&c,1);
+			RwD3D9SetVertexShaderConstant(LOC_lightDir+i,(void*)&c,1);
 		}
-	Color spec = specColor.Get();
-	spec.r *= spec.a;
-	spec.g *= spec.a;
-	spec.b *= spec.a;
-	RwD3D9SetVertexShaderConstant(LOC_directSpec, (void*)&spec, 1);
+		RwD3D9SetVertexShaderConstant(LOC_directSpec, (void*)&c, 1);
+		c = { 0.18f, 0.18f, 0.18f, 0.0f };
+		RwD3D9SetVertexShaderConstant(LOC_ambient,(void*)&c,1);
+	}else{
+		if(pAmbient)
+			UploadLightColorWithSpecular(pAmbient, LOC_ambient);
+		else
+			UploadZero(LOC_ambient);
+		if(pDirect){
+			UploadLightColorWithSpecular(pDirect, LOC_directCol);
+			UploadLightDirection(pDirect, LOC_directDir);
+		}else{
+			UploadZero(LOC_directCol);
+			UploadZero(LOC_directDir);
+		}
+		for(int i = 0 ; i < 6; i++)
+			if(pExtraDirectionals[i]){
+				UploadLightDirection(pExtraDirectionals[i], LOC_lightDir+i);
+				UploadLightColorWithSpecular(pExtraDirectionals[i], LOC_lightCol+i);
+			}else{
+				UploadZero(LOC_lightDir+i);
+				UploadZero(LOC_lightCol+i);
+			}
+		Color spec = specColor.Get();
+		spec.r *= spec.a;
+		spec.g *= spec.a;
+		spec.b *= spec.a;
+		RwD3D9SetVertexShaderConstant(LOC_directSpec, (void*)&spec, 1);
+	}
 }
 
 void
-CarPipe::DiffusePass(RxD3D9ResEntryHeader *header)
+CarPipe::DiffusePass(RxD3D9ResEntryHeader *header, RpAtomic *atomic)
 {
 	RxD3D9InstanceData *inst = (RxD3D9InstanceData*)&header[1];
+	RwBool lighting;
 	CustomSpecMapPipeMaterialData *specData;
+	CustomEnvMapPipeMaterialData *envData;
+	int noRefl;
 
 	RwD3D9SetTexture(reflectionTex, 1);
 	RwD3D9SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_LERP);
@@ -361,8 +370,12 @@ CarPipe::DiffusePass(RxD3D9ResEntryHeader *header)
 
 	RwD3D9SetVertexShader(vertexShaderPass1);
 
+	RwD3D9GetRenderState(D3DRS_LIGHTING, &lighting);
+	noRefl = CVisibilityPlugins__GetAtomicId(atomic) & 0x6000;
+
 	for(int i = 0; i < header->numMeshes; i++){
-		RwD3D9SetTexture(inst->material->texture, 0);
+		RpMaterial *material = inst->material;
+		RwD3D9SetTexture(material->texture, 0);
 		// have to set these after the texture, RW sets texture stage states automatically
 		// ^ still true in d3d9? i think not but can't be bothered to find out
 		RwD3D9SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE);
@@ -372,7 +385,17 @@ CarPipe::DiffusePass(RxD3D9ResEntryHeader *header)
 		RwD3D9SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_DIFFUSE);
 		RwD3D9SetTextureStageState(0, D3DTSS_ALPHAARG2, D3DTA_TEXTURE);
 
-		specData = *RWPLUGINOFFSET(CustomSpecMapPipeMaterialData*, inst->material, CCustomCarEnvMapPipeline__ms_specularMapPluginOffset);
+		specData = *RWPLUGINOFFSET(CustomSpecMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_specularMapPluginOffset);
+		envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
+
+		RwUInt32 materialFlags = *(RwUInt32*)&material->surfaceProps.specular;
+		bool hasRefl  = !((materialFlags & 1) == 0);
+		bool hasEnv   = !((materialFlags & 2) == 0);
+		int matfx = RpMatFXMaterialGetEffects(material);
+		if(matfx != rpMATFXEFFECTENVMAP){
+			hasEnv = false;
+			hasRefl = false;
+		}
 
 		Color c = diffColor.Get();
 		Color diff(c.r*c.a, c.g*c.a, c.b*c.a, 1.0f-c.a);
@@ -384,9 +407,9 @@ CarPipe::DiffusePass(RxD3D9ResEntryHeader *header)
 		RwD3D9SetVertexShaderConstant(LOC_matCol, (void*)&mat, 1);
 
 		float reflProps[4];
-		reflProps[0] = specData ? specData->specularity*config->neoSpecMult : 0.0f;
+//		reflProps[0] = specData ? specData->specularity*config->neoSpecMult : 0.0f;
+		reflProps[0] = (hasEnv||hasRefl) && !noRefl && envData->shininess ? config->neoShininess : 0.0f;
 		reflProps[1] = fresnel.Get();
-//		reflProps[0] = 1.0f;
 		reflProps[2] = 0.6f;	// unused
 		reflProps[3] = power.Get();
 		RwD3D9SetVertexShaderConstant(LOC_reflProps, (void*)reflProps, 1);
@@ -397,11 +420,13 @@ CarPipe::DiffusePass(RxD3D9ResEntryHeader *header)
 }
 
 void
-CarPipe::SpecularPass(RxD3D9ResEntryHeader *header)
+CarPipe::SpecularPass(RxD3D9ResEntryHeader *header, RpAtomic *atomic)
 {
 	RwUInt32 src, dst, fog, zwrite;
+	RwBool lighting;
 	RxD3D9InstanceData *inst = (RxD3D9InstanceData*)&header[1];
 	CustomSpecMapPipeMaterialData *specData;
+	int noRefl;
 
 	RwRenderStateGet(rwRENDERSTATEZWRITEENABLE, &zwrite);
 	RwRenderStateGet(rwRENDERSTATEFOGENABLE, &fog);
@@ -418,9 +443,19 @@ CarPipe::SpecularPass(RxD3D9ResEntryHeader *header)
 	RwD3D9SetTexture(NULL, 3);
 	RwD3D9SetVertexShader(vertexShaderPass2);
 	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)1);
+
+	RwD3D9GetRenderState(D3DRS_LIGHTING, &lighting);
+	noRefl = CVisibilityPlugins__GetAtomicId(atomic) & 0x6000;
+
 	for(int i = 0; i < header->numMeshes; i++){
+		RwUInt32 materialFlags = *(RwUInt32*)&inst->material->surfaceProps.specular;
+		bool hasSpec  = !((materialFlags & 4) == 0 || !lighting);
+		int matfx = RpMatFXMaterialGetEffects(inst->material);
+		if(matfx != rpMATFXEFFECTENVMAP)
+			hasSpec = false;
+
 		specData = *RWPLUGINOFFSET(CustomSpecMapPipeMaterialData*, inst->material, CCustomCarEnvMapPipeline__ms_specularMapPluginOffset);
-		if(specData && specData->specularity != 0.0f)
+		if(hasSpec && !noRefl && specData->specularity != 0.0f)
 			D3D9Render(header, inst);
 		inst++;
 	}
@@ -445,7 +480,7 @@ CarPipe::RenderCallback(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt
 	}
 
 	RxD3D9ResEntryHeader *header = (RxD3D9ResEntryHeader*)&repEntry[1];
-	ShaderSetup(RwFrameGetLTM(RpAtomicGetFrame((RpAtomic*)object)));
+	ShaderSetup((RpAtomic*)object);
 
 	if(header->indexBuffer != NULL)
 		RwD3D9SetIndices(header->indexBuffer);
@@ -454,8 +489,8 @@ CarPipe::RenderCallback(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt
 
 	RwD3D9SetPixelShader(NULL);
 
-	DiffusePass(header);
-	SpecularPass(header);
+	DiffusePass(header, (RpAtomic*)object);
+	SpecularPass(header, (RpAtomic*)object);
 	RwD3D9SetTexture(NULL, 1);
 	RwD3D9SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_DISABLE);
 	RwD3D9SetTextureStageState(1, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
