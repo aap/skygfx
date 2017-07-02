@@ -24,8 +24,13 @@ typedef unsigned int uint;
 
 extern HMODULE dllModule;
 
+#define VERSION 0x310
+
 struct Config {
-	RwBool fixGrassPlacement;	// this has to stay at that offset, see fixSeed in main.cpp
+	// these are at fixed offsets
+	int version;			// for other modules
+	RwBool fixGrassPlacement;	// fixed for fixSeed in main.cpp
+	RwBool doglare;			// fixed for doglare in main.cpp
 
 	int buildingPipe;
 	RwBool ps2ModulateBuilding;
@@ -36,6 +41,7 @@ struct Config {
 	RwBool backfaceCull;
 	RwBool dualPassDefault, dualPassGrass, dualPassVehicle, dualPassPed;
 	int vehiclePipe;
+	float neoSpecMult;
 	int colorFilter;
 	int infraredVision, nightVision, grainFilter;
 	RwBool doRadiosity;
@@ -50,8 +56,6 @@ struct Config {
 	RwBool dontChangeAmbient;
 
 	int keys[2];
-
-	float neoSpecMult;
 };
 extern int numConfigs;
 extern Config *config, configs[10];

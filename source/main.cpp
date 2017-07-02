@@ -292,6 +292,7 @@ readIni(int n)
 	int i = 1;
 	while(i < envMapSize) i *= 2;
 	envMapSize = i;
+	c->doglare = readint(cfg.get("SkyGfx", "sunGlare", ""), -1);
 
 	c->ps2ModulateGrass = readint(cfg.get("SkyGfx", "ps2ModulateGrass", ""), ps2Modulate);
 	c->dualPassGrass = readint(cfg.get("SkyGfx", "dualPassGrass", ""), dualPass);
@@ -611,8 +612,8 @@ fixSeed(void)
 	_asm{
 	// 0x5DADB7
 		mov	ecx, [config]
-		cmp	[ecx], 0	// fixGrassPlacement
-		jz	dontfix
+		cmp	[ecx+4], 0	// fixGrassPlacement
+		jle	dontfix
 		mov	ecx, [esp+54h]
 		mov	ebx, [ecx+eax*4]
 		mov	ebp, [ebx+4]
@@ -785,6 +786,24 @@ mysrand(unsigned int seed)
 //	gtasrand(seed);
 }
 
+WRAPPER void CVehicle__DoSunGlare(void *this_) { EAXJMP(0x6DD6F0); }
+
+void __declspec(naked) doglare(void)
+{
+	_asm {
+		mov	ecx, [config]
+		cmp	[ecx+8], 0	// doglare
+		jle	noglare
+		mov	ecx,esi
+		call	CVehicle__DoSunGlare
+	noglare:
+		mov     [esp+0D4h], edi
+		push	6ABD04h
+		retn
+	}
+}
+
+
 void (*InitialiseGame)(void);
 void
 InitialiseGame_hook(void)
@@ -794,6 +813,53 @@ InitialiseGame_hook(void)
 	InitialiseGame();
 }
 
+struct PointLight
+{
+	RwV3d pos;
+	RwV3d dir;
+	float radius;
+	float color[3];
+	void *attachedTo;
+	char type;
+	char fogType;
+	char generateExtraShadows;
+	char pad;
+};
+
+PointLight *pointLights = (PointLight*)0xC3F0E0;
+
+WRAPPER void
+CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect_orig(float x, float y, float z, float a4, float a5, RwUInt8 r, RwUInt8 g, RwUInt8 b, RwInt16 f, int a10, float a11, RwUInt8 alpha) { EAXJMP(0x70E780); }
+
+int currentLight;
+char *stkp;
+
+void
+CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect(float x, float y, float z, float a4, float a5, RwUInt8 r, RwUInt8 g, RwUInt8 b, RwInt16 f, int a10, float a11, RwUInt8 alpha)
+{
+	_asm mov [currentLight], esi
+	_asm mov [stkp], ebp
+	float mult = *(float*)(stkp + 0x48);
+	currentLight /= sizeof(PointLight);
+
+	float add = pointLights[currentLight].fogType == 1 ? 0.0f : 16.0f;
+	r = mult*pointLights[currentLight].color[0]+add;
+	g = mult*pointLights[currentLight].color[1]+add;
+	b = mult*pointLights[currentLight].color[2]+add;
+	f = 0xFF;
+	CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect_orig(x, y, z, a4, a5, r, g, b, f, a10, a11, alpha);
+}
+
+/*
+struct CVector { float x, y, z; };
+WRAPPER void CWaterLevel__CalculateWavesForCoordinate(int x, int y, float a3, float a4, float *z, float *colorMult, float *a7, CVector *vecnormal){ EAXJMP(0x6E6EF0); }
+void
+CWaterLevel__CalculateWavesForCoordinate_hook(int x, int y, float a3, float a4, float *z, float *colorMult, float *a7, CVector *vecnormal)
+{
+	CWaterLevel__CalculateWavesForCoordinate(x, y, a3, a4, z, colorMult, a7, vecnormal);
+	*colorMult = 0.577f;
+}
+*/
 
 static BOOL (*IsAlreadyRunning)();
 
@@ -867,55 +933,12 @@ InjectDelayedPatches()
 		if(neoWaterDrops)
 			hookWaterDrops();
 
+		if(config->doglare >= 0)
+			InjectHook(0x6ABCFD, doglare, PATCH_JUMP);
+
 		return FALSE;
 	}
 	return TRUE;
-}
-
-struct PointLight
-{
-	RwV3d pos;
-	RwV3d dir;
-	float radius;
-	float color[3];
-	void *attachedTo;
-	char type;
-	char fogType;
-	char generateExtraShadows;
-	char pad;
-};
-
-PointLight *pointLights = (PointLight*)0xC3F0E0;
-
-WRAPPER void
-CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect_orig(float x, float y, float z, float a4, float a5, RwUInt8 r, RwUInt8 g, RwUInt8 b, RwInt16 f, int a10, float a11, RwUInt8 alpha) { EAXJMP(0x70E780); }
-
-int currentLight;
-char *stkp;
-
-void
-CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect(float x, float y, float z, float a4, float a5, RwUInt8 r, RwUInt8 g, RwUInt8 b, RwInt16 f, int a10, float a11, RwUInt8 alpha)
-{
-	_asm mov [currentLight], esi
-	_asm mov [stkp], ebp
-	float mult = *(float*)(stkp + 0x48);
-	currentLight /= sizeof(PointLight);
-
-	float add = pointLights[currentLight].fogType == 1 ? 0.0f : 16.0f;
-	r = mult*pointLights[currentLight].color[0]+add;
-	g = mult*pointLights[currentLight].color[1]+add;
-	b = mult*pointLights[currentLight].color[2]+add;
-	f = 0xFF;
-	CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect_orig(x, y, z, a4, a5, r, g, b, f, a10, a11, alpha);
-}
-
-struct CVector { float x, y, z; };
-WRAPPER void CWaterLevel__CalculateWavesForCoordinate(int x, int y, float a3, float a4, float *z, float *colorMult, float *a7, CVector *vecnormal){ EAXJMP(0x6E6EF0); }
-void
-CWaterLevel__CalculateWavesForCoordinate_hook(int x, int y, float a3, float a4, float *z, float *colorMult, float *a7, CVector *vecnormal)
-{
-	CWaterLevel__CalculateWavesForCoordinate(x, y, a3, a4, z, colorMult, a7, vecnormal);
-	*colorMult = 0.577f;
 }
 
 BOOL WINAPI
@@ -934,6 +957,9 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 			freopen("CONOUT$", "w", stdout);
 			freopen("CONOUT$", "w", stderr);
 		}
+
+		for(int i = 0; i < 10; i++)
+			configs[i].version = VERSION;
 
 		IsAlreadyRunning = (BOOL(*)())(*(int*)(0x74872D+1) + 0x74872D + 5);
 		InjectHook(0x74872D, InjectDelayedPatches);
@@ -971,6 +997,7 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		// TODO: rain grain @ 0x705078
 		InjectHook(0x705091, CPostEffects::Grain_PS2);
 
+// was used for "VCS" reflections
 //		InjectHook(0x53DFDD, CRenderer__RenderEverythingBarRoads);
 //		InjectHook(0x53DD27, CRenderer__RenderEverythingBarRoads); // unused?
 
@@ -1011,6 +1038,11 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		Patch<float>(0x5DDB3D+1, 78.0f);
 //		Patch<float>(0x5DDB42+1, 5.0f);	// this is too high, grass disappears o_O
 
+		// High detail water color multiplier is multiplied by 0.65 and added to 0.27, why?
+		// Removing this silly calculation seems to work better.
+		Nop(0x6E716B, 6);
+		Nop(0x6E7176, 6);
+
 
 		//void dumpMenu(void);
 		//dumpMenu();
@@ -1042,12 +1074,6 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 
 	//	InjectHook(0x6E9760, CWaterLevel__CalculateWavesForCoordinate_hook);
 	//	InjectHook(0x6E8CB8, CWaterLevel__CalculateWavesForCoordinate_hook);
-
-		// High detail water color multiplier is multiplied by 0.65 and added to 0.27, why?
-		// Removing this silly calculation seems to work better.
-		Nop(0x6E716B, 6);
-		Nop(0x6E7176, 6);
-
 
 		// Cloud tests
 		//Nop(0x53E1AF, 5);	// CClouds::MovingFogRender
