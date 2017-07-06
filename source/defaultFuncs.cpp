@@ -38,7 +38,7 @@ D3D9RenderPreLit(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *insta
 }
 
 void __declspec(naked)
-D3D9GetEnvMapVector(RpAtomic *atomic, CustomEnvMapPipeAtomicData *atmdata, CustomEnvMapPipeMaterialData *data, RwV3d *transScale)
+GetEnvMapVector(RpAtomic *atomic, CustomEnvMapPipeAtomicData *atmdata, CustomEnvMapPipeMaterialData *data, RwV3d *transScale)
 {
 	_asm{
 		mov ecx, [esp+4]
@@ -53,7 +53,7 @@ D3D9GetEnvMapVector(RpAtomic *atomic, CustomEnvMapPipeAtomicData *atmdata, Custo
 }
 
 void __declspec(naked)
-D3D9GetTransScaleVector(CustomEnvMapPipeMaterialData *data, RpAtomic *atomic, RwV3d *transScale)
+GetTransScaleVector(CustomEnvMapPipeMaterialData *data, RpAtomic *atomic, RwV3d *transScale)
 {
 	_asm{
 		mov eax, [esp+4]
@@ -410,7 +410,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB(RwResEntry *repEntry, void *object,
 			texMat._22 = envData->scaleY / 8.0f;
 			texMat._33 = 1.0f;
 			texMat._44 = 1.0f;
-			D3D9GetTransScaleVector(envData, atomic, &transVec);
+			GetTransScaleVector(envData, atomic, &transVec);
 			texMat._31 = transVec.x;
 			texMat._32 = transVec.y;
 			RwD3D9SetTransform(D3DTS_TEXTURE1, &texMat);
@@ -447,7 +447,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB(RwResEntry *repEntry, void *object,
 				*RWPLUGINOFFSET(CustomEnvMapPipeAtomicData*, atomic,
 				                CCustomCarEnvMapPipeline__ms_envMapAtmPluginOffset) = atmEnvData;
 			}
-			D3D9GetEnvMapVector(atomic, atmEnvData, envData, &transVec);
+			GetEnvMapVector(atomic, atmEnvData, envData, &transVec);
 			texMat._11 = 1.0f;
 			texMat._22 = 1.0f;
 			texMat._33 = 1.0f;

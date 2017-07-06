@@ -4,7 +4,6 @@
 static void *vehiclePipeVS, *ps2CarFxVS;
 void *vehiclePipePS, *ps2CarFxPS;	// reused by the building pipeline
 static void *specCarFxVS, *specCarFxPS;
-static void *vcsReflVS, *vcsReflPS;
 static void *xboxCarVS;
 
 enum {
@@ -30,7 +29,6 @@ enum {
 
 void CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags);
 void CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags);
-void CCustomCarEnvMapPipeline__CustomPipeRenderCB_VCS(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags);
 
 CPool<CustomEnvMapPipeAtomicData> *&gEnvMapPipeAtmDataPool = *(CPool<CustomEnvMapPipeAtomicData>**)0xC02D2C;
 
@@ -38,6 +36,16 @@ void*
 CustomEnvMapPipeAtomicData::operator new(size_t size)
 {
 	return gEnvMapPipeAtmDataPool->New();
+}
+
+void
+uploadLightCol(RwUInt32 registerAddress, RpLight *l)
+{
+	static float black[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	if(RpLightGetFlags(l) & rpLIGHTLIGHTATOMICS)
+		RwD3D9SetVertexShaderConstant(registerAddress,(void*)&l->color,1);
+	else
+		RwD3D9SetVertexShaderConstant(registerAddress,(void*)black,1);
 }
 
 void
@@ -55,16 +63,14 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 	RpMaterial *material;
 	RwUInt32 materialFlags;
 	RwBool hasRefl, hasEnv, hasSpec, hasAlpha;
-	int activeLights;
 	struct {
 		float shininess;
 		float specularity;
-		float intensity;
+		float lightmult;
 	} reflData;
 	RwV4d envXform;
 	float envSwitch;
 	D3DMATRIX worldMat, worldITMat, viewMat, projMat;
-	int pcTrans = 0;
 
 	atomic = (RpAtomic*)object;
 
@@ -83,25 +89,18 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 
 	noRefl = CVisibilityPlugins__GetAtomicId(atomic) & 0x6000;
 	// lights
-	activeLights = 0;
-	if(CVisibilityPlugins__GetAtomicId(atomic) & 0x4000){	// exploded
-		RwRGBAReal c = { 0.0f, 0.0f, 0.0f, 0.0f };
-		RwD3D9SetVertexShaderConstant(LOC_sunDiff,(void*)&c,1);
-		c = { 0.18f, 0.18f, 0.18f, 0.0f };
-		RwD3D9SetVertexShaderConstant(LOC_sunAmb,(void*)&c,1);
-	}else{
-		RwD3D9SetVertexShaderConstant(LOC_sunDir,(void*)RwMatrixGetAt(RwFrameGetLTM(RpLightGetFrame(pDirect))),1);
-		RwD3D9SetVertexShaderConstant(LOC_sunDiff,(void*)&pDirect->color,1);
-		RwD3D9SetVertexShaderConstant(LOC_sunAmb,(void*)&pAmbient->color,1);
-		reflData.intensity = pDirect->color.red*(256.0f/255.0f);
-		for(int i = 0; i < NumExtraDirLightsInWorld; i++)
-			if(RpLightGetType(pExtraDirectionals[i]) == rpLIGHTDIRECTIONAL){
-				RwD3D9SetVertexShaderConstant(LOC_lights+i*2, (void*)RwMatrixGetAt(RwFrameGetLTM(RpLightGetFrame(pExtraDirectionals[i]))),1);
-				RwD3D9SetVertexShaderConstant(LOC_lights+i*2+1, (void*)&pExtraDirectionals[i]->color, 1);
-				activeLights++;
-			}
-	}
-	IDirect3DDevice9_SetVertexShaderConstantI(d3d9device, LOC_activeLights, &activeLights, 1);
+	reflData.lightmult = CCustomCarEnvMapPipeline__m_EnvMapLightingMult;
+	UploadLightColor(pDirect, LOC_sunDiff);
+	UploadLightDirection(pDirect, LOC_sunDir);
+	UploadLightColor(pAmbient, LOC_sunAmb);
+	for(int i = 0; i < 6; i++)
+		if(i < NumExtraDirLightsInWorld && RpLightGetType(pExtraDirectionals[i]) == rpLIGHTDIRECTIONAL){
+			UploadLightDirection(pExtraDirectionals[i], LOC_lights+i*2);
+			UploadLightColor(pExtraDirectionals[i], LOC_lights+i*2+1);
+		}else{
+			UploadZero(LOC_lights+i*2);
+			UploadZero(LOC_lights+i*2+1);
+		}
 
 	RwD3D9GetRenderState(D3DRS_LIGHTING, &lighting);
 
@@ -122,7 +121,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 	RwRenderStateGet(rwRENDERSTATEDESTBLEND, &dst);
 	RwRenderStateGet(rwRENDERSTATEFOGENABLE, &fog);
 
-	while(numMeshes--){
+	for(; numMeshes--; instancedData++){
 		material = instancedData->material;
 		if(flags & (rxGEOMETRY_TEXTURED2 | rxGEOMETRY_TEXTURED))
 			RwD3D9SetTexture(material->texture ? material->texture : gpWhiteTexture, 0);
@@ -157,11 +156,14 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 		RwD3D9SetVertexShader(vehiclePipeVS);
 		RwD3D9SetPixelShader(vehiclePipePS);
 
-		D3D9RenderVehicleDual(resEntryHeader, instancedData);
+		D3D9RenderDual(config->dualPassVehicle, resEntryHeader, instancedData);
 
 		//
 		// FX pass
 		//
+
+		if(noRefl)
+			continue;
 
 		materialFlags = *(RwUInt32*)&material->surfaceProps.specular;
 		hasRefl  = !((materialFlags & 1) == 0);
@@ -179,36 +181,36 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 		reflData.specularity = 0.0f;
 		envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
 		specData = *RWPLUGINOFFSET(CustomSpecMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_specularMapPluginOffset);
-		if(hasRefl && !noRefl){
+		if(hasRefl){
 			static D3DMATRIX texMat;
 			RwV3d transVec;
 
-			envSwitch = 2 + pcTrans;
+			envSwitch = 1;
 			reflData.shininess = envData->shininess/255.0f;
-			// ?
 			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
-			texMat._11 = envData->scaleX / 8.0f;
-			texMat._22 = envData->scaleY / 8.0f;
-			texMat._33 = 1.0f;
-			texMat._44 = 1.0f;
-			D3D9GetTransScaleVector(envData, atomic, &transVec);
-			texMat._31 = transVec.x;
-			texMat._32 = transVec.y;
-			RwD3D9SetVertexShaderConstant(LOC_Texture,(void*)&texMat,4);
 			RwD3D9SetTexture(envData->texture, 1);
-
+			// PS2
+			GetTransScaleVector(envData, atomic, &transVec);
 			envXform.x = transVec.x;
 			envXform.y = transVec.y;
 			envXform.z = envData->scaleX / 8.0f;
 			envXform.w = envData->scaleY / 8.0f;
+			// PC
+			texMat._11 = envData->scaleX / 8.0f;
+			texMat._22 = envData->scaleY / 8.0f;
+			texMat._33 = 1.0f;
+			texMat._44 = 1.0f;
+			texMat._31 = transVec.x;
+			texMat._32 = transVec.y;
+			RwD3D9SetVertexShaderConstant(LOC_Texture,(void*)&texMat,4);
+
 			fxpass = 1;
-		}else if(hasEnv && !noRefl){
+		}else if(hasEnv){
 			static D3DMATRIX texMat;
 			RwV3d transVec;
 
-			envSwitch = 0 + pcTrans;
+			envSwitch = 2;
 			reflData.shininess = envData->shininess/255.0f;
-			// ?
 			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
 			atmEnvData = *RWPLUGINOFFSET(CustomEnvMapPipeAtomicData*, atomic,
 			                             CCustomCarEnvMapPipeline__ms_envMapAtmPluginOffset);
@@ -220,7 +222,13 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 				*RWPLUGINOFFSET(CustomEnvMapPipeAtomicData*, atomic,
 				                CCustomCarEnvMapPipeline__ms_envMapAtmPluginOffset) = atmEnvData;
 			}
-			D3D9GetEnvMapVector(atomic, atmEnvData, envData, &transVec);
+			GetEnvMapVector(atomic, atmEnvData, envData, &transVec);
+			// PS2
+			envXform.x = -transVec.x;
+			envXform.y = transVec.y;
+			envXform.z = envData->scaleX / 8.0f;
+			envXform.w = envData->scaleY / 8.0f;
+			// PC
 			texMat._11 = 1.0f;
 			texMat._22 = 1.0f;
 			texMat._33 = 1.0f;
@@ -230,14 +238,10 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 			RwD3D9SetVertexShaderConstant(LOC_Texture,(void*)&texMat,4);
 			RwD3D9SetTexture(envData->texture, 1);
 
-			envXform.x = -transVec.x;
-			envXform.y = transVec.y;
-			envXform.z = envData->scaleX / 8.0f;
-			envXform.w = envData->scaleY / 8.0f;
 			fxpass = 1;
 		}
 
-		if(hasSpec && !noRefl){
+		if(hasSpec){
 			reflData.specularity = specData->specularity;
 			RwD3D9SetTexture(specData->texture, 2);
 			fxpass = 1;
@@ -264,8 +268,6 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 			RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)dst);
 			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphafunc);
 		}
-
-		instancedData++;
 	}
 	RwD3D9SetVertexShader(NULL);
 	RwD3D9SetPixelShader(NULL);
@@ -292,11 +294,10 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(RwResEntry *repEntry, void
 	RpMaterial *material;
 	RwUInt32 materialFlags;
 	RwBool hasRefl, hasEnv, hasSpec, hasAlpha;
-	int activeLights;
 	struct {
 		float shininess;
 		float specularity;
-		float intensity;
+		float lightmult;
 	} reflData;
 	RwV4d envXform;
 	float envSwitch;
@@ -323,25 +324,18 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(RwResEntry *repEntry, void
 
 	noRefl = CVisibilityPlugins__GetAtomicId(atomic) & 0x6000;
 	// lights
-	activeLights = 0;
-	if(CVisibilityPlugins__GetAtomicId(atomic) & 0x4000){	// exploded
-		RwRGBAReal c = { 0.0f, 0.0f, 0.0f, 0.0f };
-		RwD3D9SetVertexShaderConstant(LOC_sunDiff,(void*)&c,1);
-		c = { 0.18f, 0.18f, 0.18f, 0.0f };
-		RwD3D9SetVertexShaderConstant(LOC_sunAmb,(void*)&c,1);
-	}else{
-		RwD3D9SetVertexShaderConstant(LOC_sunDir,(void*)RwMatrixGetAt(RwFrameGetLTM(RpLightGetFrame(pDirect))),1);
-		RwD3D9SetVertexShaderConstant(LOC_sunDiff,(void*)&pDirect->color,1);
-		RwD3D9SetVertexShaderConstant(LOC_sunAmb,(void*)&pAmbient->color,1);
-		reflData.intensity = pDirect->color.red*(256.0f/255.0f);
-		for(int i = 0; i < NumExtraDirLightsInWorld; i++)
-			if(RpLightGetType(pExtraDirectionals[i]) == rpLIGHTDIRECTIONAL){
-				RwD3D9SetVertexShaderConstant(LOC_lights+i*2, (void*)RwMatrixGetAt(RwFrameGetLTM(RpLightGetFrame(pExtraDirectionals[i]))),1);
-				RwD3D9SetVertexShaderConstant(LOC_lights+i*2+1, (void*)&pExtraDirectionals[i]->color, 1);
-				activeLights++;
-			}
-	}
-	IDirect3DDevice9_SetVertexShaderConstantI(d3d9device, LOC_activeLights, &activeLights, 1);
+	reflData.lightmult = CCustomCarEnvMapPipeline__m_EnvMapLightingMult;
+	UploadLightColor(pDirect, LOC_sunDiff);
+	UploadLightDirection(pDirect, LOC_sunDir);
+	UploadLightColor(pAmbient, LOC_sunAmb);
+	for(int i = 0; i < 6; i++)
+		if(i < NumExtraDirLightsInWorld && RpLightGetType(pExtraDirectionals[i]) == rpLIGHTDIRECTIONAL){
+			UploadLightDirection(pExtraDirectionals[i], LOC_lights+i*2);
+			UploadLightColor(pExtraDirectionals[i], LOC_lights+i*2+1);
+		}else{
+			UploadZero(LOC_lights+i*2);
+			UploadZero(LOC_lights+i*2+1);
+		}
 
 	RwD3D9GetRenderState(D3DRS_LIGHTING, &lighting);
 
@@ -362,7 +356,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(RwResEntry *repEntry, void
 	RwRenderStateGet(rwRENDERSTATEDESTBLEND, &dst);
 	RwRenderStateGet(rwRENDERSTATEFOGENABLE, &fog);
 
-	while(numMeshes--){
+	for(; numMeshes--; instancedData++){
 		material = instancedData->material;
 		if(flags & (rxGEOMETRY_TEXTURED2 | rxGEOMETRY_TEXTURED))
 			RwD3D9SetTexture(material->texture ? material->texture : gpWhiteTexture, 0);
@@ -397,11 +391,13 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(RwResEntry *repEntry, void
 		RwD3D9SetVertexShader(vehiclePipeVS);
 		RwD3D9SetPixelShader(vehiclePipePS);
 
-		D3D9RenderVehicleDual(resEntryHeader, instancedData);
+		D3D9RenderDual(config->dualPassVehicle, resEntryHeader, instancedData);
 
 		//
 		// FX pass
 		//
+		if(noRefl)
+			continue;
 
 		materialFlags = *(RwUInt32*)&material->surfaceProps.specular;
 		hasRefl  = !((materialFlags & 1) == 0);
@@ -419,7 +415,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(RwResEntry *repEntry, void
 		reflData.specularity = 0.0f;
 		envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
 		specData = *RWPLUGINOFFSET(CustomSpecMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_specularMapPluginOffset);
-		if(hasRefl && !noRefl){
+		if(hasRefl){
 			static D3DMATRIX texMat;
 			RwV3d transVec;
 
@@ -431,7 +427,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(RwResEntry *repEntry, void
 			texMat._22 = envData->scaleY / 8.0f;
 			texMat._33 = 1.0f;
 			texMat._44 = 1.0f;
-			D3D9GetTransScaleVector(envData, atomic, &transVec);
+			GetTransScaleVector(envData, atomic, &transVec);
 			texMat._31 = transVec.x;
 			texMat._32 = transVec.y;
 			RwD3D9SetVertexShaderConstant(LOC_Texture,(void*)&texMat,4);
@@ -442,11 +438,11 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(RwResEntry *repEntry, void
 			envXform.z = envData->scaleX / 8.0f;
 			envXform.w = envData->scaleY / 8.0f;
 			fxpass = 1;
-		}else if(hasEnv && !noRefl){
+		}else if(hasEnv){
 			static D3DMATRIX texMat;
 			RwV3d transVec;
 
-			envSwitch = 0;
+			envSwitch = 2;
 			reflData.shininess = envData->shininess/255.0f;
 			// ?
 			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
@@ -460,7 +456,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(RwResEntry *repEntry, void
 				*RWPLUGINOFFSET(CustomEnvMapPipeAtomicData*, atomic,
 				                CCustomCarEnvMapPipeline__ms_envMapAtmPluginOffset) = atmEnvData;
 			}
-			D3D9GetEnvMapVector(atomic, atmEnvData, envData, &transVec);
+			GetEnvMapVector(atomic, atmEnvData, envData, &transVec);
 			texMat._11 = 1.0f;
 			texMat._22 = 1.0f;
 			texMat._33 = 1.0f;
@@ -477,7 +473,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(RwResEntry *repEntry, void
 			fxpass = 1;
 		}
 
-		if(hasSpec && !noRefl){
+		if(hasSpec){
 //			reflData.specularity = CCustomCarEnvMapPipeline__m_EnvMapLightingMult * 1.8f;
 			reflData.specularity = specData->specularity * 1.8f;
 			if(reflData.specularity > 1.0f) reflData.specularity = 1.0f;
@@ -505,8 +501,6 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(RwResEntry *repEntry, void
 			RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)dst);
 			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphafunc);
 		}
-
-		instancedData++;
 	}
 	RwD3D9SetVertexShader(NULL);
 	RwD3D9SetPixelShader(NULL);
@@ -611,7 +605,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *ob
 			texMat._22 = envData->scaleY / 8.0f;
 			texMat._33 = 1.0f;
 			texMat._44 = 1.0f;
-			D3D9GetTransScaleVector(envData, atomic, &transVec);
+			GetTransScaleVector(envData, atomic, &transVec);
 			texMat._31 = transVec.x;
 			texMat._32 = transVec.y;
 			RwD3D9SetVertexShaderConstant(LOC_Texture, (void*)&texMat, 4);
@@ -646,7 +640,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *ob
 				*RWPLUGINOFFSET(CustomEnvMapPipeAtomicData*, atomic,
 				                CCustomCarEnvMapPipeline__ms_envMapAtmPluginOffset) = atmEnvData;
 			}
-			D3D9GetEnvMapVector(atomic, atmEnvData, envData, &transVec);
+			GetEnvMapVector(atomic, atmEnvData, envData, &transVec);
 			texMat._11 = 1.0f;
 			texMat._22 = 1.0f;
 			texMat._33 = 1.0f;
@@ -711,8 +705,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *ob
 			RwD3D9SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG2);
 			RwD3D9SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_DIFFUSE);
 		}
-		D3D9RenderVehicleDual(resEntryHeader, instancedData);
-	//	D3D9Render(resEntryHeader, instancedData);
+		D3D9RenderDual(config->dualPassVehicle, resEntryHeader, instancedData);
 
 		instancedData++;
 	}
@@ -723,148 +716,6 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *ob
 	RwD3D9SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, 1);
 	RwD3D9SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_DISABLE);
 }
-
-#if 0
-RwTexture *vcsReflTex;
-
-void
-CCustomCarEnvMapPipeline__CustomPipeRenderCB_VCS(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
-{
-	RxD3D9ResEntryHeader *resEntryHeader;
-	RxD3D9InstanceData *instancedData;
-	RpAtomic *atomic;
-	RwBool lighting;
-	RwInt32	numMeshes;
-	RwBool noRefl;
-	CustomEnvMapPipeMaterialData *envData;
-	RpMaterial *material;
-	RwUInt32 materialFlags;
-	RwBool hasRefl, hasAlpha;
-	int activeLights;
-	struct {
-		float shininess;
-		float specularity;
-		float intensity;
-	} reflData;
-	RwV4d envXform;
-	D3DMATRIX worldMat, worldITMat, viewMat, projMat;
-
-	atomic = (RpAtomic*)object;
-
-	// matrices
-	RwD3D9SetPixelShader(vcsReflPS);
-	RwD3D9SetVertexShader(vcsReflVS);
-	RwD3D9GetTransform(D3DTS_WORLD, &worldMat);
-	RwD3D9GetTransform(D3DTS_VIEW, &viewMat);
-	RwD3D9GetTransform(D3DTS_PROJECTION, &projMat);
-	RwD3D9SetVertexShaderConstant(LOC_World,(void*)&worldMat,4);
-	RwD3D9SetVertexShaderConstant(LOC_View,(void*)&viewMat,4);
-	RwD3D9SetVertexShaderConstant(LOC_Proj,(void*)&projMat,4);
-	_rwD3D9VSSetActiveWorldMatrix(RwFrameGetLTM(RpAtomicGetFrame(atomic)));
-	_rwD3D9VSGetInverseWorldMatrix((void *)&worldITMat);
-	RwD3D9SetVertexShaderConstant(LOC_WorldIT,(void*)&worldITMat,4);
-
-	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
-	vcsReflTex->raster = reflTex; //CPostEffects::pRasterFrontBuffer;
-
-	noRefl = CVisibilityPlugins__GetAtomicId(atomic) & 0x6000;
-	// lights
-	activeLights = 0;
-	if(CVisibilityPlugins__GetAtomicId(atomic) & 0x4000){	// exploded
-		noRefl = 1;	// force it, probably not necessary, but be sure
-		RwRGBAReal c = { 0.0f, 0.0f, 0.0f, 0.0f };
-		RwD3D9SetVertexShaderConstant(LOC_sunDiff,(void*)&c,1);
-		c = { 0.18f, 0.18f, 0.18f, 0.0f };
-		RwD3D9SetVertexShaderConstant(LOC_sunAmb,(void*)&c,1);
-	}else{
-		RwD3D9SetVertexShaderConstant(LOC_sunDir,(void*)RwMatrixGetAt(RwFrameGetLTM(RpLightGetFrame(pDirect))),1);
-		RwD3D9SetVertexShaderConstant(LOC_sunDiff,(void*)&pDirect->color,1);
-		RwD3D9SetVertexShaderConstant(LOC_sunAmb,(void*)&pAmbient->color,1);
-		reflData.intensity = pDirect->color.red*(256.0f/255.0f);
-		for(int i = 0; i < NumExtraDirLightsInWorld; i++)
-			if(RpLightGetType(pExtraDirectionals[i]) == rpLIGHTDIRECTIONAL){
-				RwD3D9SetVertexShaderConstant(LOC_lights+i*2, (void*)RwMatrixGetAt(RwFrameGetLTM(RpLightGetFrame(pExtraDirectionals[i]))),1);
-				RwD3D9SetVertexShaderConstant(LOC_lights+i*2+1, (void*)&pExtraDirectionals[i]->color, 1);
-				activeLights++;
-			}
-	}
-	IDirect3DDevice9_SetVertexShaderConstantI(d3d9device, LOC_activeLights, &activeLights, 1);
-
-	RwD3D9GetRenderState(D3DRS_LIGHTING, &lighting);
-
-	resEntryHeader = (RxD3D9ResEntryHeader *)(repEntry + 1);
-	instancedData = (RxD3D9InstanceData *)(resEntryHeader + 1);
-	if(resEntryHeader->indexBuffer != NULL)
-		RwD3D9SetIndices(resEntryHeader->indexBuffer);
-	_rwD3D9SetStreams(resEntryHeader->vertexStream,resEntryHeader->useOffsets);
-	RwD3D9SetVertexDeclaration(resEntryHeader->vertexDeclaration);
-	numMeshes = resEntryHeader->numMeshes;
-
-	while(numMeshes--){
-		material = instancedData->material;
-		materialFlags = *(RwUInt32*)&material->surfaceProps.specular;
-
-		//hasRefl = materialFlags & 4;
-		hasRefl = materialFlags & 3;
-
-		if(flags & (rxGEOMETRY_TEXTURED2 | rxGEOMETRY_TEXTURED))
-			RwD3D9SetTexture(material->texture ? material->texture : gpWhiteTexture, 0);
-		else
-			RwD3D9SetTexture(gpWhiteTexture, 0);
-
-		reflData.shininess = 0.0f;
-		RwD3D9SetTexture(NULL, 1);
-		envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
-		if(hasRefl && !noRefl){
-			// or maybe from matfx?
-			reflData.shininess = 0x26/255.0f;
-			// ?
-			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
-			RwD3D9SetTexture(vcsReflTex, 1);
-			envXform.x = 1.0f;
-			envXform.y = 1.0f;
-			envXform.z = 1.0f;
-			envXform.w = 1.0f;
-		}
-
-		hasAlpha = instancedData->vertexAlpha || instancedData->material->color.alpha != 255;
-		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)hasAlpha);
-		RwD3D9SetVertexShaderConstant(LOC_reflData, (void*)&reflData, 1);
-		RwD3D9SetVertexShaderConstant(LOC_envXForm, (void*)&envXform, 1);
-
-		RwRGBA matColor = material->color;
-		float surfProps[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-		if(lighting || flags & rpGEOMETRYPRELIT){
-			// WTF is this?
-			int rgb;
-			rgb = *(int*)&matColor & 0xFFFFFF;
-			if(rgb == 0xAF00FF || rgb == 0x00FFB9 || rgb == 0x00FF3C || rgb == 0x003CFF ||
-			   rgb == 0x00AFFF || rgb == 0xC8FF00 || rgb == 0xFF00FF || rgb == 0xFFFF00){
-				matColor.red = 0;
-				matColor.green = 0;
-				matColor.blue = 0;
-			}
-
-			surfProps[0] = material->surfaceProps.ambient;
-			surfProps[2] = material->surfaceProps.diffuse;
-			surfProps[3] = !!(flags & rpGEOMETRYPRELIT);
-		}
-		RwRGBAReal color;
-		RwRGBARealFromRwRGBA(&color, &matColor);
-		RwD3D9SetVertexShaderConstant(LOC_matCol, (void*)&color, 1);
-		RwD3D9SetVertexShaderConstant(LOC_surfProps, (void*)surfProps, 1);
-		D3D9RenderVehicleDual(resEntryHeader, instancedData);
-		instancedData++;
-	}
-	RwD3D9SetVertexShader(NULL);
-	RwD3D9SetPixelShader(NULL);
-	RwD3D9SetTexture(NULL, 1);
-	RwD3D9SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_DISABLE);
-	RwD3D9SetTextureStageState(1, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
-	RwD3D9SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, 1);
-	RwD3D9SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_DISABLE);
-}
-#endif
 
 void
 CCustomCarEnvMapPipeline__CustomPipeRenderCB_Switch(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
@@ -886,7 +737,8 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Switch(RwResEntry *repEntry, void *
 //		CCustomCarEnvMapPipeline__CustomPipeRenderCB_VCS(repEntry, object, type, flags);
 //		return;
 	case 5:
-		CarPipe::RenderCallback(repEntry, object, type, flags);
+		if(iCanHasNeoCar)
+			CarPipe::RenderCallback(repEntry, object, type, flags);
 		return;
 	}
 }
@@ -928,16 +780,6 @@ setVehiclePipeCB(RxPipelineNode *node, RxD3D9AllInOneRenderCallBack callback)
 	resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_SPECCARFXPS), RT_RCDATA);
 	shader = (RwUInt32*)LoadResource(dllModule, resource);
 	RwD3D9CreatePixelShader(shader, &specCarFxPS);
-	FreeResource(shader);
-
-	resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_VCSREFLVS), RT_RCDATA);
-	shader = (RwUInt32*)LoadResource(dllModule, resource);
-	RwD3D9CreateVertexShader(shader, &vcsReflVS);
-	FreeResource(shader);
-
-	resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_VCSREFLPS), RT_RCDATA);
-	shader = (RwUInt32*)LoadResource(dllModule, resource);
-	RwD3D9CreatePixelShader(shader, &vcsReflPS);
 	FreeResource(shader);
 
 	resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_XBOXCARVS), RT_RCDATA);

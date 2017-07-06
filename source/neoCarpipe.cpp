@@ -222,6 +222,10 @@ CarPipe::Init(void)
 //	SetRenderCallback(RenderCallback);
 	CreateShaders();
 	LoadTweakingTable();
+	// some camera begin/end stuff in barroads with the rw cam
+//	Nop(0x553C68, 0x553C9F-0x553C68);
+//	Nop(0x553CA4, 3);
+//	Nop(0x553CCA, 0x553CF4-0x553CCA);
 }
 
 void
@@ -248,16 +252,15 @@ CarPipe::LoadTweakingTable(void)
 	char *path;
 	FILE *dat;
 	path = getpath("neo\\carTweakingTable.dat");
-	if(path == NULL){
-		MessageBox(NULL, "Couldn't load 'neo\\carTweakingTable.dat'", "Error", MB_ICONERROR | MB_OK);
-		exit(0);
-	}
+	if(path == NULL)
+		return;
 	dat = fopen(path, "r");
 	neoReadWeatherTimeBlock(dat, &fresnel);
 	neoReadWeatherTimeBlock(dat, &power);
 	neoReadWeatherTimeBlock(dat, &diffColor);
 	neoReadWeatherTimeBlock(dat, &specColor);
 	fclose(dat);
+	iCanHasNeoCar = 1;
 }
 
 //
@@ -347,7 +350,6 @@ CarPipe::DiffusePass(RxD3D9ResEntryHeader *header, RpAtomic *atomic)
 {
 	RxD3D9InstanceData *inst = (RxD3D9InstanceData*)&header[1];
 	RwBool lighting;
-	CustomSpecMapPipeMaterialData *specData;
 	CustomEnvMapPipeMaterialData *envData;
 	int noRefl;
 
@@ -385,7 +387,6 @@ CarPipe::DiffusePass(RxD3D9ResEntryHeader *header, RpAtomic *atomic)
 		RwD3D9SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_DIFFUSE);
 		RwD3D9SetTextureStageState(0, D3DTSS_ALPHAARG2, D3DTA_TEXTURE);
 
-		specData = *RWPLUGINOFFSET(CustomSpecMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_specularMapPluginOffset);
 		envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
 
 		RwUInt32 materialFlags = *(RwUInt32*)&material->surfaceProps.specular;
@@ -407,14 +408,13 @@ CarPipe::DiffusePass(RxD3D9ResEntryHeader *header, RpAtomic *atomic)
 		RwD3D9SetVertexShaderConstant(LOC_matCol, (void*)&mat, 1);
 
 		float reflProps[4];
-//		reflProps[0] = specData ? specData->specularity*config->neoSpecMult : 0.0f;
-		reflProps[0] = (hasEnv||hasRefl) && !noRefl && envData->shininess ? config->neoShininess : 0.0f;
+		reflProps[0] = (hasEnv||hasRefl) && !noRefl ? config->neoShininess : 0.0f;
 		reflProps[1] = fresnel.Get();
 		reflProps[2] = 0.6f;	// unused
 		reflProps[3] = power.Get();
 		RwD3D9SetVertexShaderConstant(LOC_reflProps, (void*)reflProps, 1);
 
-		D3D9RenderVehicleDual(header, inst);
+		D3D9RenderDual(config->dualPassVehicle, header, inst);
 		inst++;
 	}
 }
@@ -455,7 +455,7 @@ CarPipe::SpecularPass(RxD3D9ResEntryHeader *header, RpAtomic *atomic)
 			hasSpec = false;
 
 		specData = *RWPLUGINOFFSET(CustomSpecMapPipeMaterialData*, inst->material, CCustomCarEnvMapPipeline__ms_specularMapPluginOffset);
-		if(hasSpec && !noRefl && specData->specularity != 0.0f)
+		if(hasSpec && !noRefl)
 			D3D9Render(header, inst);
 		inst++;
 	}

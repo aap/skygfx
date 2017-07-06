@@ -1,5 +1,4 @@
 sampler2D tex1 : register(s1);
-sampler2D tex2 : register(s2);
 
 struct VS_OUTPUT {
 	float4 position		: POSITION;

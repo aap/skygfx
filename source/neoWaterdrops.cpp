@@ -50,8 +50,10 @@ void
 CMotionBlurStreaksRender_hook(void)
 {
 	CMotionBlurStreaksRender();
-	WaterDrops::Process();
-	WaterDrops::Render();
+	if(neoTxd){
+		WaterDrops::Process();
+		WaterDrops::Render();
+	}
 }
 
 void

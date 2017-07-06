@@ -7,7 +7,7 @@ char asipath[MAX_PATH];
 
 int numConfigs;
 Config *config, configs[10];
-bool ps2grassFiles, usePCTimecyc, disableClouds, disableGamma, ps2MarkerAmbient, neoWaterDrops, transparentLockon;
+bool ps2grassFiles, usePCTimecyc, disableClouds, disableGamma, neoWaterDrops, transparentLockon;
 int original_bRadiosity = 0;
 
 void *grassPixelShader;
@@ -63,26 +63,33 @@ D3D9Render(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceDat
 }
 
 void
-D3D9RenderVehicleDual(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instancedData)
+D3D9RenderDual(int dual, RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData)
 {
 	RwBool hasAlpha;
 	int alphafunc, alpharef;
+	int zwrite;
+	// this also takes texture alpha into account
 	RwD3D9GetRenderState(D3DRS_ALPHABLENDENABLE, &hasAlpha);
-	if(hasAlpha && config->dualPassVehicle){
+	RwRenderStateGet(rwRENDERSTATEZWRITEENABLE, &zwrite);
+	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &alphafunc);
+	if(dual && hasAlpha && zwrite){
 		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, &alpharef);
-		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &alphafunc);
 		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)128);
 		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONGREATEREQUAL);
 		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
-		D3D9Render(resEntryHeader, instancedData);
+		D3D9Render(resEntryHeader, instanceData);
 		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONLESS);
 		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
-		D3D9Render(resEntryHeader, instancedData);
-		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
+		D3D9Render(resEntryHeader, instanceData);
+		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)zwrite);
 		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)alpharef);
 		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphafunc);
+	}else if(!zwrite){
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONALWAYS);
+		D3D9Render(resEntryHeader, instanceData);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphafunc);
 	}else
-		D3D9Render(resEntryHeader, instancedData);
+		D3D9Render(resEntryHeader, instanceData);
 }
 
 // Add a dual pass to the PC pipeline, the lazy way
@@ -91,7 +98,7 @@ D3D9RenderNotLit_DUAL(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *
 {
 	RwD3D9SetPixelShader(NULL);
 	RwD3D9SetVertexShader(instanceData->vertexShader);
-	D3D9RenderVehicleDual(resEntryHeader, instanceData);
+	D3D9RenderDual(config->dualPassVehicle, resEntryHeader, instanceData);
 }
 
 void
@@ -114,7 +121,7 @@ D3D9RenderPreLit_DUAL(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *
 	}
 	RwD3D9SetPixelShader(NULL);
 	RwD3D9SetVertexShader(instanceData->vertexShader);
-	D3D9RenderVehicleDual(resEntryHeader, instanceData);
+	D3D9RenderDual(config->dualPassVehicle, resEntryHeader, instanceData);
 }
 
 WRAPPER double CTimeCycle_GetAmbientRed(void) { EAXJMP(0x560330); }
@@ -313,7 +320,6 @@ readIni(int n)
 	c->pedShadows = StrAssoc::get(boolMap, cfg.get("SkyGfx", "pedShadows", "").c_str());
 	c->stencilShadows = StrAssoc::get(boolMap, cfg.get("SkyGfx", "stencilShadows", "").c_str());
 	disableClouds = readint(cfg.get("SkyGfx", "disableClouds", ""), 0);
-	ps2MarkerAmbient = readint(cfg.get("SkyGfx", "ps2MarkerAmbient", ""), 0);
 	disableGamma = readint(cfg.get("SkyGfx", "disableGamma", ""), 0);
 	c->detailedWaterDist = readint(cfg.get("SkyGfx", "detailedWaterDist", ""), 48);
 	transparentLockon = readint(cfg.get("SkyGfx", "transparentLockon", ""), 0);
@@ -361,8 +367,6 @@ readIni(int n)
 
 	c->trailsLimit = readint(cfg.get("SkyGfx", "trailsLimit", ""), 80);
 	c->trailsIntensity = readint(cfg.get("SkyGfx", "trailsIntensity", ""), 38);
-
-	c->dontChangeAmbient = readint(cfg.get("SkyGfx", "dontChangeAmbient", ""), 0);
 
 	neoWaterDrops = readint(cfg.get("SkyGfx", "neoWaterDrops", ""), 0);
 }
@@ -928,11 +932,6 @@ InjectDelayedPatches()
 		if(disableGamma)
 			InjectHook(0x74721C, 0x7472F3, PATCH_JUMP);
 
-		// call ReSetAmbientAndDirectionalColours instead of SetBrightMarkerColours
-		// this is wrong but ps2 lighting is weird
-		if(ps2MarkerAmbient)
-			InjectHook(0x722627, 0x735C40);
-
 		if(neoWaterDrops)
 			hookWaterDrops();
 
@@ -990,6 +989,12 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		// give vehicle pipe to upgrade parts
 		//InjectHook(0x4C88F0, 0x5DA610, PATCH_JUMP);
 
+		// jump over code that sets alpha ref to 140 (not on PS2).
+		// This caused skidmarks to disappear when rendering the neo reflection scene
+		// Alternative disable alpha test for CSkidmarks::Render, no z is written so it won't mess things up
+		// ideally do both even
+		InjectHook(0x553AD1, 0x553AE5, PATCH_JUMP);
+
 		// postfx
 		InjectHook(0x5BD7AE, CPostEffects::Init, PATCH_JUMP); // ??? why not CPostEffects::Initialise? address changed to CGame::InitialiseRenderWare, partially overwrites ReadPlayerCoordsFile()
 		InjectHook(0x704D1E, CPostEffects::ColourFilter_switch);
@@ -1008,10 +1013,6 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		InjectHook(0x705078, CPostEffects::Grain_PS2);
 		// unused
 		InjectHook(0x705091, CPostEffects::Grain_PS2);
-
-// was used for "VCS" reflections
-//		InjectHook(0x53DFDD, CRenderer__RenderEverythingBarRoads);
-//		InjectHook(0x53DD27, CRenderer__RenderEverythingBarRoads); // unused?
 
 		// fix pointlight fog
 		InjectHook(0x700B6B, CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect);

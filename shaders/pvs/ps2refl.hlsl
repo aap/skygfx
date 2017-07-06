@@ -17,7 +17,6 @@ struct Directional {
 	float3 diff;
 };
 #define MAX_LIGHTS 6
-int activeLights : register(i0);
 Directional lights[MAX_LIGHTS] : register(c27);
 
 sampler2D tex0 : register(s0);
@@ -48,7 +47,7 @@ mainVS(VS_INPUT IN)
 	OUT.color = float4(IN.Color.rgb*surfProps.w, 1.0);
 	OUT.color.xyz += sunAmb*surfProps.x;
 	OUT.color.xyz += l*sunDiff*surfProps.z;
-	for(int i = 0; i < activeLights; i++) {
+	for(int i = 0; i < MAX_LIGHTS; i++) {
 		l = max(0.0, dot(worldNormal, -lights[i].dir));
 		OUT.color.xyz += l*lights[i].diff*surfProps.z;
 	}

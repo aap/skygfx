@@ -58,10 +58,6 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 	RwD3D9SetVertexShaderConstant(LOC_Proj,(void*)&projMat,4);
 	// TODO: maybe upload normal matrix?
 
-	if(!config->dontChangeAmbient)
-		ReSetAmbientAndDirectionalColours();
-	//SetLightColoursForPedsCarsAndObjects(0.0f);
-
 	RwD3D9GetRenderState(D3DRS_LIGHTING, &lighting);
 	resEntryHeader = (RxD3D9ResEntryHeader*)(repEntry + 1);
 	instancedData = (RxD3D9InstanceData*)(resEntryHeader + 1);;
@@ -77,11 +73,8 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 
 	int noExtraColors = atomic->pipeline->pluginData == 0x53F2009C;
 
-	//if(!noExtraColors && GetAsyncKeyState(VK_F8) & 0x8000)
-	//	return;
-
 	// If no extra colors, force the one we have (night, unintuitively).
-	// Night colors are guaranteed to be preset by the instance callback.
+	// Night colors are guaranteed to be present by the instance callback.
 	if(noExtraColors){
 		dnShaderVars.dayMult = 0.0f;
 		dnShaderVars.nightMult = 1.0f;
@@ -90,11 +83,17 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 	int alphafunc, alpharef;
 	int src, dst;
 	int fog;
+	int zwrite;
 	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, &alpharef);
 	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &alphafunc);
 	RwRenderStateGet(rwRENDERSTATESRCBLEND, &src);
 	RwRenderStateGet(rwRENDERSTATEDESTBLEND, &dst);
 	RwRenderStateGet(rwRENDERSTATEFOGENABLE, &fog);
+	RwRenderStateGet(rwRENDERSTATEZWRITEENABLE, &zwrite);
+
+//	if(!noExtraColors && GetAsyncKeyState(VK_F8) & 0x8000)
+//	if(GetAsyncKeyState(VK_F8) & 0x8000)
+//		return;
 
 	numMeshes = resEntryHeader->numMeshes;
 	while(numMeshes--){
@@ -128,13 +127,12 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 
 		RwRGBARealFromRwRGBA(&color, &material->color);
 		RwD3D9SetVertexShaderConstant(LOC_materialColor, (void*)&color, 1);
-		// yep, not always done by the game
-		if(CPostEffects::m_bInfraredVision){
-			color.red = 0.0f;
-			color.green = 0.0f;
-			color.blue = 1.0f;
-		}else
-			color = pAmbient->color;
+
+		// do *not* use pAmbient light. It causes so many problems
+		color.red = CTimeCycle_GetAmbientRed();
+		color.green = CTimeCycle_GetAmbientGreen();
+		color.blue = CTimeCycle_GetAmbientBlue();
+		// TODO: check for lightning flash
 		RwD3D9SetVertexShaderConstant(LOC_ambientLight, (void*)&color, 1);
 		surfProps[0] = lighting || config->buildingPipe == 0 ? material->surfaceProps.ambient : 0.0f;
 		RwD3D9SetVertexShaderConstant(LOC_surfaceProps, &surfProps, 1);
@@ -145,19 +143,7 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 		RwD3D9SetVertexShader(DNPipeVS);
 		RwD3D9SetPixelShader(vehiclePipePS);
 
-		// this takes the texture into account, somehow....
-		RwD3D9GetRenderState(D3DRS_ALPHABLENDENABLE, &hasAlpha);
-		if(hasAlpha && config->dualPassBuilding){
-			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)128);
-			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONGREATEREQUAL);
-			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
-			D3D9Render(resEntryHeader, instancedData);
-			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONLESS);
-			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
-			D3D9Render(resEntryHeader, instancedData);
-			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
-		}else
-			D3D9Render(resEntryHeader, instancedData);
+		D3D9RenderDual(config->dualPassBuilding, resEntryHeader, instancedData);
 
 		// Reflection
 
@@ -171,7 +157,7 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 			reflData.intensity = pDirect->color.red*(256.0f/255.0f);
 
 			// is this correct? taken from vehicle pipeline
-			D3D9GetTransScaleVector(envData, (RpAtomic*)object, &transVec);
+			GetTransScaleVector(envData, (RpAtomic*)object, &transVec);
 			envXform.x = transVec.x;
 			envXform.y = transVec.y;
 			envXform.z = envData->scaleX / 8.0f;
@@ -190,7 +176,7 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 			RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)0);
 			D3D9Render(resEntryHeader, instancedData);
 			RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)fog);
-			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
+			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)zwrite);
 			RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)src);
 			RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)dst);
 			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphafunc);

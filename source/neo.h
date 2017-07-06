@@ -1,9 +1,11 @@
 extern RwTexDictionary *neoTxd;
+extern int iCanHasNeoCar;
 
 void RwToD3DMatrix(void *d3d, RwMatrix *rw);
 void MakeProjectionMatrix(void *d3d, RwCamera *cam, float nbias = 0.0f, float fbias = 0.0f);
 
 #define NUMWEATHERS 23
+
 
 struct Color
 {
@@ -63,11 +65,6 @@ public:
 };
 
 #define ONCE do{ static int once = 0; assert(once == 0); once = 1; }while(0);
-
-void UploadZero(int loc);
-void UploadLightColor(RpLight *light, int loc);
-void UploadLightDirection(RpLight *light, int loc);
-void UploadLightDirectionInv(RpLight *light, int loc);
 
 void hookWaterDrops(void);
 void neoCarPipeInit(void);

@@ -9,6 +9,7 @@ short &CWeather__NewWeatherType = *(short*)0xC8131C;
 float &CWeather__InterpolationValue = *(float*)0xC8130C;
 
 RwTexDictionary *neoTxd;
+int iCanHasNeoCar;
 
 void
 RwToD3DMatrix(void *d3d, RwMatrix *rw)
@@ -63,10 +64,8 @@ neoInit(void)
 //	if(xboxcarpipe >= 0 || xboxwaterdrops){
 	{
 		char *path = getpath("neo\\neo.txd");
-		if(path == NULL){
-			MessageBox(NULL, "Couldn't load 'neo\\neo.txd'", "Error", MB_ICONERROR | MB_OK);
-			exit(0);
-		}
+		if(path == NULL)
+			return;
 		RwStream *stream = RwStreamOpen(rwSTREAMFILENAME, rwSTREAMREAD, path);
 		if(RwStreamFindChunk(stream, rwID_TEXDICTIONARY, NULL, NULL))
 			neoTxd = RwTexDictionaryStreamRead(stream);

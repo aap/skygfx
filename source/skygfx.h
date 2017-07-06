@@ -53,8 +53,6 @@ struct Config {
 	int pedShadows, stencilShadows;
 	int detailedWaterDist;
 
-	RwBool dontChangeAmbient;
-
 	int keys[2];
 };
 extern int numConfigs;
@@ -159,7 +157,16 @@ void readIni(int n);
 //void SetCloseFarAlphaDist(float close, float far);
 void resetValues(void);
 void D3D9Render(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData);
-void D3D9RenderVehicleDual(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instancedData);
+void D3D9RenderDual(int dual, RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instancedData);
+
+void UploadZero(int loc);
+void UploadLightColor(RpLight *light, int loc);
+void UploadLightDirection(RpLight *light, int loc);
+void UploadLightDirectionInv(RpLight *light, int loc);
+
+double CTimeCycle_GetAmbientRed(void);
+double CTimeCycle_GetAmbientGreen(void);
+double CTimeCycle_GetAmbientBlue(void);
 
 #define RwEngineInstance (*rwengine)
 extern RsGlobalType *RsGlobal;
@@ -203,12 +210,12 @@ extern int &CPostEffects__m_RadiosityFilterVCorrection;
 // reversed
 void D3D9RenderNotLit(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData);
 void D3D9RenderPreLit(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData, RwUInt8 flags, RwTexture *texture);
-void D3D9GetEnvMapVector(RpAtomic *atomic, CustomEnvMapPipeAtomicData *atmdata, CustomEnvMapPipeMaterialData *data, RwV3d *transScale);
-void D3D9GetTransScaleVector(CustomEnvMapPipeMaterialData *data, RpAtomic *atomic, RwV3d *transScale);
 RwBool DNInstance_default(void *object, RxD3D9ResEntryHeader *resEntryHeader, RwBool reinstance);
 void CCustomCarEnvMapPipeline__CustomPipeRenderCB(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags);
 
 // from the exe
+void GetEnvMapVector(RpAtomic *atomic, CustomEnvMapPipeAtomicData *atmdata, CustomEnvMapPipeMaterialData *data, RwV3d *transScale);
+void GetTransScaleVector(CustomEnvMapPipeMaterialData *data, RpAtomic *atomic, RwV3d *transScale);
 RwBool DNInstance(void *object, RxD3D9ResEntryHeader *resEntryHeader, RwBool reinstance);
 RwBool D3D9SetRenderMaterialProperties(RwSurfaceProperties*, RwRGBA *color, RwUInt32 flags, RwReal specularLighting, RwReal specularPower);
 RwBool D3D9RestoreSurfaceProperties(void);

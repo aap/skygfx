@@ -23,8 +23,6 @@ workspace "skygfx"
    prebuildcommands {
     "for /R \"../shaders/ps/\" %%f in (*.hlsl) do \"%DXSDK_DIR%/Utilities/bin/x86/fxc.exe\" /T ps_2_0 /nologo /E main /Fo ../resources/cso/%%~nf.cso %%f",
     "for /R \"../shaders/vs/\" %%f in (*.hlsl) do \"%DXSDK_DIR%/Utilities/bin/x86/fxc.exe\" /T vs_2_0 /nologo /E main /Fo ../resources/cso/%%~nf.cso %%f",
-    "\"%DXSDK_DIR%/Utilities/bin/x86/fxc.exe\" /T ps_2_0 /nologo /E mainPS /Fo ../resources/cso/vcsReflPS.cso ../shaders/pvs/vcsReflPS.hlsl",
-    "\"%DXSDK_DIR%/Utilities/bin/x86/fxc.exe\" /T vs_2_0 /nologo /E mainVS /Fo ../resources/cso/vcsReflVS.cso ../shaders/pvs/vcsReflVS.hlsl",
     "\"%DXSDK_DIR%/Utilities/bin/x86/fxc.exe\" /T ps_2_0 /nologo /E mainPS /Fo ../resources/cso/vehiclePS.cso ../shaders/pvs/vehiclePS.hlsl",
     "\"%DXSDK_DIR%/Utilities/bin/x86/fxc.exe\" /T vs_2_0 /nologo /E mainVS /Fo ../resources/cso/vehicleVS.cso ../shaders/pvs/vehicleVS.hlsl"
    }
