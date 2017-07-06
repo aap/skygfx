@@ -2,7 +2,6 @@ float4x4 World : register(c0);
 float4x4 View : register(c4);
 float4x4 Proj : register(c8);
 float4x4 WorldIT : register(c12);
-float4x4 Texture : register(c16);
 
 float3 sunDir : register(c23);
 
@@ -10,7 +9,7 @@ float3 reflData : register(c21);
 float4 envXform : register(c22);
 float envSwitch : register(c39);
 
-float4 eye : register(c40);
+float3 eye : register(c40);
 
 sampler2D tex1 : register(s1);
 sampler2D tex2 : register(s2);

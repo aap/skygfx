@@ -1,9 +1,6 @@
 #include "skygfx.h"
 
-WRAPPER void ReSetAmbientAndDirectionalColours(void) { EAXJMP(0x735C40); }
-WRAPPER void SetLightColoursForPedsCarsAndObjects(float f) { EAXJMP(0x735D90); }
-
-static void *DNPipeVS, *ps2BuildingFxVS;
+void *buildingVS, *ps2BuildingFxVS;
 RxPipeline *buildingPipeline, *buildingDNPipeline;
 
 enum {
@@ -140,8 +137,8 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 		dnShaderVars.reflSwitch = 1 + config->buildingPipe;
 		RwD3D9SetVertexShaderConstant(LOC_shaderVars, (void*)&dnShaderVars, 1);
 
-		RwD3D9SetVertexShader(DNPipeVS);
-		RwD3D9SetPixelShader(vehiclePipePS);
+		RwD3D9SetVertexShader(buildingVS);
+		RwD3D9SetPixelShader(simplePS);
 
 		D3D9RenderDual(config->dualPassBuilding, resEntryHeader, instancedData);
 
@@ -166,7 +163,7 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 			RwD3D9SetVertexShaderConstant(LOC_reflData, (void*)&reflData, 1);
 
 			RwD3D9SetVertexShader(ps2BuildingFxVS);
-			RwD3D9SetPixelShader(ps2CarFxPS);
+			RwD3D9SetPixelShader(ps2EnvSpecFxPS);
 
 			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONALWAYS);
 			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
@@ -424,41 +421,6 @@ DNInstance_PS2(void *object, RxD3D9ResEntryHeader *resEntryHeader, RwBool reinst
 	return 1;
 }
 
-static void
-createShaders(void)
-{
-	HRSRC resource;
-	RwUInt32 *shader;
-
-	if(DNPipeVS == NULL){
-		resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_DNPIPEVS), RT_RCDATA);
-		shader = (RwUInt32*)LoadResource(dllModule, resource);
-		RwD3D9CreateVertexShader(shader, &DNPipeVS);
-		FreeResource(shader);
-	}
-
-	if(ps2BuildingFxVS == NULL){
-		resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_PS2BUILDINGFXVS), RT_RCDATA);
-		shader = (RwUInt32*)LoadResource(dllModule, resource);
-		RwD3D9CreateVertexShader(shader, &ps2BuildingFxVS);
-		FreeResource(shader);
-	}
-
-	if(vehiclePipePS == NULL){
-		resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_VEHICLEPS), RT_RCDATA);
-		shader = (RwUInt32*)LoadResource(dllModule, resource);
-		RwD3D9CreatePixelShader(shader, &vehiclePipePS);
-		FreeResource(shader);
-	}
-
-	if(ps2CarFxPS == NULL){
-		resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_PS2CARFXPS), RT_RCDATA);
-		shader = (RwUInt32*)LoadResource(dllModule, resource);
-		RwD3D9CreatePixelShader(shader, &ps2CarFxPS);
-		FreeResource(shader);
-	}
-}
-
 RxPipeline*
 CCustomBuildingPipeline__CreateCustomObjPipe_PS2(void)
 {
@@ -483,7 +445,7 @@ CCustomBuildingPipeline__CreateCustomObjPipe_PS2(void)
 	RxD3D9AllInOneSetReinstanceCallBack(node, reinstance);
 	RxD3D9AllInOneSetRenderCallBack(node, CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2);
 
-	createShaders();
+	CreateShaders();
 
 	pipeline->pluginId = 0x53F2009C;
 	pipeline->pluginData = 0x53F2009C;
@@ -515,7 +477,7 @@ CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2(void)
 	RxD3D9AllInOneSetReinstanceCallBack(node, reinstance);
 	RxD3D9AllInOneSetRenderCallBack(node, CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2);
 
-	createShaders();
+	CreateShaders();
 
 	pipeline->pluginId = 0x53F20098;
 	pipeline->pluginData = 0x53F20098;

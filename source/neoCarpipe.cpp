@@ -233,13 +233,13 @@ CarPipe::CreateShaders(void)
 {
 	HRSRC resource;
 	RwUInt32 *shader;
-	resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_VEHICLEONEVS), RT_RCDATA);
+	resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_NEOVEHICLEONEVS), RT_RCDATA);
 	shader = (RwUInt32*)LoadResource(dllModule, resource);
 	RwD3D9CreateVertexShader(shader, &vertexShaderPass1);
 	assert(vertexShaderPass1);
 	FreeResource(shader);
 
-	resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_VEHICLETWOVS), RT_RCDATA);
+	resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_NEOVEHICLETWOVS), RT_RCDATA);
 	shader = (RwUInt32*)LoadResource(dllModule, resource);
 	RwD3D9CreateVertexShader(shader, &vertexShaderPass2);
 	assert(vertexShaderPass2);
@@ -375,7 +375,7 @@ CarPipe::DiffusePass(RxD3D9ResEntryHeader *header, RpAtomic *atomic)
 	RwD3D9GetRenderState(D3DRS_LIGHTING, &lighting);
 	noRefl = CVisibilityPlugins__GetAtomicId(atomic) & 0x6000;
 
-	for(int i = 0; i < header->numMeshes; i++){
+	for(uint i = 0; i < header->numMeshes; i++){
 		RpMaterial *material = inst->material;
 		RwD3D9SetTexture(material->texture, 0);
 		// have to set these after the texture, RW sets texture stage states automatically
@@ -447,7 +447,7 @@ CarPipe::SpecularPass(RxD3D9ResEntryHeader *header, RpAtomic *atomic)
 	RwD3D9GetRenderState(D3DRS_LIGHTING, &lighting);
 	noRefl = CVisibilityPlugins__GetAtomicId(atomic) & 0x6000;
 
-	for(int i = 0; i < header->numMeshes; i++){
+	for(uint i = 0; i < header->numMeshes; i++){
 		RwUInt32 materialFlags = *(RwUInt32*)&inst->material->surfaceProps.specular;
 		bool hasSpec  = !((materialFlags & 4) == 0 || !lighting);
 		int matfx = RpMatFXMaterialGetEffects(inst->material);

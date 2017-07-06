@@ -1,10 +1,7 @@
-// compile: fxc /T vs_2_a /E mainVS /Fh vs.txt ps2refl.hlsl
-//          fxc /T ps_2_a /E mainPS /Fh ps.txt ps2refl.hlsl
 float4x4 World : register(c0);
 float4x4 View : register(c4);
 float4x4 Proj : register(c8);
 float4x4 WorldIT : register(c12);
-float4x4 Texture : register(c16);
 
 float4 matCol : register(c20);
 float3 sunDir : register(c23);
@@ -18,8 +15,6 @@ struct Directional {
 };
 #define MAX_LIGHTS 6
 Directional lights[MAX_LIGHTS] : register(c27);
-
-sampler2D tex0 : register(s0);
 
 struct VS_INPUT {
 	float3 Position	: POSITION;
@@ -35,7 +30,7 @@ struct VS_OUTPUT {
 };
 
 VS_OUTPUT
-mainVS(VS_INPUT IN)
+main(VS_INPUT IN)
 {	
 	VS_OUTPUT OUT;
 	float3 worldNormal = normalize(mul(IN.Normal, WorldIT).xyz);
@@ -54,12 +49,4 @@ mainVS(VS_INPUT IN)
 	OUT.color *= matCol;
 
 	return OUT;
-}
-
-uniform float4 colorscale : register(c0);
-
-float4
-mainPS(VS_OUTPUT IN) : COLOR
-{
-	return tex2D(tex0, IN.texcoord0.xy)*IN.color*colorscale.x;
 }

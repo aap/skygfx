@@ -915,39 +915,13 @@ CPostEffects::ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 }
 
 void
-makePS(int res, void **sh)
-{
-	HRSRC resource = FindResource(dllModule, MAKEINTRESOURCE(res), RT_RCDATA);
-	RwUInt32 *shader = (RwUInt32*)LoadResource(dllModule, resource);
-	RwD3D9CreatePixelShader(shader, sh);
-	FreeResource(shader);
-}
-
-void
-makeVS(int res, void **sh)
-{
-	HRSRC resource = FindResource(dllModule, MAKEINTRESOURCE(res), RT_RCDATA);
-	RwUInt32 *shader = (RwUInt32*)LoadResource(dllModule, resource);
-	RwD3D9CreateVertexShader(shader, sh);
-	FreeResource(shader);
-}
-
-void
 CPostEffects::Init(void)
 {
 	InjectHook(0x7FB824, Im2dSetPixelShader_hook);
 
-	grainRaster = RwRasterCreate(64, 64, 32, 0x504);
+	CreateShaders();
 
-	makeVS(IDR_POSTFXVS, &postfxVS);
-	makePS(IDR_FILTERPS, &colorFilterPS);
-	makePS(IDR_IIITRAILSPS, &iiiTrailsPS);
-	makePS(IDR_VCTRAILSPS, &vcTrailsPS);
-	makePS(IDR_RADIOSITYPS, &radiosityPS);
-	makePS(IDR_GRAINPS, &grainPS);
-	makePS(IDR_GRADINGPS, &gradingPS);
-	if(simplePS == NULL)
-		makePS(IDR_SIMPLEPS, &simplePS);
+	grainRaster = RwRasterCreate(64, 64, 32, 0x504);
 
 	static const D3DVERTEXELEMENT9 vertexElements[] =
 	{

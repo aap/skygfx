@@ -12,7 +12,7 @@ float3 sunDiff : register(c24);
 float3 sunAmb : register(c25);
 float4 surfProps : register(c26);
 
-float4 eye : register(c40);
+float3 eye : register(c40);
 
 struct Directional {
 	float3 dir;
@@ -56,9 +56,9 @@ main(VS_INPUT IN)
 
 	float3 specCol = float3(0.7, 0.7, 0.7);
 
-	float3 diff = saturate(dot(N, -sunDir)) * sunDiff * surfProps.z*matCol;
+	float3 diff = saturate(dot(N, -sunDir)) * sunDiff * surfProps.z*matCol.xyz;
 	float3 spec = pow(saturate(dot(N, normalize(V + -sunDir))), 16) * specCol * reflData.y;
-	float3 amb = sunAmb * surfProps.x*matCol;
+	float3 amb = sunAmb * surfProps.x*matCol.xyz;
 
 	float3 tex1 = mul(Texture, float4(IN.UV2.x, IN.UV2.y, 1.0, 0.0)).xyz;
 	float3 eyeN = normalize(mul((float3x3)View, N));

@@ -311,7 +311,7 @@ void
 WaterDrops::SprayDrops(void)
 {
 	//AudioHydrant *hyd;
-	RwV3d dist;
+	//RwV3d dist;
 	static int ndrops[] = {
 		125, 250, 500, 1000, 1000,
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0

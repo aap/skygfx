@@ -7,7 +7,8 @@ char asipath[MAX_PATH];
 
 int numConfigs;
 Config *config, configs[10];
-bool ps2grassFiles, usePCTimecyc, disableClouds, disableGamma, neoWaterDrops, transparentLockon;
+bool ps2grassFiles, usePCTimecyc, disableClouds, disableGamma, neoWaterDrops;
+int transparentLockon;
 int original_bRadiosity = 0;
 
 void *grassPixelShader;
@@ -288,8 +289,7 @@ readIni(int n)
 		{"PC",      1},
 		{"Xbox",    2},
 		{"Spec",    3},
-//		{"VCS",     4},
-		{"Neo",     5},
+		{"Neo",     4},
 		{"",       -1},
 	};
 	c->vehiclePipe = StrAssoc::get(vehPipeMap, cfg.get("SkyGfx", "vehiclePipe", "").c_str());
@@ -865,6 +865,54 @@ CWaterLevel__CalculateWavesForCoordinate_hook(int x, int y, float a3, float a4, 
 	*colorMult = 0.577f;
 }
 */
+
+void
+makePS(int res, void **sh)
+{
+	if(*sh == NULL){
+		HRSRC resource = FindResource(dllModule, MAKEINTRESOURCE(res), RT_RCDATA);
+		RwUInt32 *shader = (RwUInt32*)LoadResource(dllModule, resource);
+		RwD3D9CreatePixelShader(shader, sh);
+		FreeResource(shader);
+	}
+}
+
+void
+makeVS(int res, void **sh)
+{
+	if(*sh == NULL){
+		HRSRC resource = FindResource(dllModule, MAKEINTRESOURCE(res), RT_RCDATA);
+		RwUInt32 *shader = (RwUInt32*)LoadResource(dllModule, resource);
+		RwD3D9CreateVertexShader(shader, sh);
+		FreeResource(shader);
+	}
+}
+
+void
+CreateShaders(void)
+{
+	// postfx
+	makeVS(IDR_POSTFXVS, &postfxVS);
+	makePS(IDR_FILTERPS, &colorFilterPS);
+	makePS(IDR_IIITRAILSPS, &iiiTrailsPS);
+	makePS(IDR_VCTRAILSPS, &vcTrailsPS);
+	makePS(IDR_RADIOSITYPS, &radiosityPS);
+	makePS(IDR_GRAINPS, &grainPS);
+	makePS(IDR_GRADINGPS, &gradingPS);
+	makePS(IDR_SIMPLEPS, &simplePS);
+
+	// vehicles
+	makeVS(IDR_VEHICLEVS, &vehiclePipeVS);
+	makeVS(IDR_PS2CARFXVS, &ps2CarFxVS);
+	makePS(IDR_PS2ENVSPECFXPS, &ps2EnvSpecFxPS);	// also building
+	makeVS(IDR_SPECCARFXVS, &specCarFxVS);
+	makePS(IDR_SPECCARFXPS, &specCarFxPS);
+	makeVS(IDR_XBOXCARVS, &xboxCarVS);
+
+	// building
+	makeVS(IDR_BUILDINGVS, &buildingVS);
+	makeVS(IDR_PS2BUILDINGFXVS, &ps2BuildingFxVS);
+}
 
 static BOOL (*IsAlreadyRunning)();
 

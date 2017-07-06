@@ -182,11 +182,24 @@ extern RxPipeline *buildingPipeline, *buildingDNPipeline;
 
 extern char &doRadiosity;
 
-extern RwTexture *&gpWhiteTexture;
+///// Shaders
+// misc
 extern void *simplePS;
-extern void *vehiclePipePS, *ps2CarFxPS;
-extern RwBool reflTexDone;
-extern RwRaster *reflTex;
+// vehicles
+extern void *vehiclePipeVS, *ps2CarFxVS;
+extern void *ps2EnvSpecFxPS;	// also used by the building pipeline
+extern void *specCarFxVS, *specCarFxPS;
+extern void *xboxCarVS;
+// postfx
+extern void *postfxVS, *colorFilterPS, *radiosityPS, *grainPS;
+extern void *iiiTrailsPS, *vcTrailsPS;
+extern void *gradingPS;
+// building
+extern void *buildingVS, *ps2BuildingFxVS;
+void CreateShaders(void);
+
+
+extern RwTexture *&gpWhiteTexture;
 extern RwInt32 pdsOffset;
 
 extern void **rwengine;

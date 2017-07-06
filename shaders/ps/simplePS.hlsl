@@ -10,6 +10,5 @@ struct PS_INPUT
 float4
 main(PS_INPUT IN) : COLOR
 {
-	float4 c = tex2D(tex, IN.texcoord0);
-	return c*IN.color*colorscale.x;
+	return tex2D(tex, IN.texcoord0.xy)*IN.color*colorscale.x;
 }
