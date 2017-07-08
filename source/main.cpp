@@ -148,12 +148,12 @@ resetValues(void)
 	}
 	// night vision ambient green
 	// not if this is the correct switch, maybe ps2ModulateWorld?
-	if(config->nightVision == 0)
-		Patch<float>(0x735F8B, 0.4f);
-	else
-		Patch<float>(0x735F8B, 1.0f);
+	//if(config->nightVision == 0)
+	//	Patch<float>(0x735F8B, 0.4f);
+	//else
+	//	Patch<float>(0x735F8B, 1.0f);
 
-	*(int*)0x8D37D0 = config->detailedWaterDist;
+	//*(int*)0x8D37D0 = config->detailedWaterDist;
 }
 
 int
@@ -276,8 +276,7 @@ readIni(int n)
 
 	static StrAssoc buildPipeMap[] = {
 		{"PS2",     0},
-		{"PCfixed", 1},
-		{"PC",      2},
+		{"PC",      1},
 		{"",       -1},
 	};
 	c->buildingPipe = StrAssoc::get(buildPipeMap, cfg.get("SkyGfx", "buildingPipe", "").c_str());
@@ -295,6 +294,7 @@ readIni(int n)
 	c->vehiclePipe = StrAssoc::get(vehPipeMap, cfg.get("SkyGfx", "vehiclePipe", "").c_str());
 	c->dualPassVehicle = readint(cfg.get("SkyGfx", "dualPassVehicle", ""), dualPass);
 	c->neoShininess = readfloat(cfg.get("SkyGfx", "neoShininess", ""), 0.75);
+	c->neoSpecularity = readfloat(cfg.get("SkyGfx", "neoSpecularity", ""), 0.75);
 	envMapSize = readint(cfg.get("SkyGfx", "neoEnvMapSize", ""), 128);
 	int i = 1;
 	while(i < envMapSize) i *= 2;
@@ -321,8 +321,8 @@ readIni(int n)
 	c->stencilShadows = StrAssoc::get(boolMap, cfg.get("SkyGfx", "stencilShadows", "").c_str());
 	disableClouds = readint(cfg.get("SkyGfx", "disableClouds", ""), 0);
 	disableGamma = readint(cfg.get("SkyGfx", "disableGamma", ""), 0);
-	c->detailedWaterDist = readint(cfg.get("SkyGfx", "detailedWaterDist", ""), 48);
 	transparentLockon = readint(cfg.get("SkyGfx", "transparentLockon", ""), 0);
+	c->lightningIlluminatesWorld = readint(cfg.get("SkyGfx", "lightningIlluminatesWorld", ""), 0);
 
 	static StrAssoc colorFilterMap[] = {
 		{"PS2",     0},
@@ -529,12 +529,7 @@ myDefaultCallback(RpAtomic *atomic)
 	int dodual = 0;
 	int detach = 0;
 
-//	if(GetAsyncKeyState(VK_F8) & 0x8000)
-//		writedffs();
-
 	pipe = atomic->pipeline;
-//	if(GetAsyncKeyState(VK_F8) & 0x8000)
-//		return atomic;
 	if(pipe == NULL){
 		pipe = *(RxPipeline**)(*(DWORD*)0xC97B24+0x3C+dword_C9BC60);
 		RwRenderStateGet(rwRENDERSTATEZWRITEENABLE, (void*)&zwrite);
@@ -542,19 +537,6 @@ myDefaultCallback(RpAtomic *atomic)
 			dodual = 1;
 	}else if(pipe == skinPipe && config->dualPassPed)
 		dodual = 1;
-/*
-//	if(pipe == CCustomCarEnvMapPipeline__ObjPipeline && !reflTexDone){
-	if(pipe == skinPipe && !reflTexDone){
-		if(config->vehiclePipe == 4){
-			RwCameraEndUpdate(Camera);
-			RwRasterPushContext(reflTex);
-			RwRasterRenderFast(RwCameraGetRaster(Camera), 0, 0);
-			RwRasterPopContext();
-			RwCameraBeginUpdate(Camera);
-		}
-		reflTexDone = TRUE;
-	}
-*/
 	if(dodual){
 		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, (void*)&alphatest);
 		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)&alpharef);
@@ -588,15 +570,9 @@ setTextureAndColor(RpMaterial *material, RwRGBA *color)
 	col[1] = color->green;
 	col[2] = color->blue;
 	if(config->grassAddAmbient){
-		if(CPostEffects::m_bInfraredVision){
-			col[0] += 0;
-			col[1] += 0;
-			col[2] += 255;
-		}else{
-			col[0] += CTimeCycle_GetAmbientRed()*255;
-			col[1] += CTimeCycle_GetAmbientGreen()*255;
-			col[2] += CTimeCycle_GetAmbientBlue()*255;
-		}
+		col[0] += CTimeCycle_GetAmbientRed()*255;
+		col[1] += CTimeCycle_GetAmbientGreen()*255;
+		col[2] += CTimeCycle_GetAmbientBlue()*255;
 		if(col[0] > 255) col[0] = 255;
 		if(col[1] > 255) col[1] = 255;
 		if(col[2] > 255) col[2] = 255;
@@ -866,53 +842,6 @@ CWaterLevel__CalculateWavesForCoordinate_hook(int x, int y, float a3, float a4, 
 }
 */
 
-void
-makePS(int res, void **sh)
-{
-	if(*sh == NULL){
-		HRSRC resource = FindResource(dllModule, MAKEINTRESOURCE(res), RT_RCDATA);
-		RwUInt32 *shader = (RwUInt32*)LoadResource(dllModule, resource);
-		RwD3D9CreatePixelShader(shader, sh);
-		FreeResource(shader);
-	}
-}
-
-void
-makeVS(int res, void **sh)
-{
-	if(*sh == NULL){
-		HRSRC resource = FindResource(dllModule, MAKEINTRESOURCE(res), RT_RCDATA);
-		RwUInt32 *shader = (RwUInt32*)LoadResource(dllModule, resource);
-		RwD3D9CreateVertexShader(shader, sh);
-		FreeResource(shader);
-	}
-}
-
-void
-CreateShaders(void)
-{
-	// postfx
-	makeVS(IDR_POSTFXVS, &postfxVS);
-	makePS(IDR_FILTERPS, &colorFilterPS);
-	makePS(IDR_IIITRAILSPS, &iiiTrailsPS);
-	makePS(IDR_VCTRAILSPS, &vcTrailsPS);
-	makePS(IDR_RADIOSITYPS, &radiosityPS);
-	makePS(IDR_GRAINPS, &grainPS);
-	makePS(IDR_GRADINGPS, &gradingPS);
-	makePS(IDR_SIMPLEPS, &simplePS);
-
-	// vehicles
-	makeVS(IDR_VEHICLEVS, &vehiclePipeVS);
-	makeVS(IDR_PS2CARFXVS, &ps2CarFxVS);
-	makePS(IDR_PS2ENVSPECFXPS, &ps2EnvSpecFxPS);	// also building
-	makeVS(IDR_SPECCARFXVS, &specCarFxVS);
-	makePS(IDR_SPECCARFXPS, &specCarFxPS);
-	makeVS(IDR_XBOXCARVS, &xboxCarVS);
-
-	// building
-	makeVS(IDR_BUILDINGVS, &buildingVS);
-	makeVS(IDR_PS2BUILDINGFXVS, &ps2BuildingFxVS);
-}
 
 static BOOL (*IsAlreadyRunning)();
 
@@ -937,15 +866,12 @@ InjectDelayedPatches()
 		}
 
 		// custom building pipeline
-		if(config->buildingPipe >= 0){
-			InjectHook(0x5D7100, CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2);
-			InjectHook(0x5D7D90, CCustomBuildingPipeline__CreateCustomObjPipe_PS2);
-			Patch<BYTE>(0x5D7200, 0xC3);	// disable interpolation
-		}
+		if(config->buildingPipe >= 0)
+			hookBuildingPipe();
 
 		// custom vehicle pipeline
 		if(config->vehiclePipe >= 0)
-			InjectHook(0x5D9FE9, setVehiclePipeCB);
+			hookVehiclePipe();
 
 		if(ps2grassFiles){
 			Patch<const char*>(0x5DDA87, "grass2_1.dff");

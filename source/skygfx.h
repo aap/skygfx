@@ -41,7 +41,7 @@ struct Config {
 	RwBool backfaceCull;
 	RwBool dualPassDefault, dualPassGrass, dualPassVehicle, dualPassPed;
 	int vehiclePipe;
-	float neoShininess;
+	float neoShininess, neoSpecularity;
 	int colorFilter;
 	int infraredVision, nightVision, grainFilter;
 	RwBool doRadiosity;
@@ -51,7 +51,7 @@ struct Config {
 	RwBool vcsTrails;
 	int trailsLimit, trailsIntensity;
 	int pedShadows, stencilShadows;
-	int detailedWaterDist;
+	int lightningIlluminatesWorld;
 
 	int keys[2];
 };
@@ -74,12 +74,13 @@ struct CustomEnvMapPipeMaterialData
 
 struct CustomEnvMapPipeAtomicData
 {
-	int pad1;
-	int pad2;
-	int pad3;
+	float trans;
+	float posx;
+	float posy;
 
 	void *operator new(size_t size);
 };
+CustomEnvMapPipeAtomicData *CCustomCarEnvMapPipeline__AllocEnvMapPipeAtomicData(RpAtomic *atomic);
 
 struct CustomSpecMapPipeMaterialData
 {
@@ -151,18 +152,14 @@ char *getpath(char *path);
 RxPipeline *CCustomBuildingPipeline__CreateCustomObjPipe_PS2(void);
 RxPipeline *CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2(void);
 int myPluginAttach(void);
-void setVehiclePipeCB(RxPipelineNode *node, RxD3D9AllInOneRenderCallBack callback);
+void hookVehiclePipe(void);
+void hookBuildingPipe(void);
 void loadColorcycle(void);
 void readIni(int n);
 //void SetCloseFarAlphaDist(float close, float far);
 void resetValues(void);
 void D3D9Render(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData);
 void D3D9RenderDual(int dual, RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instancedData);
-
-void UploadZero(int loc);
-void UploadLightColor(RpLight *light, int loc);
-void UploadLightDirection(RpLight *light, int loc);
-void UploadLightDirectionInv(RpLight *light, int loc);
 
 double CTimeCycle_GetAmbientRed(void);
 double CTimeCycle_GetAmbientGreen(void);
@@ -182,6 +179,8 @@ extern RxPipeline *buildingPipeline, *buildingDNPipeline;
 
 extern char &doRadiosity;
 
+
+//////// Pipelines
 ///// Shaders
 // misc
 extern void *simplePS;
@@ -195,8 +194,17 @@ extern void *postfxVS, *colorFilterPS, *radiosityPS, *grainPS;
 extern void *iiiTrailsPS, *vcTrailsPS;
 extern void *gradingPS;
 // building
-extern void *buildingVS, *ps2BuildingFxVS;
+extern void *ps2BuildingVS, *ps2BuildingFxVS;
+extern void *pcBuildingVS, *pcBuildingPS;
 void CreateShaders(void);
+void RwToD3DMatrix(void *d3d, RwMatrix *rw);
+void MakeProjectionMatrix(void *d3d, RwCamera *cam, float nbias = 0.0f, float fbias = 0.0f);
+void pipeGetComposedTransformMatrix(RpAtomic *atomic, float *out);
+void UploadZero(int loc);
+void UploadLightColor(RpLight *light, int loc);
+void UploadLightDirection(RpLight *light, int loc);
+void UploadLightDirectionLocal(RpLight *light, RwMatrix *m, int loc);
+void UploadLightDirectionInv(RpLight *light, int loc);
 
 
 extern RwTexture *&gpWhiteTexture;

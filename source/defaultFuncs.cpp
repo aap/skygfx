@@ -437,16 +437,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB(RwResEntry *repEntry, void *object,
 			RwInt32 tfactor;
 
 			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
-			atmEnvData = *RWPLUGINOFFSET(CustomEnvMapPipeAtomicData*, atomic,
-			                             CCustomCarEnvMapPipeline__ms_envMapAtmPluginOffset);
-			if(atmEnvData == NULL){
-				atmEnvData = new CustomEnvMapPipeAtomicData;
-				atmEnvData->pad1 = 0;
-				atmEnvData->pad2 = 0;
-				atmEnvData->pad3 = 0;
-				*RWPLUGINOFFSET(CustomEnvMapPipeAtomicData*, atomic,
-				                CCustomCarEnvMapPipeline__ms_envMapAtmPluginOffset) = atmEnvData;
-			}
+			atmEnvData = CCustomCarEnvMapPipeline__AllocEnvMapPipeAtomicData(atomic);
 			GetEnvMapVector(atomic, atmEnvData, envData, &transVec);
 			texMat._11 = 1.0f;
 			texMat._22 = 1.0f;

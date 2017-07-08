@@ -63,6 +63,7 @@ WRAPPER RwBool RwD3D9CreatePixelShader(const RwUInt32 *function, void **shader) 
 WRAPPER RwBool RwD3D9CreateVertexShader(const RwUInt32 *function, void **shader) { EAXJMP(0x7FAC60); }
 WRAPPER void _rwD3D9SetPixelShaderConstant(RwUInt32 i, const void *data, RwUInt32 size) { EAXJMP(0x7FAD00); }
 WRAPPER void _rwD3D9VSSetActiveWorldMatrix(const RwMatrix *worldMatrix) { EAXJMP(0x764650); }
+WRAPPER void _rwD3D9VSGetComposedTransformMatrix(void *transformMatrix) { EAXJMP(0x7646E0); }
 WRAPPER void _rwD3D9VSGetInverseWorldMatrix(void *inverseWorldMatrix) { EAXJMP(0x7647B0); }
 WRAPPER void RwD3D9GetRenderState(RwUInt32 state, void *value) { EAXJMP(0x7FC320); }
 WRAPPER void RwD3D9SetRenderState(RwUInt32 state, RwUInt32 value) { EAXJMP(0x7FC2D0); }
@@ -140,3 +141,12 @@ WRAPPER RwCamera *RwCameraSetViewWindow(RwCamera*, const RwV2d*) { EAXJMP(0x7EE4
 WRAPPER RwCamera *RwCameraSetNearClipPlane(RwCamera*, RwReal) { EAXJMP(0x7EE1D0); }
 WRAPPER RwCamera *RwCameraSetFarClipPlane(RwCamera*, RwReal) { EAXJMP(0x7EE2A0); }
 WRAPPER RpWorld *RpWorldAddCamera(RpWorld*, RwCamera*) { EAXJMP(0x750F20); }
+
+WRAPPER RwV3d *RwV3dTransformVector(RwV3d*, const RwV3d*, const RwMatrix*) { EAXJMP(0x7EDDC0); }
+WRAPPER RwV3d *RwV3dTransformPoint(RwV3d*, const RwV3d*, const RwMatrix*) { EAXJMP(0x7EDD60); }
+WRAPPER RwReal RwV3dNormalize(RwV3d*, const RwV3d*) { EAXJMP(0x7ED9B0); }
+WRAPPER RwMatrix *RwMatrixMultiply(RwMatrix*, const RwMatrix*, const RwMatrix*) { EAXJMP(0x7F18B0); }
+WRAPPER RwMatrix *RwMatrixRotate(RwMatrix*, const RwV3d*, RwReal, RwOpCombineType) { EAXJMP(0x7F1FD0); }
+WRAPPER RwFrame *RwFrameUpdateObjects(RwFrame*) { EAXJMP(0x7F0910); }
+WRAPPER RwFrame *RwFrameSetIdentity(RwFrame*) { EAXJMP(0x7F10B0); }
+WRAPPER RwMatrix *RwMatrixOrthoNormalize(RwMatrix*, const RwMatrix*) { EAXJMP(0x7F1920); }

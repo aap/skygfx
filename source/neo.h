@@ -1,9 +1,6 @@
 extern RwTexDictionary *neoTxd;
 extern int iCanHasNeoCar;
 
-void RwToD3DMatrix(void *d3d, RwMatrix *rw);
-void MakeProjectionMatrix(void *d3d, RwCamera *cam, float nbias = 0.0f, float fbias = 0.0f);
-
 #define NUMWEATHERS 23
 
 

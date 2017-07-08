@@ -1,56 +1,61 @@
-float4x4 World : register(c0);
-float4x4 View : register(c4);
-float4x4 Proj : register(c8);
-float4x4 WorldIT : register(c12);
+float4x4	combined	: register(c0);
+float3		ambient		: register(c4);
+float3		directCol[7]	: register(c5);
+float3		directDir[7]	: register(c12);
+float4		matCol		: register(c19);
+float4		surfProps	: register(c20);
 
-float3 sunDir : register(c23);
+float4		fxParams	: register(c30);
+float4		envXform	: register(c31);
+float3x3	envmat		: register(c32);
+float3x3	specmat		: register(c35);
+float3		lightdir	: register(c38);
 
-float3 reflData : register(c21);
-float4 envXform : register(c22);
-float envSwitch : register(c39);
+#define fxSwitch (fxParams.x)
+#define shininess (fxParams.y)
+#define specularity (fxParams.z)
+#define lightmult (fxParams.w)
 
 struct VS_INPUT {
-	float3 Position	: POSITION;
-	float4 Normal	: NORMAL;
-	float3 UV2	: TEXCOORD1;
+	float4 Position	: POSITION;
+	float3 Normal	: NORMAL;
+	float2 Texcoord1: TEXCOORD1;
 };
 
 struct VS_OUTPUT {
-	float4 position		: POSITION;
-	float3 texcoord1	: TEXCOORD0;
-	float3 texcoord2	: TEXCOORD1;
-	float4 envcolor		: COLOR0;
-	float4 speccolor	: COLOR1;
+	float4 Position		: POSITION;
+	float2 Texcoord0	: TEXCOORD0;
+	float3 Texcoord1	: TEXCOORD1;
+	float4 Envcolor		: COLOR0;
+	float4 Speccolor	: COLOR1;
 };
 
 VS_OUTPUT
 main(VS_INPUT IN)
 {	
 	VS_OUTPUT OUT;
-	float3 worldNormal = normalize(mul(IN.Normal, WorldIT).xyz);
-	OUT.position = mul(Proj, mul(View, mul(World, float4(IN.Position, 1.0))));
+	OUT.Position = mul(IN.Position, combined);
 
-	if (envSwitch == 1.0f) {		// env1 map
-		OUT.texcoord1.xy = worldNormal.xy - envXform.xy;
-		OUT.texcoord1.xy *= -envXform.zw;
-	} else if (envSwitch == 2.0f) {		// env2 map ("x")
-		float2 tmp = worldNormal.xy - envXform.xy;
-		OUT.texcoord1.x = tmp.x + IN.UV2.x;
-		OUT.texcoord1.y = tmp.y*envXform.y + IN.UV2.y;
-		OUT.texcoord1.xy *= -envXform.zw;
+	float3 envNormal = mul(envmat, IN.Normal);
+	if(fxSwitch == 1.0f){		// env1 map
+		OUT.Texcoord0.xy = envNormal.xy - envXform.xy;
+		OUT.Texcoord0.xy *= -envXform.zw;
+	}else if(fxSwitch == 2.0f){		// env2 map ("x")
+		OUT.Texcoord0 = envNormal.xy - envXform.xy;
+		OUT.Texcoord0.y *= envXform.y;
+		OUT.Texcoord0.xy += IN.Texcoord1;
+		OUT.Texcoord0.xy *= -envXform.zw;
 	}
-	OUT.texcoord1.z = 1.0;
+	OUT.Envcolor = float4(192.0, 192.0, 192.0, 0.0)/128.0*shininess*lightmult;
 
-	float3 N = mul((float3x3)View, worldNormal);
-	float3 V = mul((float3x3)View, sunDir);
-	float3 U = float3(V.x+1, V.y+1, V.z)*0.5;
-	OUT.texcoord2.xyz = (U - N*dot(N, V));
+	float3 N = mul(specmat, IN.Normal);
+	float3 U = (lightdir + float3(1.0, 1.0, 0.0))*0.5;
+	OUT.Texcoord1.xyz = U - N*dot(N, lightdir);
 
-	OUT.envcolor = float4(192.0, 192.0, 192.0, 0.0)/128.0*reflData.x*reflData.z;
-	
-	if (OUT.texcoord2.z < 0.0)
-		OUT.speccolor = float4(96.0, 96.0, 96.0, 0.0)/128.0*reflData.y*reflData.z;
+	if (OUT.Texcoord1.z < 0.0)
+		OUT.Speccolor = float4(96.0, 96.0, 96.0, 0.0)/128.0*specularity*lightmult;
 	else
-		OUT.speccolor = float4(0.0, 0.0, 0.0, 0.0);
+		OUT.Speccolor = float4(0.0, 0.0, 0.0, 0.0);
+
 	return OUT;
 }

@@ -12,52 +12,6 @@ RwTexDictionary *neoTxd;
 int iCanHasNeoCar;
 
 void
-RwToD3DMatrix(void *d3d, RwMatrix *rw)
-{
-	D3DMATRIX *m = (D3DMATRIX*)d3d;
-	m->m[0][0] = rw->right.x;
-	m->m[0][1] = rw->up.x;
-	m->m[0][2] = rw->at.x;
-	m->m[0][3] = rw->pos.x;
-	m->m[1][0] = rw->right.y;
-	m->m[1][1] = rw->up.y;
-	m->m[1][2] = rw->at.y;
-	m->m[1][3] = rw->pos.y;
-	m->m[2][0] = rw->right.z;
-	m->m[2][1] = rw->up.z;
-	m->m[2][2] = rw->at.z;
-	m->m[2][3] = rw->pos.z;
-	m->m[3][0] = 0.0f;
-	m->m[3][1] = 0.0f;
-	m->m[3][2] = 0.0f;
-	m->m[3][3] = 1.0f;
-}
-
-void
-MakeProjectionMatrix(void *d3d, RwCamera *cam, float nbias, float fbias)
-{
-	float f = cam->farPlane + fbias;
-	float n = cam->nearPlane + nbias;
-	D3DMATRIX *m = (D3DMATRIX*)d3d;
-	m->m[0][0] = cam->recipViewWindow.x;
-	m->m[0][1] = 0.0f;
-	m->m[0][2] = 0.0f;
-	m->m[0][3] = 0.0f;
-	m->m[1][0] = 0.0f;
-	m->m[1][1] = cam->recipViewWindow.y;
-	m->m[1][2] = 0.0f;
-	m->m[1][3] = 0.0f;
-	m->m[2][0] = 0.0f;
-	m->m[2][1] = 0.0f;
-	m->m[2][2] = f/(f-n);
-	m->m[2][3] = -n*m->m[2][2];
-	m->m[3][0] = 0.0f;
-	m->m[3][1] = 0.0f;
-	m->m[3][2] = 1.0f;
-	m->m[3][3] = 0.0f;
-}
-
-void
 neoInit(void)
 {
 	ONCE;
@@ -258,52 +212,3 @@ CustomPipe::setatomicCB(RpAtomic *atomic, void *data)
 	return atomic;
 }
 #endif
-
-/* Shader helpers */
-
-void
-UploadZero(int loc)
-{
-	static float z[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-	RwD3D9SetVertexShaderConstant(loc, (void*)z, 1);
-}
-
-void
-UploadLightColor(RpLight *light, int loc)
-{
-	float c[4];
-	if(RpLightGetFlags(light) & rpLIGHTLIGHTATOMICS){
-		c[0] = light->color.red;
-		c[1] = light->color.green;
-		c[2] = light->color.blue;
-		c[3] = 1.0f;
-		RwD3D9SetVertexShaderConstant(loc, (void*)c, 1);
-	}else
-		UploadZero(loc);
-}
-
-void
-UploadLightDirection(RpLight *light, int loc)
-{
-	float c[4];
-	if(RpLightGetFlags(light) & rpLIGHTLIGHTATOMICS){
-		RwV3d *at = RwMatrixGetAt(RwFrameGetLTM(RpLightGetFrame(light)));
-		c[0] = at->x;
-		c[1] = at->y;
-		c[2] = at->z;
-		c[3] = 1.0f;
-		RwD3D9SetVertexShaderConstant(loc, (void*)c, 1);
-	}else
-		UploadZero(loc);
-}
-
-void
-UploadLightDirectionInv(RpLight *light, int loc)
-{
-	float c[4];
-	RwV3d *at = RwMatrixGetAt(RwFrameGetLTM(RpLightGetFrame(light)));
-	c[0] = -at->x;
-	c[1] = -at->y;
-	c[2] = -at->z;
-	RwD3D9SetVertexShaderConstant(loc, (void*)c, 1);
-}

@@ -16,6 +16,7 @@ enum {
 
 	LOC_directSpec  = 30,	// for carpipe
 	LOC_reflProps   = 31,
+	LOC_surfProps	= 32,
 };
 
 
@@ -349,7 +350,6 @@ void
 CarPipe::DiffusePass(RxD3D9ResEntryHeader *header, RpAtomic *atomic)
 {
 	RxD3D9InstanceData *inst = (RxD3D9InstanceData*)&header[1];
-	RwBool lighting;
 	CustomEnvMapPipeMaterialData *envData;
 	int noRefl;
 
@@ -372,7 +372,6 @@ CarPipe::DiffusePass(RxD3D9ResEntryHeader *header, RpAtomic *atomic)
 
 	RwD3D9SetVertexShader(vertexShaderPass1);
 
-	RwD3D9GetRenderState(D3DRS_LIGHTING, &lighting);
 	noRefl = CVisibilityPlugins__GetAtomicId(atomic) & 0x6000;
 
 	for(uint i = 0; i < header->numMeshes; i++){
@@ -407,10 +406,14 @@ CarPipe::DiffusePass(RxD3D9ResEntryHeader *header, RpAtomic *atomic)
 		mat.blue = mat.blue*diff.a + diff.b;
 		RwD3D9SetVertexShaderConstant(LOC_matCol, (void*)&mat, 1);
 
+		RwSurfaceProperties surfprops = material->surfaceProps;
+		surfprops.specular = config->neoSpecularity;
+		RwD3D9SetVertexShaderConstant(LOC_surfProps, &surfprops, 1);
+
 		float reflProps[4];
 		reflProps[0] = (hasEnv||hasRefl) && !noRefl ? config->neoShininess : 0.0f;
 		reflProps[1] = fresnel.Get();
-		reflProps[2] = 0.6f;	// unused
+		reflProps[2] = CCustomCarEnvMapPipeline__m_EnvMapLightingMult;
 		reflProps[3] = power.Get();
 		RwD3D9SetVertexShaderConstant(LOC_reflProps, (void*)reflProps, 1);
 
@@ -422,7 +425,7 @@ CarPipe::DiffusePass(RxD3D9ResEntryHeader *header, RpAtomic *atomic)
 void
 CarPipe::SpecularPass(RxD3D9ResEntryHeader *header, RpAtomic *atomic)
 {
-	RwUInt32 src, dst, fog, zwrite;
+	RwUInt32 src, dst, fog, zwrite, alphatest;
 	RwBool lighting;
 	RxD3D9InstanceData *inst = (RxD3D9InstanceData*)&header[1];
 	CustomSpecMapPipeMaterialData *specData;
@@ -432,11 +435,13 @@ CarPipe::SpecularPass(RxD3D9ResEntryHeader *header, RpAtomic *atomic)
 	RwRenderStateGet(rwRENDERSTATEFOGENABLE, &fog);
 	RwRenderStateGet(rwRENDERSTATESRCBLEND, &src);
 	RwRenderStateGet(rwRENDERSTATEDESTBLEND, &dst);
+	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &alphatest);
 
 	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
 	RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)FALSE);
 	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
 	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
+	RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONALWAYS);
 	RwD3D9SetTexture(NULL, 0);
 	RwD3D9SetTexture(NULL, 1);
 	RwD3D9SetTexture(NULL, 2);
@@ -463,21 +468,24 @@ CarPipe::SpecularPass(RxD3D9ResEntryHeader *header, RpAtomic *atomic)
 	RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)fog);
 	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)src);
 	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)dst);
+	RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphatest);
 }
 
 void
 CarPipe::RenderCallback(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
 {
-	{
-		static bool keystate = false;
-		if(GetAsyncKeyState(VK_F7) & 0x8000){
-			if(!keystate){
-				keystate = true;
-				LoadTweakingTable();
-			}
-		}else
-			keystate = false;
-	}
+//		{
+//			static bool keystate = false;
+//			if(GetAsyncKeyState(VK_F7) & 0x8000){
+//				if(!keystate){
+//					keystate = true;
+//					LoadTweakingTable();
+//				}
+//			}else
+//				keystate = false;
+//		}
+	if(!iCanHasNeoCar)
+		return;
 
 	RxD3D9ResEntryHeader *header = (RxD3D9ResEntryHeader*)&repEntry[1];
 	ShaderSetup((RpAtomic*)object);
