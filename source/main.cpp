@@ -54,6 +54,8 @@ getpath(char *path)
 	return NULL;
 }
 
+
+
 void
 D3D9Render(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData)
 {
@@ -155,6 +157,372 @@ resetValues(void)
 
 	//*(int*)0x8D37D0 = config->detailedWaterDist;
 }
+
+
+RpAtomic *(*plantTab0)[4] = (RpAtomic *(*)[4])0xC039F0;
+RpAtomic *(*plantTab1)[4] = (RpAtomic *(*)[4])0xC03A00;
+
+RpAtomic*
+grassRenderCallback(RpAtomic *atomic)
+{
+	RpAtomic *ret;
+	int cullmode;
+	RwRGBAReal color = { 0.0f, 0.0, 1.0f, 1.0f };
+
+	if(config->ps2ModulateGrass){
+		gpCurrentShaderForDefaultCallbacks = grassPixelShader;
+		RwRGBARealFromRwRGBA(&color, &atomic->geometry->matList.materials[0]->color);
+		RwD3D9SetPixelShaderConstant(0, &color, 1);
+	}
+
+	RwRenderStateGet(rwRENDERSTATECULLMODE, &cullmode);
+	if(!config->backfaceCull)
+		RwRenderStateSet(rwRENDERSTATECULLMODE, (void*)rwCULLMODECULLNONE);
+
+
+	RxPipeline *pipe;
+	int alphatest, alpharef;
+	int dodual = 0;
+	int detach = 0;
+	pipe = atomic->pipeline;
+	if(pipe == NULL)
+		pipe = *(RxPipeline**)(*(DWORD*)0xC97B24+0x3C+dword_C9BC60);
+	if(config->dualPassGrass){
+		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
+		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, (void*)&alphatest);
+		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)&alpharef);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)128);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONGREATEREQUAL);
+		RxPipelineExecute(pipe, atomic, 1);
+		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONLESS);
+		pipe = RxPipelineExecute(pipe, atomic, 1);
+		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphatest);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)alpharef);
+	}else
+		pipe = RxPipelineExecute(pipe, atomic, 1);
+	ret = pipe ? atomic : NULL;
+
+
+	RwRenderStateSet(rwRENDERSTATECULLMODE, (void*)cullmode);
+	gpCurrentShaderForDefaultCallbacks = NULL;
+
+	return ret;
+}
+
+RpAtomic*
+myDefaultCallback(RpAtomic *atomic)
+{
+	RxPipeline *pipe;
+	int zwrite, alphatest, alpharef;
+	int dodual = 0;
+	int detach = 0;
+
+	pipe = atomic->pipeline;
+	if(pipe == NULL){
+		pipe = *(RxPipeline**)(*(DWORD*)0xC97B24+0x3C+dword_C9BC60);
+		RwRenderStateGet(rwRENDERSTATEZWRITEENABLE, (void*)&zwrite);
+		if(zwrite && config->dualPassDefault)
+			dodual = 1;
+	}else if(pipe == skinPipe && config->dualPassPed)
+		dodual = 1;
+	if(dodual){
+		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, (void*)&alphatest);
+		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)&alpharef);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)128);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONGREATEREQUAL);
+		RxPipelineExecute(pipe, atomic, 1);
+		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONLESS);
+		pipe = RxPipelineExecute(pipe, atomic, 1);
+		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphatest);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)alpharef);
+	}else
+		pipe = RxPipelineExecute(pipe, atomic, 1);
+	return pipe ? atomic : NULL;
+}
+
+int tmpintensity;
+RwTexture **tmptexture = (RwTexture**)0xc02dc0;
+RwRGBA *CPlantMgr_AmbientColor = (RwRGBA*)0xC03A44;
+
+RpMaterial*
+setTextureAndColor(RpMaterial *material, RwRGBA *color)
+{
+	RwTexture *texture;
+	RwRGBA newcolor;
+	unsigned int col[3];
+
+	texture = *tmptexture;
+	col[0] = color->red;
+	col[1] = color->green;
+	col[2] = color->blue;
+	if(config->grassAddAmbient){
+		col[0] += CTimeCycle_GetAmbientRed()*255;
+		col[1] += CTimeCycle_GetAmbientGreen()*255;
+		col[2] += CTimeCycle_GetAmbientBlue()*255;
+		if(col[0] > 255) col[0] = 255;
+		if(col[1] > 255) col[1] = 255;
+		if(col[2] > 255) col[2] = 255;
+	}
+	newcolor.red = (tmpintensity * col[0]) >> 8;
+	newcolor.green = (tmpintensity * col[1]) >> 8;
+	newcolor.blue = (tmpintensity * col[2]) >> 8;
+	newcolor.alpha = color->alpha;
+	material->color = newcolor;
+	if(material->texture != texture)
+		RpMaterialSetTexture(material, texture);
+	return material;
+}
+
+void __declspec(naked)
+fixSeed(void)
+{
+	_asm{
+	// 0x5DADB7
+		mov	ecx, [config]
+		cmp	[ecx+4], 0	// fixGrassPlacement
+		jle	dontfix
+		mov	ecx, [esp+54h]
+		mov	ebx, [ecx+eax*4]
+		mov	ebp, [ebx+4]
+		lea	edi, [ebp+10h]
+		mov	eax, [esi+48h]
+
+		push	5DADCCh
+		retn
+
+	dontfix:
+		fld	dword ptr [esi+48h]
+		mov	ecx, [esp+54h]
+		push	5DADBEh
+		retn
+
+	}
+}
+
+// copy color as is and save intensity (eax) for use in setTextureAndColor() later
+void __declspec(naked)
+saveIntensity(void)
+{
+	_asm{
+	// 0x5DAE61
+		movzx	eax, byte ptr [esi+44h]
+		mov	[tmpintensity], eax
+		mov	al, byte ptr [esi+40h]	// color
+		mov	cl, byte ptr [esi+41h]
+		mov	dl, byte ptr [esi+42h]
+		mov     byte ptr [esp+10h], al	// local variable color
+		mov     byte ptr [esp+11h], cl
+		mov     byte ptr [esp+12h], dl
+		mov     eax, [esi+3Ch]	// code expects texture in eax
+		push	5DAEB7h
+		retn
+	}
+}
+
+// from Silent
+void __declspec(naked)
+rxD3D9DefaultRenderCallback_Hook(void)
+{
+	_asm
+	{
+		mov	ecx, [gpCurrentShaderForDefaultCallbacks]
+		cmp	eax, ecx	// _rwD3D9LastPixelShaderUsed
+		je	rxD3D9DefaultRenderCallback_Hook_Return
+		mov	dword ptr ds:[8E244Ch], ecx
+		push	ecx
+		mov	eax, dword ptr ds:[0C97C28h]	// RwD3D9Device
+		push	eax
+		mov	ecx, [eax]
+		call	dword ptr [ecx+1ACh]
+
+	rxD3D9DefaultRenderCallback_Hook_Return:
+		push	756E17h
+		retn
+	}
+}
+
+char
+CPlantMgr_Initialise(void)
+{
+	char (*oldfunc)(void) = (char (*)(void))0x5DD910;
+	char ret;
+	ret = oldfunc();
+
+	HRSRC resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_GRASSPS), RT_RCDATA);
+	RwUInt32 *shader = (RwUInt32*)LoadResource(dllModule, resource);
+	RwD3D9CreatePixelShader(shader, &grassPixelShader);
+	FreeResource(shader);
+
+	RpAtomic *atomic;
+	for(int i = 0; i < 4; i++){
+		atomic = (*plantTab0)[i];
+		atomic->renderCallBack = grassRenderCallback;
+		atomic = (*plantTab1)[i];
+		atomic->renderCallBack = grassRenderCallback;
+	}
+	return ret;
+}
+
+/*
+WRAPPER void CRenderer__RenderEverythingBarRoads_orig(void) { EAXJMP(0x553AA0); }
+
+void CRenderer__RenderEverythingBarRoads(void)
+{
+	reflTexDone = FALSE;
+	CRenderer__RenderEverythingBarRoads_orig();
+	reflTexDone = TRUE;
+}
+*/
+
+struct FX
+{
+	char data[0x54];
+	int fxQuality;
+	int GetFxQuality_ped(void);
+	int GetFxQuality_stencil(void);
+};
+
+int
+FX::GetFxQuality_ped(void)
+{
+	if(config->pedShadows >= 0)
+		return config->pedShadows ? 3 : 0;
+	return this->fxQuality;
+}
+
+int
+FX::GetFxQuality_stencil(void)
+{
+	if(config->stencilShadows >= 0)
+		return config->stencilShadows ? 3 : 0;
+	return this->fxQuality;
+}
+
+unsigned __int64 rand_seed = 1;
+float ps2randnormalize = 1.0f/0x7FFFFFFF;
+
+int ps2rand()
+{
+	rand_seed = 0x5851F42D4C957F2D * rand_seed + 1;
+	return ((rand_seed >> 32) & 0x7FFFFFFF);
+}
+
+void ps2srand(unsigned int seed)
+{
+	rand_seed = seed;
+}
+
+void __declspec(naked) floatbitpattern(void)
+{
+	_asm {
+		fstp [esp-4]
+		mov eax, [esp-4]
+		ret
+	}
+}
+
+WRAPPER void gtasrand(unsigned int seed) { EAXJMP(0x821B11); }
+
+void
+mysrand(unsigned int seed)
+{
+	gtasrand(ps2rand());
+//	gtasrand(seed);
+}
+
+WRAPPER void CVehicle__DoSunGlare(void *this_) { EAXJMP(0x6DD6F0); }
+
+void __declspec(naked) doglare(void)
+{
+	_asm {
+		mov	ecx, [config]
+		cmp	[ecx+8], 0	// doglare
+		jle	noglare
+		mov	ecx,esi
+		call	CVehicle__DoSunGlare
+	noglare:
+		mov     [esp+0D4h], edi
+		push	6ABD04h
+		retn
+	}
+}
+
+struct PointLight
+{
+	RwV3d pos;
+	RwV3d dir;
+	float radius;
+	float color[3];
+	void *attachedTo;
+	char type;
+	char fogType;
+	char generateExtraShadows;
+	char pad;
+};
+
+PointLight *pointLights = (PointLight*)0xC3F0E0;
+
+WRAPPER void
+CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect_orig(float x, float y, float z, float a4, float a5, RwUInt8 r, RwUInt8 g, RwUInt8 b, RwInt16 f, int a10, float a11, RwUInt8 alpha) { EAXJMP(0x70E780); }
+
+int currentLight;
+char *stkp;
+
+void
+CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect(float x, float y, float z, float a4, float a5, RwUInt8 r, RwUInt8 g, RwUInt8 b, RwInt16 f, int a10, float a11, RwUInt8 alpha)
+{
+	_asm mov [currentLight], esi
+	_asm mov [stkp], ebp
+	float mult = *(float*)(stkp + 0x48);
+	currentLight /= sizeof(PointLight);
+
+	float add = pointLights[currentLight].fogType == 1 ? 0.0f : 16.0f;
+	r = mult*pointLights[currentLight].color[0]+add;
+	g = mult*pointLights[currentLight].color[1]+add;
+	b = mult*pointLights[currentLight].color[2]+add;
+	f = 0xFF;
+	CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect_orig(x, y, z, a4, a5, r, g, b, f, a10, a11, alpha);
+}
+
+/*
+struct CVector { float x, y, z; };
+WRAPPER void CWaterLevel__CalculateWavesForCoordinate(int x, int y, float a3, float a4, float *z, float *colorMult, float *a7, CVector *vecnormal){ EAXJMP(0x6E6EF0); }
+void
+CWaterLevel__CalculateWavesForCoordinate_hook(int x, int y, float a3, float a4, float *z, float *colorMult, float *a7, CVector *vecnormal)
+{
+	CWaterLevel__CalculateWavesForCoordinate(x, y, a3, a4, z, colorMult, a7, vecnormal);
+	*colorMult = 0.577f;
+}
+*/
+
+void (*CSkidmarks__Render_orig)(void);
+void CSkidmarks__Render(void)
+{
+	int alphafunc;
+	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &alphafunc);
+	RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONALWAYS);
+	CSkidmarks__Render_orig();
+	RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphafunc);
+}
+
+void (*InitialiseGame)(void);
+void
+InitialiseGame_hook(void)
+{
+	ONCE;
+	neoInit();
+	InitialiseGame();
+}
+
+
+
+
+
+
 
 int
 readhex(char *str)
@@ -371,290 +739,6 @@ readIni(int n)
 	neoWaterDrops = readint(cfg.get("SkyGfx", "neoWaterDrops", ""), 0);
 }
 
-RpAtomic *(*plantTab0)[4] = (RpAtomic *(*)[4])0xC039F0;
-RpAtomic *(*plantTab1)[4] = (RpAtomic *(*)[4])0xC03A00;
-
-RpAtomic*
-grassRenderCallback(RpAtomic *atomic)
-{
-	RpAtomic *ret;
-	int cullmode;
-	RwRGBAReal color = { 0.0f, 0.0, 1.0f, 1.0f };
-
-	if(config->ps2ModulateGrass){
-		gpCurrentShaderForDefaultCallbacks = grassPixelShader;
-		RwRGBARealFromRwRGBA(&color, &atomic->geometry->matList.materials[0]->color);
-		RwD3D9SetPixelShaderConstant(0, &color, 1);
-	}
-
-	RwRenderStateGet(rwRENDERSTATECULLMODE, &cullmode);
-	if(!config->backfaceCull)
-		RwRenderStateSet(rwRENDERSTATECULLMODE, (void*)rwCULLMODECULLNONE);
-
-
-	RxPipeline *pipe;
-	int alphatest, alpharef;
-	int dodual = 0;
-	int detach = 0;
-	pipe = atomic->pipeline;
-	if(pipe == NULL)
-		pipe = *(RxPipeline**)(*(DWORD*)0xC97B24+0x3C+dword_C9BC60);
-	if(config->dualPassGrass){
-		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
-		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, (void*)&alphatest);
-		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)&alpharef);
-		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)128);
-		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONGREATEREQUAL);
-		RxPipelineExecute(pipe, atomic, 1);
-		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
-		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONLESS);
-		pipe = RxPipelineExecute(pipe, atomic, 1);
-		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
-		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphatest);
-		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)alpharef);
-	}else
-		pipe = RxPipelineExecute(pipe, atomic, 1);
-	ret = pipe ? atomic : NULL;
-
-
-	RwRenderStateSet(rwRENDERSTATECULLMODE, (void*)cullmode);
-	gpCurrentShaderForDefaultCallbacks = NULL;
-
-	return ret;
-}
-
-/*
-WRAPPER RwStream *RwStreamOpen(RwStreamType, RwStreamAccessType, const void*) { EAXJMP(0x7ECEF0); }
-WRAPPER RwBool RwStreamClose(RwStream*, void*) { EAXJMP(0x7ECE20); }
-WRAPPER RwBool RwStreamFindChunk(RwStream*, RwUInt32, RwUInt32*, RwUInt32*) { EAXJMP(0x7ED2D0); }
-WRAPPER RpClump *RpClumpStreamRead(RwStream*) { EAXJMP(0x74B420); }
-WRAPPER RpClump *RpClumpStreamWrite(RpClump*, RwStream*) { EAXJMP(0x74AA10); }
-WRAPPER RwBool RpClumpDestroy(RpClump*) { EAXJMP(0x74A310); }
-WRAPPER RpClump *RpClumpClone(RpClump*) { EAXJMP(0x749F70); }
-WRAPPER RpClump *RpClumpForAllAtomics(RpClump*, RpAtomicCallBack, void*) { EAXJMP(0x749B70); }
-
-WRAPPER RwError *RwErrorGet(RwError *code) { EAXJMP(0x808880); }
-
-void __declspec(naked)
-nullsize(void)
-{
-	_asm{
-		xor	eax, eax
-		retn
-	}
-}
-
-void
-writeclump(RpClump *clump, char *path)
-{
-	RwStream *stream = RwStreamOpen(rwSTREAMFILENAME, rwSTREAMWRITE, path);
-	RpClumpStreamWrite(clump, stream);
-	RwStreamClose(stream, NULL);
-}
-
-RpClump*
-readclump(char *path)
-{
-	RwStream *stream = RwStreamOpen(rwSTREAMFILENAME, rwSTREAMREAD, path);
-	RwBool found = RwStreamFindChunk(stream, rwID_CLUMP, NULL, NULL);
-	RpClump *clump = RpClumpStreamRead(stream);
-	RwStreamClose(stream, NULL);
-	return clump;
-}
-
-WRAPPER RpAtomic *AtomicInstanceCB(RpAtomic*, void*) { EAXJMP(0x5A4380); }
-
-void
-instanceClump(RpClump *clump)
-{
-	RpClumpForAllAtomics(clump, AtomicInstanceCB, 0);
-}
-
-void
-writedffs(void)
-{
-	static int done = 0;
-	if(done)
-		return;
-
-	InjectHook(0x5D6DC0, nullsize, PATCH_JUMP);
-	InjectHook(0x59D0F0, nullsize, PATCH_JUMP);
-	InjectHook(0x72FBC0, nullsize, PATCH_JUMP);
-
-	done++;
-	RpClump *clump = readclump("TEST\\player.dff");
-	instanceClump(clump);
-	writeclump(clump, "TEST\\player_out.dff");
-
-	RpClump *clone = RpClumpClone(clump);
-	writeclump(clone, "TEST\\clone1.dff");
-	RpClump *clone2 = RpClumpClone(clone);
-	writeclump(clone2, "TEST\\clone2.dff");
-	RpClumpDestroy(clump);
-	RpClumpDestroy(clone);
-	RpClumpDestroy(clone2);
-
-	clump = readclump("TEST\\rccam.dff");
-	instanceClump(clump);
-	writeclump(clump, "TEST\\rccam_out.dff");
-	RpClumpDestroy(clump);
-
-	clump = readclump("TEST\\cesar.dff");
-	instanceClump(clump);
-	writeclump(clump, "TEST\\cesar_out.dff");
-	RpClumpDestroy(clump);
-
-	clump = readclump("TEST\\hanger.dff");
-	instanceClump(clump);
-	writeclump(clump, "TEST\\hanger_out.dff");
-	RpClumpDestroy(clump);
-
-	clump = readclump("TEST\\bullet_.dff");
-	instanceClump(clump);
-	writeclump(clump, "TEST\\bullet_out.dff");
-	RpClumpDestroy(clump);
-
-	clump = readclump("TEST\\lae2_roads89.dff");
-	instanceClump(clump);
-	writeclump(clump, "TEST\\lae2_roads89_out.dff");
-	RpClumpDestroy(clump);
-}
-*/
-
-RpAtomic*
-myDefaultCallback(RpAtomic *atomic)
-{
-	RxPipeline *pipe;
-	int zwrite, alphatest, alpharef;
-	int dodual = 0;
-	int detach = 0;
-
-	pipe = atomic->pipeline;
-	if(pipe == NULL){
-		pipe = *(RxPipeline**)(*(DWORD*)0xC97B24+0x3C+dword_C9BC60);
-		RwRenderStateGet(rwRENDERSTATEZWRITEENABLE, (void*)&zwrite);
-		if(zwrite && config->dualPassDefault)
-			dodual = 1;
-	}else if(pipe == skinPipe && config->dualPassPed)
-		dodual = 1;
-	if(dodual){
-		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, (void*)&alphatest);
-		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)&alpharef);
-		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)128);
-		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONGREATEREQUAL);
-		RxPipelineExecute(pipe, atomic, 1);
-		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
-		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONLESS);
-		pipe = RxPipelineExecute(pipe, atomic, 1);
-		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
-		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphatest);
-		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)alpharef);
-	}else
-		pipe = RxPipelineExecute(pipe, atomic, 1);
-	return pipe ? atomic : NULL;
-}
-
-int tmpintensity;
-RwTexture **tmptexture = (RwTexture**)0xc02dc0;
-RwRGBA *CPlantMgr_AmbientColor = (RwRGBA*)0xC03A44;
-
-RpMaterial*
-setTextureAndColor(RpMaterial *material, RwRGBA *color)
-{
-	RwTexture *texture;
-	RwRGBA newcolor;
-	unsigned int col[3];
-
-	texture = *tmptexture;
-	col[0] = color->red;
-	col[1] = color->green;
-	col[2] = color->blue;
-	if(config->grassAddAmbient){
-		col[0] += CTimeCycle_GetAmbientRed()*255;
-		col[1] += CTimeCycle_GetAmbientGreen()*255;
-		col[2] += CTimeCycle_GetAmbientBlue()*255;
-		if(col[0] > 255) col[0] = 255;
-		if(col[1] > 255) col[1] = 255;
-		if(col[2] > 255) col[2] = 255;
-	}
-	newcolor.red = (tmpintensity * col[0]) >> 8;
-	newcolor.green = (tmpintensity * col[1]) >> 8;
-	newcolor.blue = (tmpintensity * col[2]) >> 8;
-	newcolor.alpha = color->alpha;
-	material->color = newcolor;
-	if(material->texture != texture)
-		RpMaterialSetTexture(material, texture);
-	return material;
-}
-
-void __declspec(naked)
-fixSeed(void)
-{
-	_asm{
-	// 0x5DADB7
-		mov	ecx, [config]
-		cmp	[ecx+4], 0	// fixGrassPlacement
-		jle	dontfix
-		mov	ecx, [esp+54h]
-		mov	ebx, [ecx+eax*4]
-		mov	ebp, [ebx+4]
-		lea	edi, [ebp+10h]
-		mov	eax, [esi+48h]
-
-		push	5DADCCh
-		retn
-
-	dontfix:
-		fld	dword ptr [esi+48h]
-		mov	ecx, [esp+54h]
-		push	5DADBEh
-		retn
-
-	}
-}
-
-// copy color as is and save intensity (eax) for use in setTextureAndColor() later
-void __declspec(naked)
-saveIntensity(void)
-{
-	_asm{
-	// 0x5DAE61
-		movzx	eax, byte ptr [esi+44h]
-		mov	[tmpintensity], eax
-		mov	al, byte ptr [esi+40h]	// color
-		mov	cl, byte ptr [esi+41h]
-		mov	dl, byte ptr [esi+42h]
-		mov     byte ptr [esp+10h], al	// local variable color
-		mov     byte ptr [esp+11h], cl
-		mov     byte ptr [esp+12h], dl
-		mov     eax, [esi+3Ch]	// code expects texture in eax
-		push	5DAEB7h
-		retn
-	}
-}
-
-// from Silent
-void __declspec(naked)
-rxD3D9DefaultRenderCallback_Hook(void)
-{
-	_asm
-	{
-		mov	ecx, [gpCurrentShaderForDefaultCallbacks]
-		cmp	eax, ecx	// _rwD3D9LastPixelShaderUsed
-		je	rxD3D9DefaultRenderCallback_Hook_Return
-		mov	dword ptr ds:[8E244Ch], ecx
-		push	ecx
-		mov	eax, dword ptr ds:[0C97C28h]	// RwD3D9Device
-		push	eax
-		mov	ecx, [eax]
-		call	dword ptr [ecx+1ACh]
-
-	rxD3D9DefaultRenderCallback_Hook_Return:
-		push	756E17h
-		retn
-	}
-}
-
 void
 readInis(void)
 {
@@ -677,171 +761,6 @@ afterStreamIni(void)
 		retn
 	}
 }
-
-char
-CPlantMgr_Initialise(void)
-{
-	char (*oldfunc)(void) = (char (*)(void))0x5DD910;
-	char ret;
-	ret = oldfunc();
-
-	HRSRC resource = FindResource(dllModule, MAKEINTRESOURCE(IDR_GRASSPS), RT_RCDATA);
-	RwUInt32 *shader = (RwUInt32*)LoadResource(dllModule, resource);
-	RwD3D9CreatePixelShader(shader, &grassPixelShader);
-	FreeResource(shader);
-
-	RpAtomic *atomic;
-	for(int i = 0; i < 4; i++){
-		atomic = (*plantTab0)[i];
-		atomic->renderCallBack = grassRenderCallback;
-		atomic = (*plantTab1)[i];
-		atomic->renderCallBack = grassRenderCallback;
-	}
-	return ret;
-}
-
-/*
-WRAPPER void CRenderer__RenderEverythingBarRoads_orig(void) { EAXJMP(0x553AA0); }
-
-void CRenderer__RenderEverythingBarRoads(void)
-{
-	reflTexDone = FALSE;
-	CRenderer__RenderEverythingBarRoads_orig();
-	reflTexDone = TRUE;
-}
-*/
-
-struct FX
-{
-	char data[0x54];
-	int fxQuality;
-	int GetFxQuality_ped(void);
-	int GetFxQuality_stencil(void);
-};
-
-int
-FX::GetFxQuality_ped(void)
-{
-	if(config->pedShadows >= 0)
-		return config->pedShadows ? 3 : 0;
-	return this->fxQuality;
-}
-
-int
-FX::GetFxQuality_stencil(void)
-{
-	if(config->stencilShadows >= 0)
-		return config->stencilShadows ? 3 : 0;
-	return this->fxQuality;
-}
-
-unsigned __int64 rand_seed = 1;
-float ps2randnormalize = 1.0f/0x7FFFFFFF;
-
-int ps2rand()
-{
-	rand_seed = 0x5851F42D4C957F2D * rand_seed + 1;
-	return ((rand_seed >> 32) & 0x7FFFFFFF);
-}
-
-void ps2srand(unsigned int seed)
-{
-	rand_seed = seed;
-}
-
-void __declspec(naked) floatbitpattern(void)
-{
-	_asm {
-		fstp [esp-4]
-		mov eax, [esp-4]
-		ret
-	}
-}
-
-WRAPPER void gtasrand(unsigned int seed) { EAXJMP(0x821B11); }
-
-void
-mysrand(unsigned int seed)
-{
-	gtasrand(ps2rand());
-//	gtasrand(seed);
-}
-
-WRAPPER void CVehicle__DoSunGlare(void *this_) { EAXJMP(0x6DD6F0); }
-
-void __declspec(naked) doglare(void)
-{
-	_asm {
-		mov	ecx, [config]
-		cmp	[ecx+8], 0	// doglare
-		jle	noglare
-		mov	ecx,esi
-		call	CVehicle__DoSunGlare
-	noglare:
-		mov     [esp+0D4h], edi
-		push	6ABD04h
-		retn
-	}
-}
-
-
-void (*InitialiseGame)(void);
-void
-InitialiseGame_hook(void)
-{
-	ONCE;
-	neoInit();
-	InitialiseGame();
-}
-
-struct PointLight
-{
-	RwV3d pos;
-	RwV3d dir;
-	float radius;
-	float color[3];
-	void *attachedTo;
-	char type;
-	char fogType;
-	char generateExtraShadows;
-	char pad;
-};
-
-PointLight *pointLights = (PointLight*)0xC3F0E0;
-
-WRAPPER void
-CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect_orig(float x, float y, float z, float a4, float a5, RwUInt8 r, RwUInt8 g, RwUInt8 b, RwInt16 f, int a10, float a11, RwUInt8 alpha) { EAXJMP(0x70E780); }
-
-int currentLight;
-char *stkp;
-
-void
-CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect(float x, float y, float z, float a4, float a5, RwUInt8 r, RwUInt8 g, RwUInt8 b, RwInt16 f, int a10, float a11, RwUInt8 alpha)
-{
-	_asm mov [currentLight], esi
-	_asm mov [stkp], ebp
-	float mult = *(float*)(stkp + 0x48);
-	currentLight /= sizeof(PointLight);
-
-	float add = pointLights[currentLight].fogType == 1 ? 0.0f : 16.0f;
-	r = mult*pointLights[currentLight].color[0]+add;
-	g = mult*pointLights[currentLight].color[1]+add;
-	b = mult*pointLights[currentLight].color[2]+add;
-	f = 0xFF;
-	CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect_orig(x, y, z, a4, a5, r, g, b, f, a10, a11, alpha);
-}
-
-/*
-struct CVector { float x, y, z; };
-WRAPPER void CWaterLevel__CalculateWavesForCoordinate(int x, int y, float a3, float a4, float *z, float *colorMult, float *a7, CVector *vecnormal){ EAXJMP(0x6E6EF0); }
-void
-CWaterLevel__CalculateWavesForCoordinate_hook(int x, int y, float a3, float a4, float *z, float *colorMult, float *a7, CVector *vecnormal)
-{
-	CWaterLevel__CalculateWavesForCoordinate(x, y, a3, a4, z, colorMult, a7, vecnormal);
-	*colorMult = 0.577f;
-}
-*/
-
 
 static BOOL (*IsAlreadyRunning)();
 
@@ -959,15 +878,15 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 
 		// add dual pass for PC pipeline
 		InjectHook(0x5D9EEB, D3D9RenderPreLit_DUAL);
-		InjectHook(0x5DA640, D3D9RenderNotLit_DUAL);
+		InjectHook(0x5D9EFB, D3D9RenderNotLit_DUAL);
 		// give vehicle pipe to upgrade parts
 		//InjectHook(0x4C88F0, 0x5DA610, PATCH_JUMP);
 
 		// jump over code that sets alpha ref to 140 (not on PS2).
 		// This caused skidmarks to disappear when rendering the neo reflection scene
-		// Alternative disable alpha test for CSkidmarks::Render, no z is written so it won't mess things up
-		// ideally do both even
 		InjectHook(0x553AD1, 0x553AE5, PATCH_JUMP);
+		// ... was not enough. disable alpha test for skidmarks
+		InterceptCall(&CSkidmarks__Render_orig, CSkidmarks__Render, 0x53E175);
 
 		// postfx
 		InjectHook(0x5BD7AE, CPostEffects::Init, PATCH_JUMP); // ??? why not CPostEffects::Initialise? address changed to CGame::InitialiseRenderWare, partially overwrites ReadPlayerCoordsFile()

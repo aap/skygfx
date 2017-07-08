@@ -80,41 +80,10 @@ CustomBuildingEnvMapPipeline__SetupEnv(RpAtomic *atomic, RwFrame *envframe, RwMa
 }
 
 void
-CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
+setDnParams(RpAtomic *atomic)
 {
-	RpAtomic *atomic;
-	RxD3D9ResEntryHeader *resEntryHeader;
-	RxD3D9InstanceData *instancedData;
-	RpMaterial *material;
-	RwBool lighting;
-	RwInt32	numMeshes;
-	CustomEnvMapPipeMaterialData *envData;
-	RwRGBAReal color;
-	float surfProps[4];
-	RwBool hasAlpha;
-	float colorScale;
-	struct {
-		float shininess;
-		float lightmult;
-	} fxParams;
-	RwV4d envXform;
-	RwMatrix envmat;
 	float balance;
 	float dayparam[4], nightparam[4];
-	float transform[16];
-
-	atomic = (RpAtomic*)object;
-
-	pipeGetComposedTransformMatrix(atomic, transform);
-	RwD3D9SetVertexShaderConstant(0, transform, 4);
-
-	RwD3D9GetRenderState(D3DRS_LIGHTING, &lighting);
-	resEntryHeader = (RxD3D9ResEntryHeader*)(repEntry + 1);
-	instancedData = (RxD3D9InstanceData*)(resEntryHeader + 1);;
-	if(resEntryHeader->indexBuffer)
-		RwD3D9SetIndices(resEntryHeader->indexBuffer);
-	_rwD3D9SetStreams(resEntryHeader->vertexStream, resEntryHeader->useOffsets);
-	RwD3D9SetVertexDeclaration(resEntryHeader->vertexDeclaration);
 
 	balance = CCustomBuildingDNPipeline__m_fDNBalanceParam;
 	if(balance < 0.0f) balance = 0.0f;
@@ -135,6 +104,40 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 
 	RwD3D9SetVertexShaderConstant(REG_dayparam, dayparam, 1);
 	RwD3D9SetVertexShaderConstant(REG_nightparam, nightparam, 1);
+}
+
+void
+CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
+{
+	RpAtomic *atomic;
+	RxD3D9ResEntryHeader *resEntryHeader;
+	RxD3D9InstanceData *instancedData;
+	RpMaterial *material;
+	RwInt32	numMeshes;
+	CustomEnvMapPipeMaterialData *envData;
+	RwBool hasAlpha;
+	float colorScale;
+	struct {
+		float shininess;
+		float lightmult;
+	} fxParams;
+	RwV4d envXform;
+	RwMatrix envmat;
+	float transform[16];
+
+	atomic = (RpAtomic*)object;
+
+	pipeGetComposedTransformMatrix(atomic, transform);
+	RwD3D9SetVertexShaderConstant(0, transform, 4);
+
+	resEntryHeader = (RxD3D9ResEntryHeader*)(repEntry + 1);
+	instancedData = (RxD3D9InstanceData*)(resEntryHeader + 1);;
+	if(resEntryHeader->indexBuffer)
+		RwD3D9SetIndices(resEntryHeader->indexBuffer);
+	_rwD3D9SetStreams(resEntryHeader->vertexStream, resEntryHeader->useOffsets);
+	RwD3D9SetVertexDeclaration(resEntryHeader->vertexDeclaration);
+
+	setDnParams(atomic);
 
 	CustomBuildingEnvMapPipeline__SetupEnv(atomic, NULL, &envmat);
 	RwD3D9SetVertexShaderConstant(REG_envmat, &envmat, 3);
@@ -155,11 +158,9 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 		material = instancedData->material;
 
 		colorScale = 1.0f;
-		if(flags & (rxGEOMETRY_TEXTURED2 | rxGEOMETRY_TEXTURED)){
+		if(material->texture)
 			colorScale = config->ps2ModulateBuilding ? 255.0f/128.0f : 1.0f;
-			RwD3D9SetTexture(material->texture ? material->texture : gpWhiteTexture, 0);
-		}else
-			RwD3D9SetTexture(gpWhiteTexture, 0);
+		pipeSetTexture(material->texture, 0);
 		RwD3D9SetPixelShaderConstant(0, &colorScale, 1);
 		RwD3D9SetVertexShaderConstant(REG_shaderParams, &colorScale, 1);
 
@@ -177,12 +178,10 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 		hasAlpha = instancedData->vertexAlpha || instancedData->material->color.alpha != 255;
 		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)hasAlpha);
 
-		RwRGBARealFromRwRGBA(&color, &material->color);
-		RwD3D9SetVertexShaderConstant(REG_matCol, &color, 1);
+		pipeUploadMatCol(flags, material, REG_matCol);
 
 		RwD3D9SetVertexShaderConstant(REG_ambient, &buildingAmbient, 1);
-		surfProps[0] = lighting || config->buildingPipe == 0 ? material->surfaceProps.ambient : 0.0f;
-		RwD3D9SetVertexShaderConstant(REG_surfProps, &surfProps, 1);
+		RwD3D9SetVertexShaderConstant(REG_surfProps, &material->surfaceProps, 1);
 
 		RwD3D9SetVertexShader(ps2BuildingVS);
 		RwD3D9SetPixelShader(simplePS);
@@ -190,7 +189,6 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 		D3D9RenderDual(config->dualPassBuilding, resEntryHeader, instancedData);
 
 		// Reflection
-
 		if(*(int*)&material->surfaceProps.specular & 1){
 			envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
 			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
@@ -239,16 +237,11 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PC(RwResEntry *repEntry, void *obj
 	RxD3D9ResEntryHeader *resEntryHeader;
 	RxD3D9InstanceData *instancedData;
 	RpMaterial *material;
-	RwBool lighting;
 	RwInt32	numMeshes;
 	CustomEnvMapPipeMaterialData *envData;
-	RwRGBAReal color;
-	float surfProps[4];
 	RwBool hasAlpha;
 	float colorScale;
 	RwMatrix envmat;
-	float balance;
-	float dayparam[4], nightparam[4];
 	float transform[16];
 
 	atomic = (RpAtomic*)object;
@@ -259,7 +252,6 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PC(RwResEntry *repEntry, void *obj
 	pipeGetComposedTransformMatrix(atomic, transform);
 	RwD3D9SetVertexShaderConstant(0, transform, 4);
 
-	RwD3D9GetRenderState(D3DRS_LIGHTING, &lighting);
 	resEntryHeader = (RxD3D9ResEntryHeader*)(repEntry + 1);
 	instancedData = (RxD3D9InstanceData*)(resEntryHeader + 1);;
 	if(resEntryHeader->indexBuffer)
@@ -267,25 +259,7 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PC(RwResEntry *repEntry, void *obj
 	_rwD3D9SetStreams(resEntryHeader->vertexStream, resEntryHeader->useOffsets);
 	RwD3D9SetVertexDeclaration(resEntryHeader->vertexDeclaration);
 
-	balance = CCustomBuildingDNPipeline__m_fDNBalanceParam;
-	if(balance < 0.0f) balance = 0.0f;
-	if(balance > 1.0f) balance = 1.0f;
-	dayparam[0] = dayparam[1] = dayparam[2] = 1.0f - balance;
-	dayparam[3] = CWeather__WetRoads;
-	nightparam[0] = nightparam[1] = nightparam[2] = balance;
-	nightparam[3] = 1.0f - CWeather__WetRoads;
-
-	int noExtraColors = atomic->pipeline->pluginData == 0x53F2009C;
-
-	// If no extra colors, force the one we have (night, unintuitively).
-	// Night colors are guaranteed to be present by the instance callback.
-	if(noExtraColors){
-		dayparam[0] = dayparam[1] = dayparam[2] = dayparam[3] = 0.0f;
-		nightparam[0] = nightparam[1] = nightparam[2] = nightparam[3] = 1.0f;
-	}
-
-	RwD3D9SetVertexShaderConstant(REG_dayparam, dayparam, 1);
-	RwD3D9SetVertexShaderConstant(REG_nightparam, nightparam, 1);
+	setDnParams(atomic);
 
 	CustomBuildingEnvMapPipeline__SetupEnv(atomic, NULL, &envmat);
 	RwD3D9SetVertexShaderConstant(REG_envmat, &envmat, 3);
@@ -305,10 +279,7 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PC(RwResEntry *repEntry, void *obj
 	while(numMeshes--){
 		material = instancedData->material;
 
-		if(flags & (rxGEOMETRY_TEXTURED2 | rxGEOMETRY_TEXTURED))
-			RwD3D9SetTexture(material->texture ? material->texture : gpWhiteTexture, 0);
-		else
-			RwD3D9SetTexture(gpWhiteTexture, 0);
+		pipeSetTexture(material->texture, 0);
 
 		int effect = RpMatFXMaterialGetEffects(material);
 		if(effect == rpMATFXEFFECTUVTRANSFORM){
@@ -324,12 +295,13 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PC(RwResEntry *repEntry, void *obj
 		hasAlpha = instancedData->vertexAlpha || instancedData->material->color.alpha != 255;
 		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)hasAlpha);
 
-		RwRGBARealFromRwRGBA(&color, &material->color);
-		RwD3D9SetVertexShaderConstant(REG_matCol, &color, 1);
+		pipeUploadMatCol(flags, material, REG_matCol);
 
-		RwD3D9SetVertexShaderConstant(REG_ambient, &buildingAmbient, 1);
-		surfProps[0] = lighting ? material->surfaceProps.ambient : 0.0f;
-		RwD3D9SetVertexShaderConstant(REG_surfProps, &surfProps, 1);
+		if(flags & rpGEOMETRYLIGHT)
+			RwD3D9SetVertexShaderConstant(REG_ambient, &buildingAmbient, 1);
+		else
+			pipeUploadZero(REG_ambient);
+		RwD3D9SetVertexShaderConstant(REG_surfProps, &material->surfaceProps, 1);
 
 		if(*(int*)&material->surfaceProps.specular & 1){
 			envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
@@ -351,45 +323,6 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PC(RwResEntry *repEntry, void *obj
 		RwD3D9SetVertexShader(pcBuildingVS);
 
 		D3D9RenderDual(config->dualPassBuilding, resEntryHeader, instancedData);
-/*
-
-		RwD3D9SetVertexShader(pcBuildingVS);
-		RwD3D9SetPixelShader(simplePS);
-
-		D3D9RenderDual(config->dualPassBuilding, resEntryHeader, instancedData);
-
-		// Reflection
-
-		if(*(int*)&material->surfaceProps.specular & 1){
-			envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
-			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
-			RwD3D9SetTexture(envData->texture, 1);
-			fxParams.shininess = envData->shininess/255.0f;
-			fxParams.lightmult = 1.0;
-			envXform.x = 0.0;
-			envXform.y = 0.0;
-			envXform.z = envData->scaleX / 8.0f;
-			envXform.w = envData->scaleY / 8.0f;
-			RwD3D9SetVertexShaderConstant(REG_envXform, &envXform, 1);
-			RwD3D9SetVertexShaderConstant(REG_fxParams, &fxParams, 1);
-
-			RwD3D9SetVertexShader(ps2BuildingFxVS);
-			RwD3D9SetPixelShader(ps2EnvSpecFxPS);
-
-			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONALWAYS);
-			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
-			RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
-			RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
-			RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
-			RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)0);
-			D3D9Render(resEntryHeader, instancedData);
-			RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)fog);
-			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)zwrite);
-			RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)src);
-			RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)dst);
-			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphafunc);
-		}
-*/
 
 		instancedData++;
 	}

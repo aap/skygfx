@@ -1,68 +1,6 @@
 #include "skygfx.h"
 #include <DirectXMath.h>
 
-/* Shader helpers */
-
-void
-UploadZero(int loc)
-{
-	static float z[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-	RwD3D9SetVertexShaderConstant(loc, (void*)z, 1);
-}
-
-void
-UploadLightColor(RpLight *light, int loc)
-{
-	float c[4];
-	if(RpLightGetFlags(light) & rpLIGHTLIGHTATOMICS){
-		c[0] = light->color.red;
-		c[1] = light->color.green;
-		c[2] = light->color.blue;
-		c[3] = 1.0f;
-		RwD3D9SetVertexShaderConstant(loc, (void*)c, 1);
-	}else
-		UploadZero(loc);
-}
-
-void
-UploadLightDirection(RpLight *light, int loc)
-{
-	float c[4];
-	if(RpLightGetFlags(light) & rpLIGHTLIGHTATOMICS){
-		RwV3d *at = RwMatrixGetAt(RwFrameGetLTM(RpLightGetFrame(light)));
-		c[0] = at->x;
-		c[1] = at->y;
-		c[2] = at->z;
-		c[3] = 1.0f;
-		RwD3D9SetVertexShaderConstant(loc, (void*)c, 1);
-	}else
-		UploadZero(loc);
-}
-
-void
-UploadLightDirectionLocal(RpLight *light, RwMatrix *m, int loc)
-{
-	float c[4];
-	if(RpLightGetFlags(light) & rpLIGHTLIGHTATOMICS){
-		RwV3d *at = RwMatrixGetAt(RwFrameGetLTM(RpLightGetFrame(light)));
-		RwV3dTransformVector((RwV3d*)c, at, m);
-		c[3] = 1.0f;
-		RwD3D9SetVertexShaderConstant(loc, (void*)c, 1);
-	}else
-		UploadZero(loc);
-}
-
-void
-UploadLightDirectionInv(RpLight *light, int loc)
-{
-	float c[4];
-	RwV3d *at = RwMatrixGetAt(RwFrameGetLTM(RpLightGetFrame(light)));
-	c[0] = -at->x;
-	c[1] = -at->y;
-	c[2] = -at->z;
-	RwD3D9SetVertexShaderConstant(loc, (void*)c, 1);
-}
-
 void
 RwToD3DMatrix(void *d3d, RwMatrix *rw)
 {
@@ -154,6 +92,78 @@ pipeGetComposedTransformMatrix(RpAtomic *atomic, float *out)
 
 	DirectX::XMMATRIX combined = DirectX::XMMatrixMultiply(pipeProjMat, DirectX::XMMatrixMultiply(pipeViewMat, pipeWorldMat));
 	memcpy(out, &combined, 64);
+}
+
+void
+pipeUploadMatCol(int flags, RpMaterial *m, int loc)
+{
+	static float white[4] = { 1.0, 1.0, 1.0, 1.0 };
+	if(flags & rpGEOMETRYMODULATEMATERIALCOLOR){
+		RwRGBAReal color;
+		RwRGBARealFromRwRGBA(&color, &m->color);
+		RwD3D9SetVertexShaderConstant(loc, &color, 1);
+	}else
+		RwD3D9SetVertexShaderConstant(loc, white, 1);
+}
+
+void
+pipeUploadZero(int loc)
+{
+	static float z[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	RwD3D9SetVertexShaderConstant(loc, (void*)z, 1);
+}
+
+void
+pipeUploadLightColor(RpLight *light, int loc)
+{
+	float c[4];
+	if(RpLightGetFlags(light) & rpLIGHTLIGHTATOMICS){
+		c[0] = light->color.red;
+		c[1] = light->color.green;
+		c[2] = light->color.blue;
+		c[3] = 1.0f;
+		RwD3D9SetVertexShaderConstant(loc, (void*)c, 1);
+	}else
+		pipeUploadZero(loc);
+}
+
+void
+pipeUploadLightDirection(RpLight *light, int loc)
+{
+	float c[4];
+	if(RpLightGetFlags(light) & rpLIGHTLIGHTATOMICS){
+		RwV3d *at = RwMatrixGetAt(RwFrameGetLTM(RpLightGetFrame(light)));
+		c[0] = at->x;
+		c[1] = at->y;
+		c[2] = at->z;
+		c[3] = 1.0f;
+		RwD3D9SetVertexShaderConstant(loc, (void*)c, 1);
+	}else
+		pipeUploadZero(loc);
+}
+
+void
+pipeUploadLightDirectionLocal(RpLight *light, RwMatrix *m, int loc)
+{
+	float c[4];
+	if(RpLightGetFlags(light) & rpLIGHTLIGHTATOMICS){
+		RwV3d *at = RwMatrixGetAt(RwFrameGetLTM(RpLightGetFrame(light)));
+		RwV3dTransformVector((RwV3d*)c, at, m);
+		c[3] = 1.0f;
+		RwD3D9SetVertexShaderConstant(loc, (void*)c, 1);
+	}else
+		pipeUploadZero(loc);
+}
+
+void
+pipeUploadLightDirectionInv(RpLight *light, int loc)
+{
+	float c[4];
+	RwV3d *at = RwMatrixGetAt(RwFrameGetLTM(RpLightGetFrame(light)));
+	c[0] = -at->x;
+	c[1] = -at->y;
+	c[2] = -at->z;
+	RwD3D9SetVertexShaderConstant(loc, (void*)c, 1);
 }
 
 void

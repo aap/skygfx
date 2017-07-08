@@ -280,7 +280,7 @@ UploadLightColorWithSpecular(RpLight *light, int loc)
 		c[3] = 1.0f;
 		RwD3D9SetVertexShaderConstant(loc, (void*)c, 1);
 	}else
-		UploadZero(loc);
+		pipeUploadZero(loc);
 }
 
 void
@@ -322,21 +322,21 @@ CarPipe::ShaderSetup(RpAtomic *atomic)
 		if(pAmbient)
 			UploadLightColorWithSpecular(pAmbient, LOC_ambient);
 		else
-			UploadZero(LOC_ambient);
+			pipeUploadZero(LOC_ambient);
 		if(pDirect){
 			UploadLightColorWithSpecular(pDirect, LOC_directCol);
-			UploadLightDirection(pDirect, LOC_directDir);
+			pipeUploadLightDirection(pDirect, LOC_directDir);
 		}else{
-			UploadZero(LOC_directCol);
-			UploadZero(LOC_directDir);
+			pipeUploadZero(LOC_directCol);
+			pipeUploadZero(LOC_directDir);
 		}
 		for(int i = 0 ; i < 6; i++)
 			if(pExtraDirectionals[i]){
-				UploadLightDirection(pExtraDirectionals[i], LOC_lightDir+i);
+				pipeUploadLightDirection(pExtraDirectionals[i], LOC_lightDir+i);
 				UploadLightColorWithSpecular(pExtraDirectionals[i], LOC_lightCol+i);
 			}else{
-				UploadZero(LOC_lightDir+i);
-				UploadZero(LOC_lightCol+i);
+				pipeUploadZero(LOC_lightDir+i);
+				pipeUploadZero(LOC_lightCol+i);
 			}
 		Color spec = specColor.Get();
 		spec.r *= spec.a;

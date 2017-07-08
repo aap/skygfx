@@ -179,6 +179,17 @@ extern RxPipeline *buildingPipeline, *buildingDNPipeline;
 
 extern char &doRadiosity;
 
+extern RwTexture *&gpWhiteTexture;
+extern RwInt32 pdsOffset;
+
+extern void **rwengine;
+extern RwInt32 &CCustomCarEnvMapPipeline__ms_envMapPluginOffset;
+extern RwInt32 &CCustomCarEnvMapPipeline__ms_envMapAtmPluginOffset;
+extern RwInt32 &CCustomCarEnvMapPipeline__ms_specularMapPluginOffset;
+extern RwReal &CCustomCarEnvMapPipeline__m_EnvMapLightingMult;
+extern RwInt32 &CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset;
+extern RwReal &CCustomBuildingDNPipeline__m_fDNBalanceParam;
+
 
 //////// Pipelines
 ///// Shaders
@@ -200,23 +211,14 @@ void CreateShaders(void);
 void RwToD3DMatrix(void *d3d, RwMatrix *rw);
 void MakeProjectionMatrix(void *d3d, RwCamera *cam, float nbias = 0.0f, float fbias = 0.0f);
 void pipeGetComposedTransformMatrix(RpAtomic *atomic, float *out);
-void UploadZero(int loc);
-void UploadLightColor(RpLight *light, int loc);
-void UploadLightDirection(RpLight *light, int loc);
-void UploadLightDirectionLocal(RpLight *light, RwMatrix *m, int loc);
-void UploadLightDirectionInv(RpLight *light, int loc);
+void pipeUploadMatCol(int flags, RpMaterial *m, int loc);
+void pipeUploadZero(int loc);
+void pipeUploadLightColor(RpLight *light, int loc);
+void pipeUploadLightDirection(RpLight *light, int loc);
+void pipeUploadLightDirectionLocal(RpLight *light, RwMatrix *m, int loc);
+void pipeUploadLightDirectionInv(RpLight *light, int loc);
+inline void pipeSetTexture(RwTexture *t, int n) { RwD3D9SetTexture(t ? t : gpWhiteTexture, n); };
 
-
-extern RwTexture *&gpWhiteTexture;
-extern RwInt32 pdsOffset;
-
-extern void **rwengine;
-extern RwInt32 &CCustomCarEnvMapPipeline__ms_envMapPluginOffset;
-extern RwInt32 &CCustomCarEnvMapPipeline__ms_envMapAtmPluginOffset;
-extern RwInt32 &CCustomCarEnvMapPipeline__ms_specularMapPluginOffset;
-extern RwReal &CCustomCarEnvMapPipeline__m_EnvMapLightingMult;
-extern RwInt32 &CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset;
-extern RwReal &CCustomBuildingDNPipeline__m_fDNBalanceParam;
 
 extern int &dword_C02C20, &dword_C9BC60;
 extern RxPipeline *&skinPipe, *&CCustomCarEnvMapPipeline__ObjPipeline;

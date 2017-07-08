@@ -28,6 +28,9 @@ void *ps2EnvSpecFxPS;	// also used by the building pipeline
 void *specCarFxVS, *specCarFxPS;
 void *xboxCarVS;
 
+float black4f[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+float white4f[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+
 CPool<CustomEnvMapPipeAtomicData> *&gEnvMapPipeAtmDataPool = *(CPool<CustomEnvMapPipeAtomicData>**)0xC02D2C;
 
 void*
@@ -208,27 +211,33 @@ CCustomCarEnvMapPipeline__SetupSpec(RpAtomic *atomic, RwMatrix *specmat, RwV3d *
 void
 uploadLightCol(RwUInt32 registerAddress, RpLight *l)
 {
-	static float black[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 	if(RpLightGetFlags(l) & rpLIGHTLIGHTATOMICS)
 		RwD3D9SetVertexShaderConstant(registerAddress,(void*)&l->color,1);
 	else
-		RwD3D9SetVertexShaderConstant(registerAddress,(void*)black,1);
+		RwD3D9SetVertexShaderConstant(registerAddress,(void*)black4f,1);
 }
 
 void
 uploadLights(RwMatrix *lightmat)
 {
-	UploadLightColor(pAmbient, REG_ambient);
-	UploadLightColor(pDirect, REG_directCol);
-	UploadLightDirectionLocal(pDirect, lightmat, REG_directDir);
+	pipeUploadLightColor(pAmbient, REG_ambient);
+	pipeUploadLightColor(pDirect, REG_directCol);
+	pipeUploadLightDirectionLocal(pDirect, lightmat, REG_directDir);
 	for(int i = 0; i < 6; i++)
 		if(i < NumExtraDirLightsInWorld && RpLightGetType(pExtraDirectionals[i]) == rpLIGHTDIRECTIONAL){
-			UploadLightColor(pExtraDirectionals[i], REG_directCol+i+1);
-			UploadLightDirectionLocal(pExtraDirectionals[i], lightmat, REG_directDir+i+1);
+			pipeUploadLightColor(pExtraDirectionals[i], REG_directCol+i+1);
+			pipeUploadLightDirectionLocal(pExtraDirectionals[i], lightmat, REG_directDir+i+1);
 		}else{
-			UploadZero(REG_directCol+i+1);
-			UploadZero(REG_directDir+i+1);
+			pipeUploadZero(REG_directCol+i+1);
+			pipeUploadZero(REG_directDir+i+1);
 		}
+}
+
+void
+uploadNoLights(void)
+{
+	static float black[4*(1+2*7)] = { 0.0f };
+	RwD3D9SetVertexShaderConstant(REG_ambient, black, 1+2*7);
 }
 
 void
@@ -237,7 +246,6 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 	RxD3D9ResEntryHeader *resEntryHeader;
 	RxD3D9InstanceData *instancedData;
 	RpAtomic *atomic;
-	RwBool lighting;
 	RwInt32	numMeshes;
 	RwBool noFx;
 	CustomEnvMapPipeMaterialData *envData;
@@ -266,13 +274,12 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 
 	pipeGetComposedTransformMatrix(atomic, transform);
 	RwD3D9SetVertexShaderConstant(REG_transform, transform, 4);
-	RwMatrixInvert(&lightmat, RwFrameGetLTM(RpAtomicGetFrame(atomic)));
 
-	noFx = CVisibilityPlugins__GetAtomicId(atomic) & 0x6000;
-	fxParams.lightmult = CCustomCarEnvMapPipeline__m_EnvMapLightingMult;
-	uploadLights(&lightmat);
-
-	RwD3D9GetRenderState(D3DRS_LIGHTING, &lighting);
+	if(flags & rpGEOMETRYLIGHT){
+		RwMatrixInvert(&lightmat, RwFrameGetLTM(RpAtomicGetFrame(atomic)));
+		uploadLights(&lightmat);
+	}else
+		uploadNoLights();
 
 	resEntryHeader = (RxD3D9ResEntryHeader *)(repEntry + 1);
 	instancedData = (RxD3D9InstanceData *)(resEntryHeader + 1);
@@ -291,41 +298,25 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 	RwRenderStateGet(rwRENDERSTATEDESTBLEND, &dst);
 	RwRenderStateGet(rwRENDERSTATEFOGENABLE, &fog);
 
+	noFx = CVisibilityPlugins__GetAtomicId(atomic) & 0x6000;
+	fxParams.lightmult = CCustomCarEnvMapPipeline__m_EnvMapLightingMult;
 	CCustomCarEnvMapPipeline__SetupSpec(atomic, &specmat, &specdir);
 	RwD3D9SetVertexShaderConstant(REG_specmat, &specmat, 3);
 	RwD3D9SetVertexShaderConstant(REG_lightdir, &specdir, 1);
 
 	for(; numMeshes--; instancedData++){
 		material = instancedData->material;
-		if(flags & (rxGEOMETRY_TEXTURED2 | rxGEOMETRY_TEXTURED))
-			RwD3D9SetTexture(material->texture ? material->texture : gpWhiteTexture, 0);
-		else
-			RwD3D9SetTexture(gpWhiteTexture, 0);
+		pipeSetTexture(material->texture, 0);
 
 		hasAlpha = instancedData->vertexAlpha || instancedData->material->color.alpha != 255;
 		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)hasAlpha);
 
-		RwRGBA matColor = material->color;
-		float surfProps[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-		if(lighting || flags & rpGEOMETRYPRELIT){
-			// WTF is this?
-			int rgb;
-			rgb = *(int*)&matColor & 0xFFFFFF;
-			if(rgb == 0xAF00FF || rgb == 0x00FFB9 || rgb == 0x00FF3C || rgb == 0x003CFF ||
-			   rgb == 0x00AFFF || rgb == 0xC8FF00 || rgb == 0xFF00FF || rgb == 0xFFFF00){
-				matColor.red = 0;
-				matColor.green = 0;
-				matColor.blue = 0;
-			}
-
-			surfProps[0] = material->surfaceProps.ambient;
-			surfProps[2] = material->surfaceProps.diffuse;
-			surfProps[3] = !!(flags & rpGEOMETRYPRELIT);
-		}
-		RwRGBAReal color;
-		RwRGBARealFromRwRGBA(&color, &matColor);
-		RwD3D9SetVertexShaderConstant(REG_matCol, (void*)&color, 1);
-		RwD3D9SetVertexShaderConstant(REG_surfProps, (void*)surfProps, 1);
+		pipeUploadMatCol(flags, material, REG_matCol);
+		float surfProps[4];
+		surfProps[0] = material->surfaceProps.ambient;
+		surfProps[2] = material->surfaceProps.diffuse;
+		surfProps[3] = !!(flags & rpGEOMETRYPRELIT);
+		RwD3D9SetVertexShaderConstant(REG_surfProps, surfProps, 1);
 
 		RwD3D9SetVertexShader(vehiclePipeVS);
 		RwD3D9SetPixelShader(simplePS);
@@ -335,19 +326,17 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 		//
 		// FX pass
 		//
-
 		if(noFx)
 			continue;
 
 		materialFlags = *(RwUInt32*)&material->surfaceProps.specular;
-		hasEnv1  = !((materialFlags & 1) == 0);
-		hasEnv2   = !((materialFlags & 2) == 0 || (atomic->geometry->flags & rpGEOMETRYTEXTURED2) == 0);
-		hasSpec  = !((materialFlags & 4) == 0 || !lighting);
-		int matfx = RpMatFXMaterialGetEffects(material);
-		if(matfx != rpMATFXEFFECTENVMAP){
-			hasSpec = false;
-			hasEnv2 = false;
+		hasEnv1  = !!(materialFlags & 1);
+		hasEnv2  = !!(materialFlags & 2);
+		hasSpec  = !!(materialFlags & 4);
+		if(RpMatFXMaterialGetEffects(material) != rpMATFXEFFECTENVMAP){
 			hasEnv1 = false;
+			hasEnv2 = false;
+			hasSpec = false;
 		}
 
 		int fxpass = 0;
@@ -423,7 +412,6 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(RwResEntry *repEntry, void
 	RxD3D9ResEntryHeader *resEntryHeader;
 	RxD3D9InstanceData *instancedData;
 	RpAtomic *atomic;
-	RwBool lighting;
 	RwInt32	numMeshes;
 	RwBool noFx;
 	CustomEnvMapPipeMaterialData *envData;
@@ -452,16 +440,10 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(RwResEntry *repEntry, void
 	pipeGetComposedTransformMatrix(atomic, transform);
 	RwD3D9SetVertexShaderConstant(0, transform, 4);
 	RwMatrixInvert(&lightmat, RwFrameGetLTM(RpAtomicGetFrame(atomic)));
-
-	RwMatrix *camfrm = RwFrameGetLTM(RwCameraGetFrame(Camera));
-	RwV3dTransformPoint(&eye, RwMatrixGetPos(camfrm), &lightmat);
-	RwD3D9SetVertexShaderConstant(REG_eye, &eye, 1);
-
-	noFx = CVisibilityPlugins__GetAtomicId(atomic) & 0x6000;
-	fxParams.lightmult = CCustomCarEnvMapPipeline__m_EnvMapLightingMult;
-	uploadLights(&lightmat);
-
-	RwD3D9GetRenderState(D3DRS_LIGHTING, &lighting);
+	if(flags & rpGEOMETRYLIGHT)
+		uploadLights(&lightmat);
+	else
+		uploadNoLights();
 
 	resEntryHeader = (RxD3D9ResEntryHeader *)(repEntry + 1);
 	instancedData = (RxD3D9InstanceData *)(resEntryHeader + 1);
@@ -480,36 +462,24 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(RwResEntry *repEntry, void
 	RwRenderStateGet(rwRENDERSTATEDESTBLEND, &dst);
 	RwRenderStateGet(rwRENDERSTATEFOGENABLE, &fog);
 
+	noFx = CVisibilityPlugins__GetAtomicId(atomic) & 0x6000;
+	fxParams.lightmult = CCustomCarEnvMapPipeline__m_EnvMapLightingMult;
+	RwMatrix *camfrm = RwFrameGetLTM(RwCameraGetFrame(Camera));
+	RwV3dTransformPoint(&eye, RwMatrixGetPos(camfrm), &lightmat);
+	RwD3D9SetVertexShaderConstant(REG_eye, &eye, 1);
+
 	for(; numMeshes--; instancedData++){
 		material = instancedData->material;
-		if(flags & (rxGEOMETRY_TEXTURED2 | rxGEOMETRY_TEXTURED))
-			RwD3D9SetTexture(material->texture ? material->texture : gpWhiteTexture, 0);
-		else
-			RwD3D9SetTexture(gpWhiteTexture, 0);
+		pipeSetTexture(material->texture, 0);
 
 		hasAlpha = instancedData->vertexAlpha || instancedData->material->color.alpha != 255;
 		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)hasAlpha);
 
-		RwRGBA matColor = material->color;
-		float surfProps[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-		if(lighting || flags & rpGEOMETRYPRELIT){
-			// WTF is this?
-			int rgb;
-			rgb = *(int*)&matColor & 0xFFFFFF;
-			if(rgb == 0xAF00FF || rgb == 0x00FFB9 || rgb == 0x00FF3C || rgb == 0x003CFF ||
-			   rgb == 0x00AFFF || rgb == 0xC8FF00 || rgb == 0xFF00FF || rgb == 0xFFFF00){
-				matColor.red = 0;
-				matColor.green = 0;
-				matColor.blue = 0;
-			}
-
-			surfProps[0] = material->surfaceProps.ambient;
-			surfProps[2] = material->surfaceProps.diffuse;
-			surfProps[3] = !!(flags & rpGEOMETRYPRELIT);
-		}
-		RwRGBAReal color;
-		RwRGBARealFromRwRGBA(&color, &matColor);
-		RwD3D9SetVertexShaderConstant(REG_matCol, &color, 1);
+		pipeUploadMatCol(flags, material, REG_matCol);
+		float surfProps[4];
+		surfProps[0] = material->surfaceProps.ambient;
+		surfProps[2] = material->surfaceProps.diffuse;
+		surfProps[3] = !!(flags & rpGEOMETRYPRELIT);
 		RwD3D9SetVertexShaderConstant(REG_surfProps, surfProps, 1);
 
 		RwD3D9SetVertexShader(vehiclePipeVS);
@@ -524,14 +494,13 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(RwResEntry *repEntry, void
 			continue;
 
 		materialFlags = *(RwUInt32*)&material->surfaceProps.specular;
-		hasEnv1  = !((materialFlags & 1) == 0);
-		hasEnv2   = !((materialFlags & 2) == 0 || (atomic->geometry->flags & rpGEOMETRYTEXTURED2) == 0);
-		hasSpec  = !((materialFlags & 4) == 0 || !lighting);
-		int matfx = RpMatFXMaterialGetEffects(material);
-		if(matfx != rpMATFXEFFECTENVMAP){
-			hasSpec = false;
-			hasEnv2 = false;
+		hasEnv1  = !!(materialFlags & 1);
+		hasEnv2  = !!(materialFlags & 2);
+		hasSpec  = !!(materialFlags & 4);
+		if(RpMatFXMaterialGetEffects(material) != rpMATFXEFFECTENVMAP){
 			hasEnv1 = false;
+			hasEnv2 = false;
+			hasSpec = false;
 		}
 
 		int fxpass = 0;
@@ -618,6 +587,8 @@ enum {
 	LOC_envSwitch = 39,
 	LOC_eye = 40,
 };
+
+// TODO: reverse and implement this better
 
 void
 CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
