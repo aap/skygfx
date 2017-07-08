@@ -286,19 +286,12 @@ UploadLightColorWithSpecular(RpLight *light, int loc)
 void
 CarPipe::ShaderSetup(RpAtomic *atomic)
 {
-	RwMatrix *world = RwFrameGetLTM(RpAtomicGetFrame(atomic));
-	DirectX::XMMATRIX worldMat, viewMat, projMat, texMat;
+	float worldMat[16], combined[16];
+	DirectX::XMMATRIX texMat;
 	RwCamera *cam = (RwCamera*)RWSRCGLOBAL(curCamera);
 
-	RwMatrix view;
-	RwMatrixInvert(&view, RwFrameGetLTM(RwCameraGetFrame(cam)));
-
-	RwToD3DMatrix(&worldMat, world);
-	RwToD3DMatrix(&viewMat, &view);
-	viewMat.r[0] = DirectX::XMVectorNegate(viewMat.r[0]);
-	MakeProjectionMatrix(&projMat, cam);
-
-	DirectX::XMMATRIX combined = DirectX::XMMatrixMultiply(projMat, DirectX::XMMatrixMultiply(viewMat, worldMat));
+	pipeGetComposedTransformMatrix(atomic, combined);
+	RwToD3DMatrix(&worldMat, RwFrameGetLTM(RpAtomicGetFrame(atomic)));
 	RwD3D9SetVertexShaderConstant(LOC_combined, (void*)&combined, 4);
 	RwD3D9SetVertexShaderConstant(LOC_world, (void*)&worldMat, 4);
 	texMat = DirectX::XMMatrixIdentity();

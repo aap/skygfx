@@ -79,7 +79,7 @@ transpose(void *dst, void *src)
 	m1[3][3] = m2[3][3];
 }
 
-DirectX::XMMATRIX pipeWorldMat, pipeViewMat, pipeProjMat;
+static DirectX::XMMATRIX pipeWorldMat, pipeViewMat, pipeProjMat;
 
 void
 pipeGetComposedTransformMatrix(RpAtomic *atomic, float *out)
