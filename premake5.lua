@@ -14,6 +14,7 @@ workspace "skygfx"
    files { "shaders/*.*" }
    files { "source/*.*" }
    
+   includedirs { "external/injector/include" }
    includedirs { "external" }
    includedirs { "resources" }
    includedirs { "shaders" }
