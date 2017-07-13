@@ -100,8 +100,21 @@ public:
 };
 
 /*
- * neo water drops
- */
+* neo water drops
+*/
+
+struct CMatrix
+{
+	RwMatrix matrix;
+	RwMatrix *pMatrix;
+	int haveRwMatrix;
+};
+
+struct CPlaceable_III
+{
+	void *vmt;
+	CMatrix matrix;
+};
 
 struct VertexTex2
 {
@@ -121,6 +134,9 @@ class WaterDrop
 public:
 	float x, y, time;		// shorts on xbox (short float?)
 	float size, uvsize, ttl;	// "
+	uchar r;
+	uchar g;
+	uchar b;
 	uchar alpha;
 	bool active;
 	bool fades;
@@ -161,7 +177,7 @@ public:
 	static RwV3d ms_posDelta;
 
 	static int ms_splashDuration;
-	//static CPlaceable_III *ms_splashObject;
+	static CPlaceable_III *ms_splashObject;
 
 	static void Process(void);
 	static void CalculateMovement(void);
@@ -170,23 +186,24 @@ public:
 	static void ProcessMoving(void);
 	static void Fade(void);
 
-	static WaterDrop *PlaceNew(float x, float y, float size, float time, bool fades);
+	static WaterDrop *PlaceNew(float x, float y, float size, float time, bool fades, int R, int G, int B);
 	static void NewTrace(WaterDropMoving*);
 	static void NewDropMoving(WaterDrop*);
 	// this has one more argument in VC: ttl, but it's always 2000.0
-	static void FillScreenMoving(float amount);
+	static void FillScreenMoving(float amount, bool isBlood);
 	static void FillScreen(int n);
 	static void Clear(void);
 	static void Reset(void);
 
-	//static void RegisterSplash(CPlaceable_III *plc);
+	static void RegisterSplash(CPlaceable_III *plc, float distance = 20.0f);
+	static void WaterDrops::RegisterSplash(RwV3d* point, float distance = 20.0f, int duration = 14);
 	static bool NoRain(void);
 
 	// Rendering
 
 	static RwTexture *ms_maskTex;
 	static RwTexture *ms_tex;
-//	static RwRaster *ms_maskRaster;
+	//	static RwRaster *ms_maskRaster;
 	static RwRaster *ms_raster;
 	static int ms_fbWidth, ms_fbHeight;
 	static void *ms_vertexBuf;
