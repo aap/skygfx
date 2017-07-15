@@ -361,7 +361,7 @@ void WaterDrops::CalculateMovement()
 
 bool WaterDrops::NoRain()
 {
-	return CCullZones__CamNoRain() || CCullZones__PlayerNoRain() || CWeather__UnderWaterness > 0.0f || *CGame__currArea != 0 || *CEntryExitManager__ms_exitEnterState != 3;
+	return CCullZones__CamNoRain() || CCullZones__PlayerNoRain() || CWeather__UnderWaterness > 0.0f || *CGame__currArea != 0 || *CEntryExitManager__ms_exitEnterState != 0;
 }
 
 WaterDrop* WaterDrops::PlaceNew(float x, float y, float size, float ttl, bool fades, int R = 0xFF, int G = 0xFF, int B = 0xFF)
