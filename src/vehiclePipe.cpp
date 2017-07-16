@@ -95,6 +95,8 @@ CCustomCarEnvMapPipeline__PreRenderUpdate(void)
 
 	RwMatrixInvert(&carfx_env1Inv, RwFrameGetLTM(carfx_env1Frame));
 	RwMatrixInvert(&carfx_env2Inv, RwFrameGetLTM(carfx_env2Frame));
+
+	CCustomCarEnvMapPipeline__PreRenderUpdate_orig();
 }
 
 void
@@ -104,11 +106,13 @@ CCustomCarEnvMapPipeline__Env1Xform(RwMatrix *envmat,
 	float sclx, scly;
 	sclx = envData->transScaleX/8.0f*50.0f;
 	scly = envData->transScaleY/8.0f*50.0f;
+	// fractional parts of pos/scl
 	envXform[0] = (envmat->pos.x - ((float)(int)(envmat->pos.x/sclx))*sclx)/sclx;
 	envXform[1] = (envmat->pos.y - ((float)(int)(envmat->pos.y/scly))*scly)/scly;
 }
 
-inline float calcthing(float pos, float scl){
+// get absolute fractional part of pos/scl, or 1 - fractional part
+inline float scaledfract(float pos, float scl){
 	int i;
 	float f;
 	i = pos/scl;
@@ -143,8 +147,8 @@ CCustomCarEnvMapPipeline__Env2Xform(RpAtomic *atomic, RwMatrix *envmat,
 		lastobject = atomic;
 		lastenvdata = envData;
 
-		val1 = calcthing(envmat->pos.x, sclx) + calcthing(envmat->pos.y, scly);
-		val2 = calcthing(atmEnvData->posx, sclx) + calcthing(atmEnvData->posy, scly);
+		val1 = scaledfract(envmat->pos.x, sclx) + scaledfract(envmat->pos.y, scly);
+		val2 = scaledfract(atmEnvData->posx, sclx) + scaledfract(atmEnvData->posy, scly);
 
 		diff = { envmat->pos.x - atmEnvData->posx, envmat->pos.y - atmEnvData->posy, 0.0 };
 

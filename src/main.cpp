@@ -7,7 +7,7 @@ char asipath[MAX_PATH];
 
 int numConfigs;
 Config *config, configs[10];
-bool ps2grassFiles, usePCTimecyc, disableClouds, disableGamma, neoWaterDrops;
+bool ps2grassFiles, usePCTimecyc, disableClouds, disableGamma, neoWaterDrops, fixPcCarLight;
 int transparentLockon;
 int original_bRadiosity = 0;
 
@@ -136,7 +136,7 @@ resetValues(void)
 {
 	CPostEffects__m_RadiosityFilterPasses = config->radiosityFilterPasses;
 	CPostEffects__m_RadiosityRenderPasses = config->radiosityRenderPasses;
-	CPostEffects__m_RadiosityIntensityLimit = config->radiosityIntensityLimit;
+//	CPostEffects__m_RadiosityIntensityLimit = config->radiosityIntensityLimit;	// only used for timecycle override
 	CPostEffects__m_RadiosityIntensity = config->radiosityIntensity;
 	CPostEffects__m_RadiosityFilterUCorrection = config->radiosityFilterUCorrection;
 	CPostEffects__m_RadiosityFilterVCorrection = config->radiosityFilterVCorrection;
@@ -728,7 +728,7 @@ readIni(int n)
 
 	c->radiosityFilterPasses = readint(cfg.get("SkyGfx", "radiosityFilterPasses", ""), 2);
 	c->radiosityRenderPasses = readint(cfg.get("SkyGfx", "radiosityRenderPasses", ""), 1);
-	c->radiosityIntensityLimit = readint(cfg.get("SkyGfx", "radiosityIntensityLimit", ""), 0xDC);
+//	c->radiosityIntensityLimit = readint(cfg.get("SkyGfx", "radiosityIntensityLimit", ""), 0xDC);
 	c->radiosityIntensity = readint(cfg.get("SkyGfx", "radiosityIntensity", ""), 0x23);
 	c->radiosityFilterUCorrection = readint(cfg.get("SkyGfx", "radiosityFilterUCorrection", ""), 2);
 	c->radiosityFilterVCorrection = readint(cfg.get("SkyGfx", "radiosityFilterVCorrection", ""), 2);
@@ -737,6 +737,8 @@ readIni(int n)
 	c->trailsIntensity = readint(cfg.get("SkyGfx", "trailsIntensity", ""), 38);
 
 	neoWaterDrops = readint(cfg.get("SkyGfx", "neoWaterDrops", ""), 0);
+	c->neoBloodDrops = readint(cfg.get("SkyGfx", "neoBloodDrops", ""), 0);
+	fixPcCarLight = readint(cfg.get("SkyGfx", "fixPcCarLight", ""), 0);
 }
 
 void
@@ -817,6 +819,20 @@ InjectDelayedPatches()
 		InjectHook(0x711D95, &FX::GetFxQuality_stencil);
 		// vehicle, pole
 		InjectHook(0x70F9B8, &FX::GetFxQuality_stencil);
+
+		if(fixPcCarLight){
+			// carenv light diffuse
+			Patch<uint>(0x5D88D1 +6, 0);
+			Patch<uint>(0x5D88DB +6, 0);
+			Patch<uint>(0x5D88E5 +6, 0);
+			// carenv light ambient
+			Patch<uint>(0x5D88F9 +6, 0);
+			Patch<uint>(0x5D8903 +6, 0);
+			Patch<uint>(0x5D890D +6, 0);
+			// use local viewer for spec light
+			// ...or not... (PS2 doesn't)
+			// Patch<uchar>(0x5D9AD0 +1, 1);
+		}
 
 		if(disableClouds)
 			// jump over cloud loop
@@ -948,7 +964,6 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		// Removing this silly calculation seems to work better.
 		Nop(0x6E716B, 6);
 		Nop(0x6E7176, 6);
-
 
 		//void dumpMenu(void);
 		//dumpMenu();

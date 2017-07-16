@@ -49,8 +49,10 @@ main(VS_INPUT IN)
 	OUT.Envcolor = float4(192.0, 192.0, 192.0, 0.0)/128.0*shininess*lightmult;
 
 	float3 N = mul(specmat, IN.Normal);
-	float3 U = (lightdir + float3(1.0, 1.0, 0.0))*0.5;
-	OUT.Texcoord1.xyz = U - N*dot(N, lightdir);
+	// reflect V along N
+	float3 V = lightdir - 2.0*N*dot(N, lightdir);
+	// transform [-1,1] to [0,1] in xy ((0,0) = center of spec doc texture)
+	OUT.Texcoord1.xyz = (V + float3(1.0, 1.0, 0.0))/2.0;
 
 	if (OUT.Texcoord1.z < 0.0)
 		OUT.Speccolor = float4(96.0, 96.0, 96.0, 0.0)/128.0*specularity*lightmult;

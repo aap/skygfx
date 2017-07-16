@@ -24,7 +24,7 @@ typedef unsigned int uint;
 
 extern HMODULE dllModule;
 
-#define VERSION 0x310
+#define VERSION 0x320
 
 struct Config {
 	// these are at fixed offsets
@@ -45,13 +45,14 @@ struct Config {
 	int colorFilter;
 	int infraredVision, nightVision, grainFilter;
 	RwBool doRadiosity;
-	int radiosityFilterPasses, radiosityRenderPasses, radiosityIntensityLimit;
+	int radiosityFilterPasses, radiosityRenderPasses;
 	int radiosityIntensity, radiosityFilterUCorrection, radiosityFilterVCorrection;
 	int offLeft, offRight, offTop, offBottom;
 	RwBool vcsTrails;
 	int trailsLimit, trailsIntensity;
 	int pedShadows, stencilShadows;
 	int lightningIlluminatesWorld;
+	RwBool neoBloodDrops;
 
 	int keys[2];
 };

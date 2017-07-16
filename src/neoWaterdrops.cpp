@@ -412,6 +412,9 @@ void WaterDrops::FillScreenMoving(float amount, bool isBlood = false)
 	float x, y, time;
 	WaterDrop *drop;
 
+	if(isBlood && !config->neoBloodDrops)
+		return;
+
 	while (n--)
 		if (ms_numDrops < MAXDROPS && ms_numDropsMoving < MAXDROPSMOVING) {
 			x = rand() % ms_fbWidth;

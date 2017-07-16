@@ -233,6 +233,7 @@ CPostEffects::Radiosity_VCS(int intensityLimit, int filterPasses, int renderPass
 	RwD3D9SetVertexShader(postfxVS);
 	RwD3D9SetPixelShader(radiosityPS);
 
+	// TODO: this may well be controlled by the timecycle and passed as an argument here
 	radiosityColors[0] = config->trailsLimit/255.0f;
 	radiosityColors[1] = 1.0f;
 	radiosityColors[2] = 1.0f;
@@ -444,7 +445,6 @@ CPostEffects::Radiosity_PS2(int intensityLimit, int filterPasses, int renderPass
 
 	radiosityColors[0] = intensityLimit/255.0f;
 	radiosityColors[1] = (intensity/255.0f)*renderPasses;
-	radiosityColors[2] = 2.0f;
 	RwD3D9SetPixelShaderConstant(0, radiosityColors, 1);
 
 	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)1);
