@@ -130,7 +130,8 @@ struct CPostEffects
 	static void ColourFilter_Generic(RwRGBA rgb1, RwRGBA rgb2, void *ps);
 	static void ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2);
 	static void SetFilterMainColour_PS2(RwRaster *raster, RwRGBA color);
-	static void Init(void);
+	static void (*Initialise_orig)(void);
+	static void Initialise(void);
 	static void ImmediateModeRenderStatesStore(void);
 	static void ImmediateModeRenderStatesSet(void);
 	static void ImmediateModeRenderStatesReStore(void);

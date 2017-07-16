@@ -905,7 +905,7 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		InterceptCall(&CSkidmarks__Render_orig, CSkidmarks__Render, 0x53E175);
 
 		// postfx
-		InjectHook(0x5BD7AE, CPostEffects::Init, PATCH_JUMP); // ??? why not CPostEffects::Initialise? address changed to CGame::InitialiseRenderWare, partially overwrites ReadPlayerCoordsFile()
+		InterceptCall(&CPostEffects::Initialise_orig, CPostEffects::Initialise, 0x5BD779);
 		InjectHook(0x704D1E, CPostEffects::ColourFilter_switch);
 		InjectHook(0x704D5D, CPostEffects::Radiosity_PS2);
 		InjectHook(0x704FB3, CPostEffects::Radiosity_PS2);

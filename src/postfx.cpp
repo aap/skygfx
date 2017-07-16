@@ -914,9 +914,11 @@ CPostEffects::ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 	//	renderRamp();
 }
 
+void (*CPostEffects::Initialise_orig)(void);
 void
-CPostEffects::Init(void)
+CPostEffects::Initialise(void)
 {
+	Initialise_orig();
 	InjectHook(0x7FB824, Im2dSetPixelShader_hook);
 
 	CreateShaders();
