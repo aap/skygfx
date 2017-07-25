@@ -698,7 +698,8 @@ readIni(int n)
 		{"Mobile",  2},
 		{"III",     3},
 		{"VC",      4},
-		{"None",    5},
+		{"VCS",     5},
+		{"None",    6},
 		{"",        1},
 	};
 	static StrAssoc ps2pcMap[] = {

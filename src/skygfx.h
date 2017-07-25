@@ -118,6 +118,17 @@ struct RsGlobalType
 
 struct CPostEffects
 {
+	// effects:
+	//          III ColourFilter/Blur
+	//          VC  ColourFilter/Blur
+	//          SA  ColourFilter/Blur
+	//          SA  Radiosity
+	//          VCS Radiosity
+	//          VCS Blur
+	static void Radiosity_VCS_init(void);
+	static void Radiosity_VCS_new(int limit, int intensity);
+	static void Blur_VCS(void);
+
 	static void Radiosity_VCS(int col1, int nSubdivs, int unknown, int col2);
 	static void Radiosity_PS2(int col1, int nSubdivs, int unknown, int col2);
 	static void InfraredVision(RwRGBA c1, RwRGBA c2);
