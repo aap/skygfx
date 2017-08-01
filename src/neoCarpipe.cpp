@@ -300,43 +300,23 @@ CarPipe::ShaderSetup(RpAtomic *atomic)
 	RwMatrix *camfrm = RwFrameGetLTM(RwCameraGetFrame(cam));
 	RwD3D9SetVertexShaderConstant(LOC_eye, (void*)RwMatrixGetPos(camfrm), 1);
 
-	if(CVisibilityPlugins__GetAtomicId(atomic) & 0x4000){
-		RwRGBAReal c = { 0.0f, 0.0f, 0.0f, 0.0f };
-		RwD3D9SetVertexShaderConstant(LOC_directCol,(void*)&c,1);
-		RwD3D9SetVertexShaderConstant(LOC_directDir,(void*)&c,1);
-		for(int i = 0; i < 6; i++){
-			RwD3D9SetVertexShaderConstant(LOC_lightCol+i,(void*)&c,1);
-			RwD3D9SetVertexShaderConstant(LOC_lightDir+i,(void*)&c,1);
-		}
-		RwD3D9SetVertexShaderConstant(LOC_directSpec, (void*)&c, 1);
-		c = { 0.18f, 0.18f, 0.18f, 0.0f };
-		RwD3D9SetVertexShaderConstant(LOC_ambient,(void*)&c,1);
-	}else{
-		if(pAmbient)
-			UploadLightColorWithSpecular(pAmbient, LOC_ambient);
-		else
-			pipeUploadZero(LOC_ambient);
-		if(pDirect){
-			UploadLightColorWithSpecular(pDirect, LOC_directCol);
-			pipeUploadLightDirection(pDirect, LOC_directDir);
+	UploadLightColorWithSpecular(pAmbient, LOC_ambient);
+	UploadLightColorWithSpecular(pDirect, LOC_directCol);
+	pipeUploadLightDirection(pDirect, LOC_directDir);
+	for(int i = 0 ; i < 6; i++)
+		if(i < NumExtraDirLightsInWorld && RpLightGetType(pExtraDirectionals[i]) == rpLIGHTDIRECTIONAL){
+			pipeUploadLightDirection(pExtraDirectionals[i], LOC_lightDir+i);
+			UploadLightColorWithSpecular(pExtraDirectionals[i], LOC_lightCol+i);
 		}else{
-			pipeUploadZero(LOC_directCol);
-			pipeUploadZero(LOC_directDir);
+			pipeUploadZero(LOC_lightDir+i);
+			pipeUploadZero(LOC_lightCol+i);
 		}
-		for(int i = 0 ; i < 6; i++)
-			if(pExtraDirectionals[i]){
-				pipeUploadLightDirection(pExtraDirectionals[i], LOC_lightDir+i);
-				UploadLightColorWithSpecular(pExtraDirectionals[i], LOC_lightCol+i);
-			}else{
-				pipeUploadZero(LOC_lightDir+i);
-				pipeUploadZero(LOC_lightCol+i);
-			}
-		Color spec = specColor.Get();
-		spec.r *= spec.a;
-		spec.g *= spec.a;
-		spec.b *= spec.a;
-		RwD3D9SetVertexShaderConstant(LOC_directSpec, (void*)&spec, 1);
-	}
+
+	Color spec = specColor.Get();
+	spec.r *= spec.a;
+	spec.g *= spec.a;
+	spec.b *= spec.a;
+	RwD3D9SetVertexShaderConstant(LOC_directSpec, (void*)&spec, 1);
 }
 
 void

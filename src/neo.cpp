@@ -72,6 +72,7 @@ InterpolatedFloat::Get(void)
 	if(curInterpolator != CClock__ms_nGameClockSeconds){
 		INTERP_SETUP
 		curVal = INTERP(data);
+		curInterpolator = CClock__ms_nGameClockSeconds;
 	}
 	return curVal;
 }
@@ -101,6 +102,7 @@ InterpolatedColor::Get(void)
 		curVal.g = INTERPF(data, g);
 		curVal.b = INTERPF(data, b);
 		curVal.a = INTERPF(data, a);
+		curInterpolator = CClock__ms_nGameClockSeconds;
 	}
 	return curVal;
 }
