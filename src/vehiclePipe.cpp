@@ -182,6 +182,83 @@ CCustomCarEnvMapPipeline__Env2Xform(RpAtomic *atomic, RwMatrix *envmat,
 }
 
 void
+CCustomCarEnvMapPipeline__Env1Xform_PC(RpAtomic *atomic,
+	CustomEnvMapPipeMaterialData *envData, float *envXform)
+{
+	float sclx, scly;
+	RwMatrix *envmat;
+	envmat = RwFrameGetLTM(RpAtomicGetClump(atomic) ? RpClumpGetFrame(RpAtomicGetClump(atomic)) : RpAtomicGetFrame(atomic));
+	sclx = envData->transScaleX/8.0f*50.0f;
+	scly = envData->transScaleY/8.0f*50.0f;
+	// fractional parts of pos/scl
+	envXform[0] = -(envmat->pos.x - ((float)(int)(envmat->pos.x/sclx))*sclx)/sclx;
+	envXform[1] = -(envmat->pos.y - ((float)(int)(envmat->pos.y/scly))*scly)/scly;
+}
+
+void
+CCustomCarEnvMapPipeline__Env2Xform_PC(RpAtomic *atomic,
+	CustomEnvMapPipeMaterialData *envData, CustomEnvMapPipeAtomicData *atmEnvData, float *envXform)
+{
+	static void *lastobject;
+	static CustomEnvMapPipeMaterialData *lastenvdata;
+	static RwUInt16 lastrenderframe;
+	static float lastTransX, lastTransY;
+	static float lastx, lasty;
+
+	RwV3d diff, upnorm;
+	float trans;
+	float sclx, scly;
+	float val1, val2;
+	int sub;
+	RwMatrix *envmat;
+
+	sclx = envData->transScaleX/8.0f*50.0f;
+	scly = envData->transScaleY/8.0f*50.0f;
+	envmat = RwFrameGetLTM(RpAtomicGetClump(atomic) ? RpClumpGetFrame(RpAtomicGetClump(atomic)) : RpAtomicGetFrame(atomic));
+
+	if(lastrenderframe != RWSRCGLOBAL(renderFrame) ||
+	   lastobject != atomic ||
+	   lastenvdata != envData){
+		envData->renderFrameCounter = RWSRCGLOBAL(renderFrame);
+		lastrenderframe = RWSRCGLOBAL(renderFrame);
+		lastobject = atomic;
+		lastenvdata = envData;
+
+		val1 = scaledfract(envmat->pos.x, sclx) + scaledfract(envmat->pos.y, scly);
+		val2 = scaledfract(atmEnvData->posx, sclx) + scaledfract(atmEnvData->posy, scly);
+
+		diff = { envmat->pos.x - atmEnvData->posx, envmat->pos.y - atmEnvData->posy, 0.0 };
+
+		sub = 0;
+		if(RwV3dDotProduct(&diff, &diff) > 0.0f ||
+		   RwV3dNormalize(&diff, &diff), RwV3dNormalize(&upnorm, &envmat->up), RwV3dDotProduct(&diff, &upnorm) < 0.0f){
+			trans = atmEnvData->trans - fabs(val2-val1);
+			if(trans < 0.0f)
+				trans += 1.0f;
+		}else{
+			trans = atmEnvData->trans + fabs(val2-val1);
+			if(trans >= 1.0f)
+				trans -= 1.0f;
+		}
+
+		lastTransX = atmEnvData->trans = trans;
+		lastTransY = envmat->at.x + envmat->at.y;
+		if(lastTransY > 0.1) lastTransY = 0.1f;
+		if(lastTransY < 0.0) lastTransY = 0.0f;
+		if(envmat->at.z < 0.0f)
+			lastTransY = 1.0 - lastTransY;
+		lastx = atmEnvData->posx = envmat->pos.x;
+		lasty = atmEnvData->posy = envmat->pos.y;
+	}else{
+		atmEnvData->trans = lastTransX;
+		atmEnvData->posx = lastx;
+		atmEnvData->posy = lasty;
+	}
+	envXform[0] = -lastTransX;
+	envXform[1] = lastTransY;
+}
+
+void
 CCustomCarEnvMapPipeline__SetupEnv(RpAtomic *atomic, RwFrame *envframe, RwMatrix *frminv, RwMatrix *envmat)
 {
 	static RwMatrix lastmat;
@@ -593,6 +670,7 @@ enum {
 };
 
 // TODO: reverse and implement this better
+volatile void *asdfoo;
 
 void
 CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
@@ -617,7 +695,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *ob
 	} reflData;
 
 	atomic = (RpAtomic*)object;
-	noFx = CVisibilityPlugins__GetAtomicId(atomic) & 0x6000;
+	noFx = !!(CVisibilityPlugins__GetAtomicId(atomic) & 0x6000);
 	notLit = !((pDirect->object.object.flags & 1) == 0 ||
 	           (CVisibilityPlugins__GetAtomicId(atomic) & 0x4000) == 0);
 
@@ -656,9 +734,13 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *ob
 		material = instancedData->material;
 		materialFlags = *(RwUInt32*)&material->surfaceProps.specular;
 
-		hasEnv1  = !((materialFlags & 1) == 0 || noFx);
-		hasEnv2   = !((materialFlags & 2) == 0 || noFx || (atomic->geometry->flags & rpGEOMETRYTEXTURED2) == 0);
-		hasSpec  = !((materialFlags & 4) == 0 || !lighting);
+		hasEnv1  = !!(materialFlags & 1) && !noFx;
+		hasEnv2  = !!(materialFlags & 2) && !noFx;
+		hasSpec  = !!(materialFlags & 4) && !noFx;
+
+//		hasEnv1  = !((materialFlags & 1) == 0 || noFx);
+//		hasEnv2   = !((materialFlags & 2) == 0 || noFx || (atomic->geometry->flags & rpGEOMETRYTEXTURED2) == 0);
+//		hasSpec  = !((materialFlags & 4) == 0 || !lighting);
 		hasAlpha = instancedData->vertexAlpha || instancedData->material->color.alpha != 255;
 
 		RwD3D9SetTexture(NULL, 1);
@@ -671,7 +753,8 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *ob
 		}
 
 		envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
-
+		asdfoo = (void*)envData;
+		RwTexture *tex1 = envData->texture;
 		if(notLit){
 			if(hasEnv2)
 				envSwitch = 3;
@@ -679,7 +762,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *ob
 			envSwitch = 5;
 			if(!hasSpec) envSwitch = 2;
 			static D3DMATRIX texMat;
-			RwV3d transVec;
+			float trans[2];
 			RwInt32 tfactor;
 
 			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
@@ -687,9 +770,9 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *ob
 			texMat._22 = envData->scaleY / 8.0f;
 			texMat._33 = 1.0f;
 			texMat._44 = 1.0f;
-			GetTransScaleVector(envData, atomic, &transVec);
-			texMat._31 = transVec.x;
-			texMat._32 = transVec.y;
+			CCustomCarEnvMapPipeline__Env1Xform_PC(atomic, envData, trans);
+			texMat._31 = trans[0];
+			texMat._32 = trans[1];
 			RwD3D9SetVertexShaderConstant(LOC_Texture, (void*)&texMat, 4);
 			RwD3D9SetTexture(envData->texture, 1);
 			tfactor = CCustomCarEnvMapPipeline__m_EnvMapLightingMult * 96.0f;
@@ -708,18 +791,18 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *ob
 			envSwitch = 6;
 			if(!hasSpec) envSwitch = 3;
 			static D3DMATRIX texMat;
-			RwV3d transVec;
+			float trans[2] = { 0, 0 };
 			RwInt32 tfactor;
 
 			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
 			atmEnvData = CCustomCarEnvMapPipeline__AllocEnvMapPipeAtomicData(atomic);
-			GetEnvMapVector(atomic, atmEnvData, envData, &transVec);
+			CCustomCarEnvMapPipeline__Env2Xform_PC(atomic, envData, atmEnvData, trans);
 			texMat._11 = 1.0f;
 			texMat._22 = 1.0f;
 			texMat._33 = 1.0f;
 			texMat._44 = 1.0f;
-			texMat._31 = transVec.x;
-			texMat._32 = transVec.y;
+			texMat._31 = trans[0];
+			texMat._32 = trans[1];
 			RwD3D9SetVertexShaderConstant(LOC_Texture, (void*)&texMat, 4);
 			RwD3D9SetTexture(envData->texture, 1);
 			tfactor = CCustomCarEnvMapPipeline__m_EnvMapLightingMult * 24.0f;
@@ -735,28 +818,18 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *ob
 			RwD3D9SetTextureStageState(2, D3DTSS_COLOROP, D3DTOP_DISABLE);
 		}
 
+if(envData->texture != tex1)
+	exit(1);
+
+
+if(material->texture != instancedData->material->texture)
+	exit(1);
+
 		RwD3D9SetVertexShaderConstant(LOC_reflData, (void*)&reflData, 1);
 		RwD3D9SetVertexShaderConstant(LOC_envSwitch, (void*)&envSwitch, 1);
 
 		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)hasAlpha);
 		RwRGBA matColor = material->color;
-		{
-			// WTF is this?
-			int rgb;
-			rgb = *(int*)&matColor & 0xFFFFFF;
-			if(rgb > 0xAF00FF){
-				if(rgb == 0xC8FF00 || rgb == 0xFF00FF || rgb == 0xFFFF00){
-					matColor.red = 0;
-					matColor.green = 0;
-					matColor.blue = 0;
-				}
-			}else if (rgb == 0xAF00FF ||
-			          rgb == 0x003CFF || rgb == 0x007300 || rgb == 0x004F3D || rgb == 0x004FBA){
-				matColor.red = 0;
-				matColor.green = 0;
-				matColor.blue = 0;
-			}
-		}
 		RwRGBAReal color;
 		RwRGBARealFromRwRGBA(&color, &matColor);
 		RwD3D9SetVertexShaderConstant(LOC_matCol, (void*)&color, 1);

@@ -37,34 +37,6 @@ D3D9RenderPreLit(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *insta
 		RwD3D9DrawPrimitive(resEntryHeader->primType, instanceData->baseIndex, instanceData->numPrimitives);
 }
 
-void __declspec(naked)
-GetEnvMapVector(RpAtomic *atomic, CustomEnvMapPipeAtomicData *atmdata, CustomEnvMapPipeMaterialData *data, RwV3d *transScale)
-{
-	_asm{
-		mov ecx, [esp+4]
-		mov edi, [esp+8]
-		mov esi, [esp+12]
-		push [esp+16]
-		mov edx, 0x5D8590
-		call edx
-		pop eax
-		retn
-	}
-}
-
-void __declspec(naked)
-GetTransScaleVector(CustomEnvMapPipeMaterialData *data, RpAtomic *atomic, RwV3d *transScale)
-{
-	_asm{
-		mov eax, [esp+4]
-		mov ecx, [esp+8]
-		mov esi, [esp+12]
-		mov edx, 0x5D84C0
-		call edx
-		retn
-	}
-}
-
 void
 CCustomBuildingDNPipeline__CustomPipeRenderCB(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
 {
@@ -402,7 +374,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB(RwResEntry *repEntry, void *object,
 		envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
 		if(hasRefl){
 			static D3DMATRIX texMat;
-			RwV3d transVec;
+			float trans[2];
 			RwInt32 tfactor;
 
 			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
@@ -410,9 +382,9 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB(RwResEntry *repEntry, void *object,
 			texMat._22 = envData->scaleY / 8.0f;
 			texMat._33 = 1.0f;
 			texMat._44 = 1.0f;
-			GetTransScaleVector(envData, atomic, &transVec);
-			texMat._31 = transVec.x;
-			texMat._32 = transVec.y;
+			CCustomCarEnvMapPipeline__Env1Xform_PC(atomic, envData, trans);
+			texMat._31 = trans[0];
+			texMat._32 = trans[1];
 			RwD3D9SetTransform(D3DTS_TEXTURE1, &texMat);
 			RwD3D9SetTexture(envData->texture, 1);
 			tfactor = envData->shininess * lightMult * 254.0/255.0;
@@ -433,18 +405,18 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB(RwResEntry *repEntry, void *object,
 
 		if(hasEnv){
 			static D3DMATRIX texMat;
-			RwV3d transVec;
+			float trans[2];
 			RwInt32 tfactor;
 
 			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
 			atmEnvData = CCustomCarEnvMapPipeline__AllocEnvMapPipeAtomicData(atomic);
-			GetEnvMapVector(atomic, atmEnvData, envData, &transVec);
+			CCustomCarEnvMapPipeline__Env2Xform_PC(atomic, envData, atmEnvData, trans);
 			texMat._11 = 1.0f;
 			texMat._22 = 1.0f;
 			texMat._33 = 1.0f;
 			texMat._44 = 1.0f;
-			texMat._31 = transVec.x;
-			texMat._32 = transVec.y;
+			texMat._31 = trans[0];
+			texMat._32 = trans[1];
 			RwD3D9SetTransform(D3DTS_TEXTURE1, &texMat);
 			RwD3D9SetTexture(envData->texture, 1);
 			tfactor = lightMult * 24.0f;
