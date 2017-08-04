@@ -698,7 +698,9 @@ readIni(int n)
 		{"Mobile",  2},
 		{"III",     3},
 		{"VC",      4},
+#ifdef DEBUG
 		{"VCS",     5},
+#endif
 		{"None",    6},
 		{"",        1},
 	};
@@ -725,17 +727,17 @@ readIni(int n)
 
 	tmpint = readint(cfg.get("SkyGfx", "doRadiosity", ""), 4000);
 	c->doRadiosity = tmpint == 4000 ? original_bRadiosity : tmpint;	// saved value from stream.ini
+#ifdef DEBUG
 	c->vcsTrails = readint(cfg.get("SkyGfx", "vcsTrails", ""), 0);
+	c->trailsLimit = readint(cfg.get("SkyGfx", "trailsLimit", ""), 80);
+	c->trailsIntensity = readint(cfg.get("SkyGfx", "trailsIntensity", ""), 38);
+#endif
 
 	c->radiosityFilterPasses = readint(cfg.get("SkyGfx", "radiosityFilterPasses", ""), 2);
 	c->radiosityRenderPasses = readint(cfg.get("SkyGfx", "radiosityRenderPasses", ""), 1);
-//	c->radiosityIntensityLimit = readint(cfg.get("SkyGfx", "radiosityIntensityLimit", ""), 0xDC);
 	c->radiosityIntensity = readint(cfg.get("SkyGfx", "radiosityIntensity", ""), 0x23);
 	c->radiosityFilterUCorrection = readint(cfg.get("SkyGfx", "radiosityFilterUCorrection", ""), 2);
 	c->radiosityFilterVCorrection = readint(cfg.get("SkyGfx", "radiosityFilterVCorrection", ""), 2);
-
-	c->trailsLimit = readint(cfg.get("SkyGfx", "trailsLimit", ""), 80);
-	c->trailsIntensity = readint(cfg.get("SkyGfx", "trailsIntensity", ""), 38);
 
 	neoWaterDrops = readint(cfg.get("SkyGfx", "neoWaterDrops", ""), 0);
 	c->neoBloodDrops = readint(cfg.get("SkyGfx", "neoBloodDrops", ""), 0);

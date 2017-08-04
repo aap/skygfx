@@ -24,7 +24,7 @@ typedef unsigned int uint;
 
 extern HMODULE dllModule;
 
-#define VERSION 0x320
+#define VERSION 0x330
 
 struct Config {
 	// these are at fixed offsets
@@ -126,10 +126,9 @@ struct CPostEffects
 	//          VCS Radiosity
 	//          VCS Blur
 	static void Radiosity_VCS_init(void);
-	static void Radiosity_VCS_new(int limit, int intensity);
+	static void Radiosity_VCS(int limit, int intensity);
 	static void Blur_VCS(void);
 
-	static void Radiosity_VCS(int col1, int nSubdivs, int unknown, int col2);
 	static void Radiosity_PS2(int col1, int nSubdivs, int unknown, int col2);
 	static void InfraredVision(RwRGBA c1, RwRGBA c2);
 	static void InfraredVision_PS2(RwRGBA c1, RwRGBA c2);

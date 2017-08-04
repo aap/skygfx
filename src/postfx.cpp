@@ -179,7 +179,7 @@ CPostEffects::Radiosity_VCS_init(void)
 }
 
 void
-CPostEffects::Radiosity_VCS_new(int limit, int intensity)
+CPostEffects::Radiosity_VCS(int limit, int intensity)
 {
 	static int lastWidth, lastHeight;
 	int i;
@@ -382,227 +382,6 @@ if(0){
 }
 
 void
-CPostEffects::Radiosity_VCS(int intensityLimit, int filterPasses, int renderPasses, int intensity)
-{
-	RwRaster *vcsBuffer1, *vcsBuffer2;
-	float radiosityColors[4];
-	static RwTexture *tempTexture = NULL;
-	RwRaster *camraster;
-	int width, height;
-	float uOffsets[] = { -1.0f, 1.0f, 0.0f, 0.0f };
-	float vOffsets[] = { 0.0f, 0.0f, -1.0f, 1.0f };
-
-	width = vcsRect.w = filterPasses ? RsGlobal->MaximumWidth*256/640 : RsGlobal->MaximumWidth;
-	height = vcsRect.h = filterPasses ? RsGlobal->MaximumHeight*128/480 : RsGlobal->MaximumHeight;
-
-	if(target1->width < width || target2->width < width ||
-	   target1->height < height || target2->height < height || 
-	   target1->width != target2->width || target1->height != target2->height){
-		int width2 = 1, height2 = 1;
-		while(width2 < width) width2 <<= 1;
-		while(height2 < height) height2 <<= 1;
-		RwRasterDestroy(target1);
-		target1 = RwRasterCreate(width2, height2, CPostEffects::pRasterFrontBuffer->depth, 5);
-		RwRasterDestroy(target2);
-		target2 = RwRasterCreate(width2, height2, CPostEffects::pRasterFrontBuffer->depth, 5);
-	}
-	vcsBuffer1 = target1;
-	vcsBuffer2 = target2;
-
-	float rasterWidth = RwRasterGetWidth(target1);
-	float rasterHeight = RwRasterGetHeight(target1);
-	float halfU = 0.5 / rasterWidth;
-	float halfV = 0.5 / rasterHeight;
-	float uMax = width / rasterWidth;
-	float vMax = height / rasterHeight;
-	float xMax = -1.0f + 2*uMax;
-	float yMax = 1.0f - 2*vMax;
-	float xOffsetScale = width/256.0f;
-	float yOffsetScale = height/128.0f;
-	if(config->radiosityFilterUCorrection == 0.0f)
-		xOffsetScale = yOffsetScale = 0.0f;
-
-	vcsVertices[0].x = -1.0f;
-	vcsVertices[0].y = 1.0f;
-	vcsVertices[0].z = 0.0f;
-	vcsVertices[0].rhw = 1.0f;
-	vcsVertices[0].u = 0.0f + halfU;
-	vcsVertices[0].v = 0.0f + halfV;
-	vcsVertices[0].emissiveColor = 0xFFFFFFFF;
-
-	vcsVertices[1].x = -1.0f;
-	vcsVertices[1].y = yMax;
-	vcsVertices[1].z = 0.0f;
-	vcsVertices[1].rhw = 1.0f;
-	vcsVertices[1].u = 0.0f + halfU;
-	vcsVertices[1].v = vMax + halfV;
-	vcsVertices[1].emissiveColor = 0xFFFFFFFF;
-
-	vcsVertices[2].x = xMax;
-	vcsVertices[2].y = 1.0f;
-	vcsVertices[2].z = 0.0f;
-	vcsVertices[2].rhw = 1.0f;
-	vcsVertices[2].u = uMax + halfU;
-	vcsVertices[2].v = 0.0f + halfV;
-	vcsVertices[2].emissiveColor = 0xFFFFFFFF;
-
-	vcsVertices[3].x = xMax;
-	vcsVertices[3].y = yMax;
-	vcsVertices[3].z = 0.0f;
-	vcsVertices[3].rhw = 1.0f;
-	vcsVertices[3].u = uMax + halfU;
-	vcsVertices[3].v = vMax + halfV;
-	vcsVertices[3].emissiveColor = 0xFFFFFFFF;
-
-	vcsVertices[4].x = -1.0f;
-	vcsVertices[4].y = 1.0f;
-	vcsVertices[4].z = 0.0f;
-	vcsVertices[4].rhw = 1.0f;
-	vcsVertices[4].u = 0.0f + halfU;
-	vcsVertices[4].v = 0.0f + halfV;
-	vcsVertices[4].emissiveColor = 0xFFFFFFFF;
-
-	vcsVertices[5].x = -1.0f;
-	vcsVertices[5].y = -1.0f;
-	vcsVertices[5].z = 0.0f;
-	vcsVertices[5].rhw = 1.0f;
-	vcsVertices[5].u = 0.0f + halfU;
-	vcsVertices[5].v = vMax + halfV;
-	vcsVertices[5].emissiveColor = 0xFFFFFFFF;
-
-	vcsVertices[6].x = 1.0f;
-	vcsVertices[6].y = 1.0f;
-	vcsVertices[6].z = 0.0f;
-	vcsVertices[6].rhw = 1.0f;
-	vcsVertices[6].u = uMax + halfU;
-	vcsVertices[6].v = 0.0f + halfV;
-	vcsVertices[6].emissiveColor = 0xFFFFFFFF;
-
-	vcsVertices[7].x = 1.0f;
-	vcsVertices[7].y = -1.0f;
-	vcsVertices[7].z = 0.0f;
-	vcsVertices[7].rhw = 1.0f;
-	vcsVertices[7].u = uMax + halfU;
-	vcsVertices[7].v = vMax + halfV;
-	vcsVertices[7].emissiveColor = 0xFFFFFFFF;
-
-	RwUInt32 c = 0xFF000000 | 0x010101*config->trailsIntensity;
-	for(int i = 8; i < 24; i++){
-		int idx = (i-8)/4;
-		vcsVertices[i].x = vcsVertices[i%4].x;
-		vcsVertices[i].y = vcsVertices[i%4].y;
-		vcsVertices[i].z = 0.0f;
-		vcsVertices[i].rhw = 1.0f;
-		switch(i%4){
-		case 0:
-			vcsVertices[i].u = 0.0f + xOffsetScale*uOffsets[idx]/rasterWidth + halfU;
-			vcsVertices[i].v = 0.0f + yOffsetScale*vOffsets[idx]/rasterHeight + halfV;
-			break;
-		case 1:
-			vcsVertices[i].u = 0.0f + xOffsetScale*uOffsets[idx]/rasterWidth + halfU;
-			vcsVertices[i].v = vMax + yOffsetScale*vOffsets[idx]/rasterHeight + halfV;
-			break;
-		case 2:
-			vcsVertices[i].u = uMax + xOffsetScale*uOffsets[idx]/rasterWidth + halfU;
-			vcsVertices[i].v = 0.0f + yOffsetScale*vOffsets[idx]/rasterHeight + halfV;
-			break;
-		case 3:
-			vcsVertices[i].u = uMax + xOffsetScale*uOffsets[idx]/rasterWidth + halfU;
-			vcsVertices[i].v = vMax + yOffsetScale*vOffsets[idx]/rasterHeight + halfV;
-			break;
-		}
-		vcsVertices[i].emissiveColor = c;
-	}
-
-	// First pass - render downsampled and darkened frame to buffer2
-
-	RwCameraEndUpdate(Camera);
-	RwRasterPushContext(vcsBuffer1);
-	camraster = RwCameraGetRaster(Camera);
-	RwRasterRenderScaled(camraster, &vcsRect);
-	RwRasterPopContext();
-	RwCameraSetRaster(Camera, vcsBuffer2);
-	RwCameraBeginUpdate(Camera);
-
-	if(tempTexture == NULL){
-		tempTexture = RwTextureCreate(NULL);
-		tempTexture->filterAddressing = 0x1102;
-	}
-
-	tempTexture->raster = vcsBuffer1;
-	RwD3D9SetTexture(tempTexture, 0);
-
-	RwD3D9SetVertexDeclaration(quadVertexDecl);
-
-	RwD3D9SetVertexShader(postfxVS);
-	RwD3D9SetPixelShader(radiosityPS);
-
-	// TODO: this may well be controlled by the timecycle and passed as an argument here
-	radiosityColors[0] = config->trailsLimit/255.0f;
-	radiosityColors[1] = 1.0f;
-	radiosityColors[2] = 1.0f;
-	RwD3D9SetPixelShaderConstant(0, radiosityColors, 1);
-
-	int blend, srcblend, destblend, ztest, zwrite;
-	RwRenderStateGet(rwRENDERSTATEZTESTENABLE, &ztest);
-	RwRenderStateGet(rwRENDERSTATEZWRITEENABLE, &zwrite);
-	RwRenderStateGet(rwRENDERSTATEVERTEXALPHAENABLE, &blend);
-	RwRenderStateGet(rwRENDERSTATESRCBLEND, &srcblend);
-	RwRenderStateGet(rwRENDERSTATEDESTBLEND, &destblend);
-
-	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)FALSE);
-	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
-	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)0);
-	RwD3D9SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
-	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
-	RwD3D9DrawIndexedPrimitiveUP(D3DPT_TRIANGLELIST, 0, 6, 2, vcsIndices1, vcsVertices, sizeof(QuadVertex));
-
-	// Second pass - render brightened buffer2 to buffer1 (then swap buffers)
-	RwD3D9SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE);
-	RwD3D9SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
-	RwD3D9SetTextureStageState(0, D3DTSS_COLORARG2, D3DTA_DIFFUSE);
-	RwD3D9SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_DISABLE);
-	RwD3D9SetTextureStageState(1, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
-
-	for(int i = 0; i < 4; i++){
-		RwCameraEndUpdate(Camera);
-		RwCameraSetRaster(Camera, vcsBuffer1);
-		RwCameraBeginUpdate(Camera);
-
-		RwD3D9SetPixelShader(radiosityPS);
-		RwD3D9SetTexture(NULL, 0);
-		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)0);
-		RwD3D9DrawIndexedPrimitiveUP(D3DPT_TRIANGLELIST, 0, 6, 2, vcsIndices1, vcsVertices, sizeof(QuadVertex));
-
-		RwD3D9SetPixelShader(NULL);
-		tempTexture->raster = vcsBuffer2;
-		RwD3D9SetTexture(tempTexture, 0);
-		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)1);
-		RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
-		RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
-		RwD3D9DrawIndexedPrimitiveUP(D3DPT_TRIANGLELIST, 0, 6*7, 2*7, vcsIndices1, vcsVertices+8, sizeof(QuadVertex));
-		RwRaster *tmp = vcsBuffer1;
-		vcsBuffer1 = vcsBuffer2;
-		vcsBuffer2 = tmp;
-	}
-
-	RwCameraEndUpdate(Camera);
-	RwCameraSetRaster(Camera, camraster);
-	RwCameraBeginUpdate(Camera);
-
-	tempTexture->raster = vcsBuffer2;
-	RwD3D9SetTexture(tempTexture, 0);
-	RwD3D9DrawIndexedPrimitiveUP(D3DPT_TRIANGLELIST, 0, 6, 2, vcsIndices1, vcsVertices+4, sizeof(QuadVertex));
-
-	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)ztest);
-	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)zwrite);
-	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)blend);
-	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)srcblend);
-	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)destblend);
-	RwD3D9SetVertexShader(NULL);
-}
-
-void
 CPostEffects::Radiosity_PS2(int intensityLimit, int filterPasses, int renderPasses, int intensity)
 {
 	int width, height;
@@ -614,8 +393,7 @@ CPostEffects::Radiosity_PS2(int intensityLimit, int filterPasses, int renderPass
 		return;
 
 	if(config->vcsTrails){
-		if(!(GetAsyncKeyState(VK_F8) & 0x8000))
-			CPostEffects::Radiosity_VCS_new(intensityLimit, intensity);
+		CPostEffects::Radiosity_VCS(intensityLimit, intensity);
 		if(config->colorFilter == 5)
 			CPostEffects::Blur_VCS();
 		return;
@@ -1260,11 +1038,6 @@ CPostEffects::Initialise(void)
 	smallRect.y = 0;
 	smallRect.w = Camera->frameBuffer->width/4;
 	smallRect.h = Camera->frameBuffer->height/4;
-
-////	reflTex = RwRasterCreate(128, 128, 0, 5);
-//	reflTex = RwRasterCreate(CPostEffects::pRasterFrontBuffer->width, CPostEffects::pRasterFrontBuffer->height, 0, 5);
-//	vcsRect.x = 0;
-//	vcsRect.y = 0;
 }
 
 
