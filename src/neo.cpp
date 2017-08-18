@@ -129,7 +129,7 @@ neoReadWeatherTimeBlock(FILE *file, InterpolatedValue *interp)
 		if(c != EOF && c != '#'){
 			while(c != EOF && c != '\n' && field < NUMWEATHERS){
 				p = buf;
-				while(c != EOF && c == '\t')
+				while(c == '\t')
 					c = getc(file);
 				*p++ = c;
 				while(c = getc(file), c != EOF && c != '\t' && c != '\n')

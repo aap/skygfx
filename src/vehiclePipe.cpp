@@ -396,7 +396,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 		float surfProps[4];
 		surfProps[0] = material->surfaceProps.ambient;
 		surfProps[2] = material->surfaceProps.diffuse;
-		surfProps[3] = !!(flags & rpGEOMETRYPRELIT);
+		surfProps[3] = flags & rpGEOMETRYPRELIT ? 1.0f : 0.0f;
 		RwD3D9SetVertexShaderConstant(REG_surfProps, surfProps, 1);
 
 		RwD3D9SetVertexShader(vehiclePipeVS);

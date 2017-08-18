@@ -52,7 +52,8 @@ void
 RenderScene_hook(void)
 {
 	RenderScene();
-	CarPipe::RenderEnvTex();
+	if(config->vehiclePipe == 4)
+		CarPipe::RenderEnvTex();
 }
 
 void
