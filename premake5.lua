@@ -30,7 +30,7 @@ project "skygfx"
 	kind "SharedLib"
 	language "C++"
 	targetdir "bin/%{cfg.buildcfg}"
-	targetextension ".asi"
+	targetextension ".dll"
 	characterset ("MBCS")
 
 	filter "configurations:Debug"
@@ -38,7 +38,7 @@ project "skygfx"
 		symbols "On"
 		debugdir "C:/Users/aap/games/gtasa"
 		debugcommand "C:/Users/aap/games/gtasa/gta_sa.exe"
-		postbuildcommands "copy /y \"$(TargetPath)\" \"C:\\Users\\aap\\games\\gtasa\\scripts\\skygfx.asi\""
+		postbuildcommands "copy /y \"$(TargetPath)\" \"C:\\Users\\aap\\games\\gtasa\\dlls\\skygfx.dll\""
 
 	filter "configurations:Release"
 		defines { "NDEBUG" }
@@ -46,4 +46,4 @@ project "skygfx"
 		flags { "StaticRuntime" }
 		debugdir "C:/Users/aap/games/gtasa"
 		debugcommand "C:/Users/aap/games/gtasa/gta_sa.exe"
-		postbuildcommands "copy /y \"$(TargetPath)\" \"C:\\Users\\aap\\games\\gtasa\\scripts\\skygfx.asi\""
+		postbuildcommands "copy /y \"$(TargetPath)\" \"C:\\Users\\aap\\games\\gtasa\\dlls\\skygfx.dll\""

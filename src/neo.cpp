@@ -1,13 +1,6 @@
 #include "skygfx.h"
 #include "neo.h"
 
-byte &CClock__ms_nGameClockHours = *(byte*)0xB70153;
-byte &CClock__ms_nGameClockMinutes = *(byte*)0xB70152;
-short &CClock__ms_nGameClockSeconds = *(short*)0xB70150;
-short &CWeather__OldWeatherType = *(short*)0xC81320;
-short &CWeather__NewWeatherType = *(short*)0xC8131C;
-float &CWeather__InterpolationValue = *(float*)0xC8130C;
-
 RwTexDictionary *neoTxd;
 int iCanHasNeoCar;
 

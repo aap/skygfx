@@ -18,13 +18,17 @@
 #include "MemoryMgr.h"
 #include "Pools.h"
 
-typedef unsigned char uchar;
-typedef unsigned short ushort;
-typedef unsigned int uint;
+typedef uint8_t uint8, uchar;
+typedef uint16_t uint16, ushort;
+typedef uint32_t uint32, uint;
+typedef int8_t int8;
+typedef int16_t int16;
+typedef int32_t int32;
 
 extern HMODULE dllModule;
 
-#define VERSION 0x330
+#define nil NULL
+#define VERSION 0x340
 
 struct Config {
 	// these are at fixed offsets
@@ -36,7 +40,8 @@ struct Config {
 	RwBool ps2ModulateBuilding;
 	RwBool dualPassBuilding;
 
-	RwBool ps2Ambient, ps2ModulateGrass;
+	RwBool usePCTimecyc;
+	RwBool ps2ModulateGrass;
 	RwBool grassAddAmbient;
 	RwBool backfaceCull;
 	RwBool dualPassDefault, dualPassGrass, dualPassVehicle, dualPassPed;
@@ -46,30 +51,39 @@ struct Config {
 	int infraredVision, nightVision, grainFilter;
 	RwBool doRadiosity;
 	int radiosityFilterPasses, radiosityRenderPasses;
-	int radiosityIntensity, radiosityFilterUCorrection, radiosityFilterVCorrection;
+	int radiosityIntensity;
 	int offLeft, offRight, offTop, offBottom;
 	RwBool vcsTrails;
 	int trailsLimit, trailsIntensity;
 	int pedShadows, stencilShadows;
 	int lightningIlluminatesWorld;
+	RwBool neoWaterDrops;
 	RwBool neoBloodDrops;
+
+	RwBool ps2ModulateGlobal, dualPassGlobal;
 
 	int keys[2];
 };
 extern int numConfigs;
+extern int currentConfig;
 extern Config *config, configs[10];
+void readIni(int n);
+void resetValues(void);
+void refreshIni(void);
+void reloadAllInis(void);
+void setConfig(void);
 
 extern int envMapSize;
 
 struct CustomEnvMapPipeMaterialData
 {
-	int8_t scaleX;
-	int8_t scaleY;
-	int8_t transScaleX;
-	int8_t transScaleY;
-	int8_t shininess;
-	uint8_t pad3;
-	uint16_t renderFrameCounter;
+	int8 scaleX;
+	int8 scaleY;
+	int8 transScaleX;
+	int8 transScaleY;
+	int8 shininess;
+	uint8 pad3;
+	uint16 renderFrameCounter;
 	RwTexture *texture;
 };
 
@@ -116,6 +130,38 @@ struct RsGlobalType
 	void*			pad;
 };
 
+enum {
+	COLORFILTER_NONE   = 0,
+	COLORFILTER_PS2    = 1,
+	COLORFILTER_PC     = 2,
+	COLORFILTER_MOBILE = 3,
+	COLORFILTER_III    = 4,
+	COLORFILTER_VC     = 5,
+#ifdef DEBUG
+	COLORFILTER_VCS    = 6,
+#endif
+};
+
+
+struct Imf
+{
+	float zScreenNear;
+	float recipZ;
+	RwRaster *frontBuffer;
+	int width;
+	int height;
+	float umin;
+	float vmin;
+	float umax;
+	float vmax;
+	RwD3D9Vertex triangle_verts[3];
+	float tri_umin;
+	float tri_umax;
+	float tri_vmin;
+	float tri_vmax;
+	RwD3D9Vertex quad_verts[4];
+};
+
 struct CPostEffects
 {
 	// effects:
@@ -129,7 +175,9 @@ struct CPostEffects
 	static void Radiosity_VCS(int limit, int intensity);
 	static void Blur_VCS(void);
 
-	static void Radiosity_PS2(int col1, int nSubdivs, int unknown, int col2);
+	static void Radiosity(int intensityLimit, int filterPasses, int renderPasses, int intensity);
+	static void DarknessFilter(uint8 alpha);
+	static void DarknessFilter_fix(uint8 alpha);
 	static void InfraredVision(RwRGBA c1, RwRGBA c2);
 	static void InfraredVision_PS2(RwRGBA c1, RwRGBA c2);
 	static void NightVision(RwRGBA color);
@@ -137,6 +185,8 @@ struct CPostEffects
 	static void Grain(int strength, bool generate);
 	static void Grain_PS2(int strength, bool generate);
 	static void ColourFilter(RwRGBA rgb1, RwRGBA rgb2);
+	static void ColourFilter_Mobile(RwRGBA rgb1, RwRGBA rgb2);
+	static void ColourFilter_PS2(RwRGBA rgb1, RwRGBA rgb2);
 	static void ColourFilter_Generic(RwRGBA rgb1, RwRGBA rgb2, void *ps);
 	static void ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2);
 	static void SetFilterMainColour_PS2(RwRaster *raster, RwRGBA color);
@@ -147,8 +197,11 @@ struct CPostEffects
 	static void ImmediateModeRenderStatesReStore(void);
 	static void SetFilterMainColour(RwRaster *raster, RwRGBA color);
 	static void DrawQuad(float x1, float y1, float x2, float y2, uchar r, uchar g, uchar b, uchar alpha, RwRaster *ras);
+	static void DrawQuadSetUVs(float utl, float vtl, float utr, float vtr, float ubr, float vbr, float ubl, float vbl);
+	static void DrawQuadSetDefaultUVs(void);
 	static void SpeedFX(float);
-	static void SpeedFX_Fix(float fStrength);
+
+	static Imf &ms_imf;
 
 	static RwRaster *&pRasterFrontBuffer;
 	static float &m_fInfraredVisionFilterRadius;;
@@ -157,6 +210,51 @@ struct CPostEffects
 	static int &m_NightVisionGrainStrength;
 	static float &m_fNightVisionSwitchOnFXCount;
 	static bool &m_bInfraredVision;
+
+	static bool &m_bDisableAllPostEffect;
+
+	static bool &m_bColorEnable;
+	static int &m_colourLeftUOffset;
+	static int &m_colourRightUOffset;
+	static int &m_colourTopVOffset;
+	static int &m_colourBottomVOffset;
+	static float &m_colour1Multiplier;
+	static float &m_colour2Multiplier;
+	static float &SCREEN_EXTRA_MULT_CHANGE_RATE;
+	static float &SCREEN_EXTRA_MULT_BASE_CAP;
+	static float &SCREEN_EXTRA_MULT_BASE_MULT;
+
+	static bool &m_bRadiosity;
+	static bool &m_bRadiosityDebug;
+	static int &m_RadiosityFilterPasses;
+	static int &m_RadiosityRenderPasses;
+	static int &m_RadiosityIntensityLimit;
+	static int &m_RadiosityIntensity;
+	static bool &m_bRadiosityBypassTimeCycleIntensityLimit;
+	static int &m_RadiosityFilterUCorrection;
+	static int &m_RadiosityFilterVCorrection;
+
+	static bool &m_bDarknessFilter;
+	static int &m_DarknessFilterAlpha;
+	static int &m_DarknessFilterAlphaDefault;
+	static int &m_DarknessFilterRadiosityIntensityLimit;
+
+	static bool &m_bCCTV;
+	static bool &m_bFog;
+	static bool &m_bNightVision;
+	static bool &m_bHeatHazeFX;
+	static bool &m_bHeatHazeMaskModeTest;
+	static bool &m_bGrainEnable;
+	static bool &m_waterEnable;
+
+	static bool &m_bSpeedFX;
+	static bool &m_bSpeedFXTestMode;
+	static uint8 &m_SpeedFXAlpha;
+
+	/* My own */
+	static bool m_bBlurColourFilter;
+
+	static void UpdateFrontBuffer(void);
 };
 
 char *getpath(char *path);
@@ -166,10 +264,6 @@ RxPipeline *CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2(void);
 int myPluginAttach(void);
 void hookVehiclePipe(void);
 void hookBuildingPipe(void);
-void loadColorcycle(void);
-void readIni(int n);
-//void SetCloseFarAlphaDist(float close, float far);
-void resetValues(void);
 void D3D9Render(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData);
 void D3D9RenderDual(int dual, RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instancedData);
 
@@ -189,10 +283,15 @@ extern D3DLIGHT9 &gCarEnvMapLight;
 
 extern RxPipeline *buildingPipeline, *buildingDNPipeline;
 
-extern char &doRadiosity;
-
 extern RwTexture *&gpWhiteTexture;
 extern RwInt32 pdsOffset;
+
+extern int16 &CClock__ms_nGameClockSeconds;
+extern uint8 &CClock__ms_nGameClockMinutes;
+extern uint8 &CClock__ms_nGameClockHours;
+extern int16 &CWeather__OldWeatherType;
+extern int16 &CWeather__NewWeatherType;
+extern float &CWeather__InterpolationValue;
 
 extern void **rwengine;
 extern RwInt32 &CCustomCarEnvMapPipeline__ms_envMapPluginOffset;
@@ -213,7 +312,6 @@ extern void *ps2EnvSpecFxPS;	// also used by the building pipeline
 extern void *specCarFxVS, *specCarFxPS;
 extern void *xboxCarVS;
 // postfx
-extern void *postfxVS, *colorFilterPS, *radiosityPS, *grainPS;
 extern void *iiiTrailsPS, *vcTrailsPS;
 extern void *gradingPS;
 // building
@@ -234,13 +332,6 @@ inline void pipeSetTexture(RwTexture *t, int n) { RwD3D9SetTexture(t ? t : gpWhi
 
 extern int &dword_C02C20, &dword_C9BC60;
 extern RxPipeline *&skinPipe, *&CCustomCarEnvMapPipeline__ObjPipeline;
-
-extern int &CPostEffects__m_RadiosityFilterPasses;
-extern int &CPostEffects__m_RadiosityRenderPasses;
-extern int &CPostEffects__m_RadiosityIntensityLimit;
-extern int &CPostEffects__m_RadiosityIntensity;
-extern int &CPostEffects__m_RadiosityFilterUCorrection;
-extern int &CPostEffects__m_RadiosityFilterVCorrection;
 
 // reversed
 void D3D9RenderNotLit(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData);

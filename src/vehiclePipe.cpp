@@ -670,7 +670,6 @@ enum {
 };
 
 // TODO: reverse and implement this better
-volatile void *asdfoo;
 
 void
 CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
@@ -753,7 +752,6 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *ob
 		}
 
 		envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
-		asdfoo = (void*)envData;
 		RwTexture *tex1 = envData->texture;
 		if(notLit){
 			if(hasEnv2)
@@ -817,13 +815,6 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *ob
 			RwD3D9SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, 1);
 			RwD3D9SetTextureStageState(2, D3DTSS_COLOROP, D3DTOP_DISABLE);
 		}
-
-if(envData->texture != tex1)
-	exit(1);
-
-
-if(material->texture != instancedData->material->texture)
-	exit(1);
 
 		RwD3D9SetVertexShaderConstant(LOC_reflData, (void*)&reflData, 1);
 		RwD3D9SetVertexShaderConstant(LOC_envSwitch, (void*)&envSwitch, 1);

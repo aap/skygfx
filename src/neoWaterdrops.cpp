@@ -195,7 +195,7 @@ void hookWaterDrops()
 	auto CMotionBlurStreaksRenderHook = []()
 	{
 		CMotionBlurStreaksRender.fun();
-		if (neoTxd) {
+		if(neoTxd && config->neoWaterDrops){
 			WaterDrops::Process();
 			WaterDrops::Render();
 		}

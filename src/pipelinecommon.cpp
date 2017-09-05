@@ -192,13 +192,10 @@ void
 CreateShaders(void)
 {
 	// postfx
-	makeVS(IDR_POSTFXVS, &postfxVS);
-	makePS(IDR_FILTERPS, &colorFilterPS);
 	makePS(IDR_IIITRAILSPS, &iiiTrailsPS);
 	makePS(IDR_VCTRAILSPS, &vcTrailsPS);
-	makePS(IDR_RADIOSITYPS, &radiosityPS);
-	makePS(IDR_GRAINPS, &grainPS);
 	makePS(IDR_GRADINGPS, &gradingPS);
+
 	makePS(IDR_SIMPLEPS, &simplePS);
 
 	// vehicles

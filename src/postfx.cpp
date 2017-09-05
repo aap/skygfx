@@ -1,5 +1,16 @@
 #include "skygfx.h"
 
+float &CTimer__ms_fTimeStep = *(float*)0xB7CB5C;
+
+
+
+
+RwIm2DVertex *colorfilterVerts = (RwIm2DVertex*)0xC400D8;
+RwImVertexIndex *colorfilterIndices = (RwImVertexIndex*)0x8D5174;
+
+Imf &CPostEffects::ms_imf = *(Imf*)0xC40150;
+
+WRAPPER void CPostEffects::DarknessFilter(uint8 alpha) { EAXJMP(0x702F00); }
 WRAPPER void CPostEffects::Grain(int strengh, bool generate) { EAXJMP(0x7037C0); }
 WRAPPER void CPostEffects::SpeedFX(float) { EAXJMP(0x7030A0); }
 RwRaster *&CPostEffects::pRasterFrontBuffer = *(RwRaster**)0xC402D8;
@@ -18,35 +29,142 @@ int &CPostEffects::m_InfraredVisionGrainStrength = *(int*)0x8D50B4;
 int &CPostEffects::m_NightVisionGrainStrength = *(int*)0x8D50A8;
 bool &CPostEffects::m_bInfraredVision = *(bool*)0xC402B9;
 
+bool &CPostEffects::m_bDisableAllPostEffect = *(bool*)0xC402CF;
+
+bool &CPostEffects::m_bColorEnable = *(bool*)0x8D518C;
+int &CPostEffects::m_colourLeftUOffset = *(int*)0x8D5150;
+int &CPostEffects::m_colourRightUOffset = *(int*)0x8D5154;
+int &CPostEffects::m_colourTopVOffset = *(int*)0x8D5158;
+int &CPostEffects::m_colourBottomVOffset = *(int*)0x8D515C;
+float &CPostEffects::m_colour1Multiplier = *(float*)0x8D5160;
+float &CPostEffects::m_colour2Multiplier = *(float*)0x8D5164;
+float &CPostEffects::SCREEN_EXTRA_MULT_CHANGE_RATE = *(float*)0x8D5168;
+float &CPostEffects::SCREEN_EXTRA_MULT_BASE_CAP = *(float*)0x8D516C;
+float &CPostEffects::SCREEN_EXTRA_MULT_BASE_MULT = *(float*)0x8D5170;
+
+bool &CPostEffects::m_bRadiosity = *(bool*)0xC402CC;
+bool &CPostEffects::m_bRadiosityDebug = *(bool*)0xC402CD;
+int &CPostEffects::m_RadiosityFilterPasses = *(int*)0x8D510C;
+int &CPostEffects::m_RadiosityRenderPasses = *(int*)0x8D5110;
+int &CPostEffects::m_RadiosityIntensityLimit = *(int*)0x8D5114;
+int &CPostEffects::m_RadiosityIntensity = *(int*)0x8D5118;
+bool &CPostEffects::m_bRadiosityBypassTimeCycleIntensityLimit = *(bool*)0xC402CE;
+int &CPostEffects::m_RadiosityFilterUCorrection = *(int*)0x8D511C;
+int &CPostEffects::m_RadiosityFilterVCorrection = *(int*)0x8D5120;
+
+bool &CPostEffects::m_bDarknessFilter = *(bool*)0xC402C4;
+int &CPostEffects::m_DarknessFilterAlpha = *(int*)0x8D5204;
+int &CPostEffects::m_DarknessFilterAlphaDefault = *(int*)0x8D50F4;
+int &CPostEffects::m_DarknessFilterRadiosityIntensityLimit = *(int*)0x8D50F8;
+
+bool &CPostEffects::m_bCCTV = *(bool*)0xC402C5;
+bool &CPostEffects::m_bFog = *(bool*)0xC402C6;
+bool &CPostEffects::m_bNightVision = *(bool*)0xC402B8;
+bool &CPostEffects::m_bHeatHazeFX = *(bool*)0xC402BA;
+bool &CPostEffects::m_bHeatHazeMaskModeTest = *(bool*)0xC402BB;
+bool &CPostEffects::m_bGrainEnable = *(bool*)0xC402B4;
+bool &CPostEffects::m_waterEnable = *(bool*)0xC402D3;
+
+bool &CPostEffects::m_bSpeedFX = *(bool*)0x8D5100;
+bool &CPostEffects::m_bSpeedFXTestMode = *(bool*)0xC402C7;
+uint8 &CPostEffects::m_SpeedFXAlpha = *(uint8*)0x8D5104;
+
+/* My own */
+bool CPostEffects::m_bBlurColourFilter = true;
+
+
+/////
+///// Im2D overrides
+/////
+
+
+int overrideColorMod = -1;
+int overrideAlphaMod = -1;
+void *overrideIm2dPixelShader;
+
+void Im2DColorModulationHook(RwUInt32 stage, RwUInt32 type, RwUInt32 value)
+{
+	if(overrideColorMod >= 0)
+		RwD3D9SetTextureStageState(stage, type, overrideColorMod);
+	else
+		RwD3D9SetTextureStageState(stage, type, value);
+}
+void Im2DAlphaModulationHook(RwUInt32 stage, RwUInt32 type, RwUInt32 value)
+{
+	if(overrideAlphaMod >= 0)
+		RwD3D9SetTextureStageState(stage, type, overrideAlphaMod);
+	else
+		RwD3D9SetTextureStageState(stage, type, value);
+}
+
+void
+Im2dSetPixelShader_hook(void*)
+{
+	RwD3D9SetPixelShader(overrideIm2dPixelShader);
+}
+
+
+/////
+/////
+/////
+
 // Credits: much of the code in this file was originally written by NTAuthority
+// there's not a lot of that left now
 
-struct QuadVertex
-{
-	RwReal      x, y, z;
-	RwReal      rhw;
-	RwUInt32    emissiveColor;
-	RwReal      u, v;
-	RwReal      u1, v1;
-};
-
-struct ScreenVertex
-{
-	RwReal      x, y, z;
-	RwReal      rhw;
-	RwReal      u, v;
-};
-
-void *postfxVS, *colorFilterPS, *radiosityPS, *grainPS;
 void *iiiTrailsPS, *vcTrailsPS;
+RwRaster *grainRaster;
+
+
+// Mobile stuff
+struct Grade
+{
+	float r, g, b, a;
+};
 void *gradingPS;
-void *quadVertexDecl, *screenVertexDecl;
-RwRect smallRect;
-static QuadVertex quadVertices[4];
-static ScreenVertex screenVertices[4];
-RwRaster *target1, *target2;
+#define NUMHOURS 8
+#define NUMWEATHERS 23
+#define EXTRASTART 21
+
+struct GradeColorset
+{
+	Grade red;
+	Grade green;
+	Grade blue;
+
+	GradeColorset(void) {}
+	GradeColorset(int h, int w);
+	void Interpolate(GradeColorset *a, GradeColorset *b, float fa, float fb);
+};
+
+
+struct Colorcycle
+{
+	static bool initialised;
+	static Grade redGrade[NUMHOURS][NUMWEATHERS];
+	static Grade greenGrade[NUMHOURS][NUMWEATHERS];
+	static Grade blueGrade[NUMHOURS][NUMWEATHERS];
+
+	static void Initialise(void);
+	static void Update(GradeColorset *colorset);
+};
+
+
+
+
+void
+CPostEffects::UpdateFrontBuffer(void)
+{
+	RwCameraEndUpdate(Camera);
+	RwRasterPushContext(CPostEffects::pRasterFrontBuffer);
+	RwRasterRenderFast(RwCameraGetRaster(Camera), 0, 0);
+	RwRasterPopContext();
+	RwCameraBeginUpdate(Camera);
+}
+
+#ifdef VCS_POSTFX
 
 RwRaster *vcs_radiosity_target1, *vcs_radiosity_target2;
-static QuadVertex vcsVertices[24];
+static RwIm2DVertex vcsVertices[24];
 RwRect vcsRect;
 RwImVertexIndex vcsIndices1[] = {
 	0, 1, 2, 1, 2, 3,
@@ -62,28 +180,10 @@ RwImVertexIndex radiosityIndices[] = {
 	0, 1, 2, 1, 2, 3
 };
 
-static RwImVertexIndex* quadIndices = (RwImVertexIndex*)0x8D5174;
-
-void
-CPostEffects::SpeedFX_Fix(float fStrength)
-{
-	// So we don't do useless work if no colour postfx was performed
-	if(config->colorFilter < 2){
-		RwCameraEndUpdate(Camera);
-		RwRasterPushContext(CPostEffects::pRasterFrontBuffer);
-		RwRasterRenderFast(RwCameraGetRaster(Camera), 0, 0);
-		RwRasterPopContext();
-		RwCameraBeginUpdate(Camera);
-	}
-	CPostEffects::SpeedFX(fStrength);
-}
-
 RwD3D9Vertex radiosity_vcs_vertices[44];
 
 #define LIMIT (config->trailsLimit)
 #define INTENSITY (config->trailsIntensity)
-
-// vertex decl: C980F4
 
 void
 makequad(RwD3D9Vertex *v, int width, int height, int texwidth = 0, int texheight = 0)
@@ -381,355 +481,438 @@ if(0){
 	CPostEffects::ImmediateModeRenderStatesReStore();
 }
 
-void
-CPostEffects::Radiosity_PS2(int intensityLimit, int filterPasses, int renderPasses, int intensity)
-{
-	int width, height;
-	RwRaster *buffer1, *buffer2, *camraster;
-	float radiosityColors[4];
-	static RwTexture *tempTexture = NULL;
+#endif
 
+/* quad format:
+ * 0--3
+ * |\ |
+ * | \|
+ * 1--2 */
+void
+quadSetXY(RwIm2DVertex *verts, float x0, float y0, float x1, float y1)
+{
+	RwIm2DVertexSetScreenX(&verts[0], x0);
+	RwIm2DVertexSetScreenY(&verts[0], y0);
+	RwIm2DVertexSetScreenX(&verts[1], x0);
+	RwIm2DVertexSetScreenY(&verts[1], y1);
+	RwIm2DVertexSetScreenX(&verts[2], x1);
+	RwIm2DVertexSetScreenY(&verts[2], y1);
+	RwIm2DVertexSetScreenX(&verts[3], x1);
+	RwIm2DVertexSetScreenY(&verts[3], y0);
+}
+
+void
+quadSetUV(RwIm2DVertex *verts, float u0, float v0, float u1, float v1)
+{
+	RwIm2DVertexSetU(&verts[0], u0, 1.0f);
+	RwIm2DVertexSetV(&verts[0], v0, 1.0f);
+	RwIm2DVertexSetU(&verts[1], u0, 1.0f);
+	RwIm2DVertexSetV(&verts[1], v1, 1.0f);
+	RwIm2DVertexSetU(&verts[2], u1, 1.0f);
+	RwIm2DVertexSetV(&verts[2], v1, 1.0f);
+	RwIm2DVertexSetU(&verts[3], u1, 1.0f);
+	RwIm2DVertexSetV(&verts[3], v0, 1.0f);
+}
+
+void
+CPostEffects::DrawQuadSetUVs(float utl, float vtl, float utr, float vtr, float ubr, float vbr, float ubl, float vbl)
+{
+	RwIm2DVertexSetU(&ms_imf.quad_verts[0], utl, ms_imf.recipZ);
+	RwIm2DVertexSetV(&ms_imf.quad_verts[0], vtl, ms_imf.recipZ);
+	RwIm2DVertexSetU(&ms_imf.quad_verts[1], utr, ms_imf.recipZ);
+	RwIm2DVertexSetV(&ms_imf.quad_verts[1], vtr, ms_imf.recipZ);
+	RwIm2DVertexSetU(&ms_imf.quad_verts[2], ubl, ms_imf.recipZ);
+	RwIm2DVertexSetV(&ms_imf.quad_verts[2], vbl, ms_imf.recipZ);
+	RwIm2DVertexSetU(&ms_imf.quad_verts[3], ubr, ms_imf.recipZ);
+	RwIm2DVertexSetV(&ms_imf.quad_verts[3], vbr, ms_imf.recipZ);
+}
+
+void
+CPostEffects::DrawQuadSetDefaultUVs(void)
+{
+	DrawQuadSetUVs(0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f);
+}
+
+/*
 	if(!config->doRadiosity)
 		return;
 
 	if(config->vcsTrails){
 		CPostEffects::Radiosity_VCS(intensityLimit, intensity);
-		if(config->colorFilter == 5)
+		if(config->colorFilter == 6)
 			CPostEffects::Blur_VCS();
 		return;
 	}
-	if(tempTexture == NULL){
-		tempTexture = RwTextureCreate(NULL);
-		tempTexture->filterAddressing = 0x1102;
+*/
+
+void
+CPostEffects::Radiosity(int intensityLimit, int filterPasses, int renderPasses, int intensity)
+{
+	static RwRaster *workBuffer;
+	if(workBuffer)
+		if(workBuffer->width != pRasterFrontBuffer->width ||
+		   workBuffer->height != pRasterFrontBuffer->height ||
+		   workBuffer->depth != pRasterFrontBuffer->depth){
+			RwRasterDestroy(workBuffer);
+			workBuffer = nil;
+		}
+	if(workBuffer == nil)
+		workBuffer = RwRasterCreate(pRasterFrontBuffer->width, pRasterFrontBuffer->height, pRasterFrontBuffer->depth, rwRASTERTYPECAMERATEXTURE);
+
+	RwRaster *renderBuffer, *textureBuffer;
+
+	RwRaster *drawBuffer = RwCameraGetRaster(Camera);
+
+	RwInt32 w = RwRasterGetWidth(drawBuffer);
+	RwInt32 h = RwRasterGetHeight(drawBuffer);
+	RwReal width = RwRasterGetWidth(pRasterFrontBuffer);
+	RwReal height = RwRasterGetHeight(pRasterFrontBuffer);
+	float umin, umax, vmin, vmax;
+
+	static RwIm2DVertex verts[4];
+
+	float nearscreen = RwIm2DGetNearScreenZ();
+	float nearcam = RwCameraGetNearClipPlane(Camera);
+	float recipz = 1.0f/nearcam;
+	for(int i = 0; i < 4; i++){
+		RwIm2DVertexSetScreenZ(&verts[i], nearscreen);
+		RwIm2DVertexSetCameraZ(&verts[i], nearcam);
+		RwIm2DVertexSetRecipCameraZ(&verts[i], recipz);
+		RwIm2DVertexSetIntRGBA(&verts[i], 255, 255, 255, 255);
 	}
 
-
-	width = RsGlobal->MaximumWidth;
-	height = RsGlobal->MaximumHeight;
-
-	if(target1->width < width || target2->width < width ||
-	   target1->height < height || target2->height < height || 
-	   target1->width != target2->width || target1->height != target2->height){
-		int width2 = 1, height2 = 1;
-		while(width2 < width) width2 <<= 1;
-		while(height2 < height) height2 <<= 1;
-		RwRasterDestroy(target1);
-		target1 = RwRasterCreate(width2, height2, CPostEffects::pRasterFrontBuffer->depth, 5);
-		RwRasterDestroy(target2);
-		target2 = RwRasterCreate(width2, height2, CPostEffects::pRasterFrontBuffer->depth, 5);
-	}
-	buffer1 = target1;
-	buffer2 = target2;
-
-	RwCameraEndUpdate(Camera);
-	RwRasterPushContext(buffer1);
-	camraster = RwCameraGetRaster(Camera);
-	RwRasterRenderFast(RwCameraGetRaster(Camera), 0, 0);
-	RwRasterPopContext();
-	RwCameraBeginUpdate(Camera);
-
-	float rasterWidth = RwRasterGetWidth(target1);
-	float rasterHeight = RwRasterGetHeight(target1);
-	float xOffsetScale = width/640.0f;
-	float yOffsetScale = height/480.0f;
-
-	screenVertices[0].z = 0.0f;
-	screenVertices[0].rhw = 1.0f / Camera->nearPlane;
-	screenVertices[1].z = 0.0f;
-	screenVertices[1].rhw = 1.0f / Camera->nearPlane;
-	screenVertices[2].z = 0.0f;
-	screenVertices[2].rhw = 1.0f / Camera->nearPlane;
-	screenVertices[3].z = 0.0f;
-	screenVertices[3].rhw = 1.0f / Camera->nearPlane;
-
-	RwD3D9SetVertexDeclaration(screenVertexDecl);
-	RwD3D9SetVertexShader(NULL);
-	RwD3D9SetPixelShader(NULL);
-
-	int blend, srcblend, destblend, ztest, zwrite;
-	RwRenderStateGet(rwRENDERSTATEVERTEXALPHAENABLE, &blend);
-	RwRenderStateGet(rwRENDERSTATESRCBLEND, &srcblend);
-	RwRenderStateGet(rwRENDERSTATEDESTBLEND, &destblend);
-	RwRenderStateGet(rwRENDERSTATEZTESTENABLE, &ztest);
-	RwRenderStateGet(rwRENDERSTATEZWRITEENABLE, &zwrite);
-
-	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)0);
-	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
-	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDZERO);
-	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)0);
-	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)0);
-	RwD3D9SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
-
-	RwD3D9SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
-	RwD3D9SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
-	RwD3D9SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
-	RwD3D9SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
-
-	screenVertices[0].x = 0.0f;
-	screenVertices[0].y = 0.0f;
-	screenVertices[0].u = (config->radiosityFilterUCorrection*xOffsetScale + 0.5f) / rasterWidth;
-	screenVertices[0].v = (config->radiosityFilterVCorrection*yOffsetScale + 0.5f) / rasterHeight;
-	screenVertices[2].x = screenVertices[0].x;
-	screenVertices[1].y = screenVertices[0].y;
-	screenVertices[2].u = screenVertices[0].u;
-	screenVertices[1].v = screenVertices[0].v;
-
-	for(int i = 0; i < filterPasses; i++){
-		screenVertices[3].x = width/2 + 1*xOffsetScale;
-		screenVertices[3].y = height/2 + 1*yOffsetScale;
-		screenVertices[3].u = (width + 0.5f) / rasterWidth;
-		screenVertices[3].v = (height + 0.5f) / rasterHeight;
-
-		screenVertices[1].x = screenVertices[3].x;
-		screenVertices[2].y = screenVertices[3].y;
-		screenVertices[1].u = screenVertices[3].u;
-		screenVertices[2].v = screenVertices[3].v;
-
-		width /= 2;
-		height /= 2;
-
-//		RwD3D9SetRenderTarget(0, buffer2);
-		RwCameraEndUpdate(Camera);
-		RwCameraSetRaster(Camera, buffer2);
-		RwCameraBeginUpdate(Camera);
-
-		tempTexture->raster = buffer1;
-		RwD3D9SetTexture(tempTexture, 0);
-		RwD3D9DrawIndexedPrimitiveUP(D3DPT_TRIANGLELIST, 0, 6, 2, radiosityIndices, screenVertices, sizeof(ScreenVertex));
-		RwRaster *tmp = buffer1;
-		buffer1 = buffer2;
-		buffer2 = tmp;
-	}
-
-	screenVertices[0].x = 0.0f;
-	screenVertices[0].y = 0.0f;
-	screenVertices[0].u = 0.5f / rasterWidth;
-	screenVertices[0].v = 0.5f / rasterHeight;
-
-	screenVertices[3].x = RsGlobal->MaximumWidth;
-	screenVertices[3].y = RsGlobal->MaximumHeight;
-	screenVertices[3].u = (width+0.5f) / rasterWidth;
-	screenVertices[3].v = (height+0.5f) / rasterHeight;
-
-	screenVertices[1].x = screenVertices[3].x;
-	screenVertices[2].y = screenVertices[3].y;
-	screenVertices[1].u = screenVertices[3].u;
-	screenVertices[2].v = screenVertices[3].v;
-	screenVertices[2].x = screenVertices[0].x;
-	screenVertices[1].y = screenVertices[0].y;
-	screenVertices[2].u = screenVertices[0].u;
-	screenVertices[1].v = screenVertices[0].v;
-
-	RwCameraEndUpdate(Camera);
-	RwCameraSetRaster(Camera, camraster);
-	RwCameraBeginUpdate(Camera);
-
-	tempTexture->raster = buffer1;
-	RwD3D9SetTexture(tempTexture, 0);
-	RwD3D9SetPixelShader(radiosityPS);
-
-	radiosityColors[0] = intensityLimit/255.0f;
-	radiosityColors[1] = (intensity/255.0f)*renderPasses;
-	RwD3D9SetPixelShaderConstant(0, radiosityColors, 1);
-
-	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)1);
-	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
-	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
 
 	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
+	RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)FALSE);
+	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)FALSE);
+	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
+	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)FALSE);
 
-	RwD3D9DrawIndexedPrimitiveUP(D3DPT_TRIANGLELIST, 0, 6, 2, radiosityIndices, screenVertices, sizeof(ScreenVertex));
+	renderBuffer = workBuffer;
+	textureBuffer  = pRasterFrontBuffer;
+	RwCameraEndUpdate(Camera);
+	RwCameraSetRaster(Camera, renderBuffer);
+	RwCameraBeginUpdate(Camera);
+	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, (void*)textureBuffer);
 
-	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)blend);
-	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)srcblend);
-	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)destblend);
-	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)ztest);
-	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)zwrite);
+	int downsampledwidth = w;
+	int downsampledheight = h;
 
-	RwD3D9SetVertexShader(NULL);
-	RwD3D9SetPixelShader(NULL);
+	// First step: Downsample
+	for(int i = 0; i < filterPasses; i++){
+		umin = (m_RadiosityFilterUCorrection + 0.5f)/width;
+		umax = (downsampledwidth + 0.5f)/width;
+		vmin = (m_RadiosityFilterVCorrection + 0.5f)/height;
+		vmax = (downsampledheight + 0.5f)/height;
+
+		downsampledwidth /= 2;
+		downsampledheight /= 2;
+
+		quadSetUV(verts, umin, vmin, umax, vmax);
+		quadSetXY(verts, 0.0f, 0.0f, downsampledwidth+1, downsampledheight+1);
+
+		RwIm2DRenderIndexedPrimitive(rwPRIMTYPETRILIST, verts, 4, colorfilterIndices, 6);
+
+		// Switch buffers
+		RwRaster *tmp = renderBuffer;
+		renderBuffer = textureBuffer;
+		textureBuffer = tmp;
+		RwD3D9SetRenderTarget(0, renderBuffer);
+		RwRenderStateSet(rwRENDERSTATETEXTURERASTER, (void*)textureBuffer);
+	}
+
+	// Second step: Subtract intensity value
+	umin = (0 + 0.5f)/width;
+	umax = (downsampledwidth+1 + 0.5f)/width;
+	vmin = (0 + 0.5f)/height;
+	vmax = (downsampledheight+1 + 0.5f)/height;
+
+	quadSetUV(verts, umin, vmin, umax, vmax);
+	quadSetXY(verts, 0.0f, 0.0f, downsampledwidth+1, downsampledheight+1);
+
+	// D = 2*D - limit
+	// We do 2*(D - limit/2) because the fixed function combiners can't do the above
+	int limit = intensityLimit*128/255;
+	RwD3D9SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_SUBTRACT);
+	RwD3D9SetTextureStageState(1, D3DTSS_COLORARG1, D3DTA_CURRENT);
+	RwD3D9SetTextureStageState(1, D3DTSS_COLORARG2, D3DTA_CONSTANT);
+	RwD3D9SetTextureStageState(1, D3DTSS_CONSTANT, D3DCOLOR_ARGB(255, limit, limit, limit));
+	RwD3D9SetTextureStageState(2, D3DTSS_COLOROP, D3DTOP_ADD);
+	RwD3D9SetTextureStageState(2, D3DTSS_COLORARG1, D3DTA_CURRENT);
+	RwD3D9SetTextureStageState(2, D3DTSS_COLORARG2, D3DTA_CURRENT);
+
+	RwIm2DRenderIndexedPrimitive(rwPRIMTYPETRILIST, verts, 4, colorfilterIndices, 6);
+
+	RwD3D9SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_DISABLE);
+	RwD3D9SetTextureStageState(2, D3DTSS_COLOROP, D3DTOP_DISABLE);
+
+	RwCameraEndUpdate(Camera);
+	RwCameraSetRaster(Camera, drawBuffer);
+	RwCameraBeginUpdate(Camera);
+	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, (void*)renderBuffer);
+
+	// Third step: add to framebuffer
+	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)!m_bRadiosityDebug);
+	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDSRCALPHA);
+	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
+	umin = (0 + 0.5f)/width;
+	umax = (downsampledwidth + 0.5f)/width;
+	vmin = (0 + 0.5f)/height;
+	vmax = (downsampledheight + 0.5f)/height;
+	quadSetUV(verts, umin, vmin, umax, vmax);
+	quadSetXY(verts, 0.0f, 0.0f, w, h);
+	RwIm2DVertexSetIntRGBA(&verts[0], 255, 255, 255, intensity);
+	RwIm2DVertexSetIntRGBA(&verts[1], 255, 255, 255, intensity);
+	RwIm2DVertexSetIntRGBA(&verts[2], 255, 255, 255, intensity);
+	RwIm2DVertexSetIntRGBA(&verts[3], 255, 255, 255, intensity);
+	for(int i = 0; i < renderPasses; i++)
+		RwIm2DRenderIndexedPrimitive(rwPRIMTYPETRILIST, verts, 4, colorfilterIndices, 6);
+
+
+	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)TRUE);
+	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
+	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, (void*)NULL);
+	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDSRCALPHA);
+	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDINVSRCALPHA);
+
+	UpdateFrontBuffer();
+}
+
+void
+CPostEffects::DarknessFilter_fix(uint8 alpha)
+{
+	DarknessFilter(alpha);
+	UpdateFrontBuffer();
 }
 
 void
 CPostEffects::ColourFilter_Generic(RwRGBA rgb1, RwRGBA rgb2, void *ps)
 {
-	float rasterWidth = RwRasterGetWidth(CPostEffects::pRasterFrontBuffer);
-	float rasterHeight = RwRasterGetHeight(CPostEffects::pRasterFrontBuffer);
-	float halfU = 0.5 / rasterWidth;
-	float halfV = 0.5 / rasterHeight;
-	float uMax = RsGlobal->MaximumWidth / rasterWidth;
-	float vMax = RsGlobal->MaximumHeight / rasterHeight;
-	int i = 0;
-
-	float leftOff, rightOff, topOff, bottomOff;
-	float scale = RsGlobal->MaximumWidth/640.0f;
-	leftOff = (float)config->offLeft*scale / 16.0f / rasterWidth;
-	rightOff = (float)config->offRight*scale / 16.0f / rasterWidth;
-	topOff = (float)config->offTop*scale / 16.0f / rasterHeight;
-	bottomOff = (float)config->offBottom*scale / 16.0f / rasterHeight;
-
-	quadVertices[i].x = 1.0f;
-	quadVertices[i].y = -1.0f;
-	quadVertices[i].z = 0.0f;
-	quadVertices[i].rhw = 1.0f;
-	quadVertices[i].u = uMax + halfU;
-	quadVertices[i].v = vMax + halfV;
-	quadVertices[i].u1 = quadVertices[i].u + rightOff;
-	quadVertices[i].v1 = quadVertices[i].v + bottomOff;
-	i++;
-
-	quadVertices[i].x = -1.0f;
-	quadVertices[i].y = -1.0f;
-	quadVertices[i].z = 0.0f;
-	quadVertices[i].rhw = 1.0f;
-	quadVertices[i].u = 0.0f + halfU;
-	quadVertices[i].v = vMax + halfV;
-	quadVertices[i].u1 = quadVertices[i].u + leftOff;
-	quadVertices[i].v1 = quadVertices[i].v + bottomOff;
-	i++;
-
-	quadVertices[i].x = -1.0f;
-	quadVertices[i].y = 1.0f;
-	quadVertices[i].z = 0.0f;
-	quadVertices[i].rhw = 1.0f;
-	quadVertices[i].u = 0.0f + halfU;
-	quadVertices[i].v = 0.0f + halfV;
-	quadVertices[i].u1 = quadVertices[i].u + leftOff;
-	quadVertices[i].v1 = quadVertices[i].v + topOff;
-	i++;
-
-	quadVertices[i].x = 1.0f;
-	quadVertices[i].y = 1.0f;
-	quadVertices[i].z = 0.0f;
-	quadVertices[i].rhw = 1.0f;
-	quadVertices[i].u = uMax + halfU;
-	quadVertices[i].v = 0.0f + halfV;
-	quadVertices[i].u1 = quadVertices[i].u + rightOff;
-	quadVertices[i].v1 = quadVertices[i].v + topOff;
-	
-	static RwTexture *tempTexture = NULL;
-	if(tempTexture == NULL){
-		tempTexture = RwTextureCreate(NULL);
-		tempTexture->filterAddressing = 0x1102;
-	}
-	tempTexture->raster = CPostEffects::pRasterFrontBuffer;
-	RwD3D9SetTexture(tempTexture, 0);
-
-	RwD3D9SetVertexDeclaration(quadVertexDecl);
-
-	RwD3D9SetVertexShader(postfxVS);
-	RwD3D9SetPixelShader(ps);
+	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERNEAREST);
+	RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)FALSE);
+	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)FALSE);
+	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
+	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, (void*)CPostEffects::pRasterFrontBuffer);
+	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)FALSE);
 
 	RwRGBAReal color, color2;
 	RwRGBARealFromRwRGBA(&color, &rgb1);
 	RwRGBARealFromRwRGBA(&color2, &rgb2);
-
 	RwD3D9SetPixelShaderConstant(0, &color, 1);
 	RwD3D9SetPixelShaderConstant(1, &color2, 1);
 
-	RwD3D9SetRenderState(D3DRS_ALPHABLENDENABLE, 0);
-	RwD3D9SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
-	RwD3D9DrawIndexedPrimitiveUP(D3DPT_TRIANGLELIST, 0, 6, 2, quadIndices, quadVertices, sizeof(QuadVertex));
+	overrideIm2dPixelShader = ps;
+	RwIm2DRenderIndexedPrimitive(rwPRIMTYPETRILIST, colorfilterVerts, 4, colorfilterIndices, 6);
+	overrideIm2dPixelShader = nil;
 
-	RwD3D9SetRenderState(D3DRS_ALPHABLENDENABLE, 1);
-
-	RwD3D9SetVertexShader(NULL);
-	RwD3D9SetPixelShader(NULL);
+	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
+	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)TRUE);
+	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
+	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, (void*)NULL);
+	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
 }
-
-void *overrideIm2dPixelShader;
 
 void
-Im2dSetPixelShader_hook(void*)
+CPostEffects::ColourFilter_Mobile(RwRGBA rgba1, RwRGBA rgba2)
 {
-	if(overrideIm2dPixelShader)
-		RwD3D9SetPixelShader(overrideIm2dPixelShader);
-	else
-		RwD3D9SetPixelShader(NULL);
+	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERNEAREST);
+	RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)FALSE);
+	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)FALSE);
+	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
+	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, (void*)CPostEffects::pRasterFrontBuffer);
+	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)FALSE);
+
+	if(!Colorcycle::initialised)
+		Colorcycle::Initialise();
+
+	GradeColorset cset;
+	Colorcycle::Update(&cset);
+	Grade red, green, blue;
+	red = cset.red;
+	green = cset.green;
+	blue = cset.blue;
+
+	// Mobile colors
+	float r = rgba1.red + rgba2.red;
+	float g = rgba1.green + rgba2.green;
+	float b = rgba1.blue + rgba2.blue;
+	float invsqrt = 1.0f/sqrt(r*r + g*g + b*b);
+	r *= invsqrt;
+	g *= invsqrt;
+	b *= invsqrt;
+	red.r = (1.5f + r*1.732f)*0.4f*red.r;
+	green.g = (1.5f + g*1.732f)*0.4f*green.g;
+	blue.b = (1.5f + b*1.732f)*0.4f*blue.b;
+
+/*	// Fun trick: PS2 colour filter:
+	float a = rgba2.alpha/128.0f;
+	red.r = rgba1.red/128.0f + a*rgba2.red/128.0f;
+	green.g = rgba1.green/128.0f + a*rgba2.green/128.0f;
+	blue.b = rgba1.blue/128.0f + a*rgba2.blue/128.0f;
+	red.g = red.b = red.a = 0.0f;
+	green.r = green.b = green.a = 0.0f;
+	blue.r = blue.g = blue.a = 0.0f;
+*/
+/*	// Also fun: PC colour filter:
+	float a1 = rgba1.alpha/128.0f;
+	float a2 = rgba2.alpha/128.0f;
+	red.r = 1.0f + a1*rgba1.red/255.0f + a2*rgba2.red/255.0f;
+	green.g = 1.0f + a1*rgba1.green/255.0f + a2*rgba2.green/255.0f;
+	blue.b = 1.0f + a1*rgba1.blue/255.0f + a2*rgba2.blue/255.0f;
+	red.g = red.b = red.a = 0.0f;
+	green.r = green.b = green.a = 0.0f;
+	blue.r = blue.g = blue.a = 0.0f;
+*/
+
+	RwD3D9SetPixelShaderConstant(0, &red, 1);
+	RwD3D9SetPixelShaderConstant(1, &green, 1);
+	RwD3D9SetPixelShaderConstant(2, &blue, 1);
+
+	overrideIm2dPixelShader = gradingPS;
+	RwIm2DRenderIndexedPrimitive(rwPRIMTYPETRILIST, colorfilterVerts, 4, colorfilterIndices, 6);
+	overrideIm2dPixelShader = nil;
+
+	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
+	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)TRUE);
+	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
+	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, (void*)NULL);
+	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
 }
 
+void
+CPostEffects::ColourFilter_PS2(RwRGBA rgba1, RwRGBA rgba2)
+{
+	RwIm2DVertex *verts;
 
-RwIm2DVertex *postfxQuad = (RwIm2DVertex*)0xC401D8;
-RwRaster *&visionRaster = *(RwRaster**)0xC40158;
-RwRaster *grainRaster;
+	verts = colorfilterVerts;
+	// Setup state
+	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERNEAREST);
+	RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)FALSE);
+	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)FALSE);
+	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
+	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, (void*)CPostEffects::pRasterFrontBuffer);
+
+	// Make Im2D use PS2 color range
+	overrideColorMod = D3DTOP_MODULATE2X;
+	overrideAlphaMod = D3DTOP_MODULATE2X;
+
+	// First color - replace
+	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)FALSE);
+	RwIm2DVertexSetIntRGBA(&verts[0], rgba1.red, rgba1.green, rgba1.blue, 255);
+	RwIm2DVertexSetIntRGBA(&verts[1], rgba1.red, rgba1.green, rgba1.blue, 255);
+	RwIm2DVertexSetIntRGBA(&verts[2], rgba1.red, rgba1.green, rgba1.blue, 255);
+	RwIm2DVertexSetIntRGBA(&verts[3], rgba1.red, rgba1.green, rgba1.blue, 255);
+	RwIm2DRenderIndexedPrimitive(rwPRIMTYPETRILIST, verts, 4, colorfilterIndices, 6);
+
+	if(m_bBlurColourFilter){
+		static RwIm2DVertex blurVerts[4];
+		float rasterWidth = RwRasterGetWidth(CPostEffects::pRasterFrontBuffer);
+		float rasterHeight = RwRasterGetHeight(CPostEffects::pRasterFrontBuffer);
+		float leftOff   = m_colourLeftUOffset/16.0f   / rasterWidth;
+		float rightOff  = m_colourRightUOffset/16.0f  / rasterWidth;
+		float topOff    = m_colourTopVOffset/16.0f    / rasterHeight;
+		float bottomOff = m_colourBottomVOffset/16.0f / rasterHeight;
+		memcpy(blurVerts, verts, sizeof(blurVerts));
+		/* These are our vertices:
+		 * 0--3
+		 * |\ |
+		 * | \|
+		 * 1--2 */
+		// We can get away without setting zrecip on D3D
+		RwIm2DVertexSetU(&blurVerts[0], RwIm2DVertexGetU(&blurVerts[0]) + leftOff, 1.0f);
+		RwIm2DVertexSetU(&blurVerts[1], RwIm2DVertexGetU(&blurVerts[1]) + leftOff, 1.0f);
+		RwIm2DVertexSetU(&blurVerts[2], RwIm2DVertexGetU(&blurVerts[2]) + rightOff, 1.0f);
+		RwIm2DVertexSetU(&blurVerts[3], RwIm2DVertexGetU(&blurVerts[3]) + rightOff, 1.0f);
+		RwIm2DVertexSetV(&blurVerts[0], RwIm2DVertexGetV(&blurVerts[0]) + topOff, 1.0f);
+		RwIm2DVertexSetV(&blurVerts[3], RwIm2DVertexGetV(&blurVerts[3]) + topOff, 1.0f);
+		RwIm2DVertexSetV(&blurVerts[1], RwIm2DVertexGetV(&blurVerts[1]) + bottomOff, 1.0f);
+		RwIm2DVertexSetV(&blurVerts[2], RwIm2DVertexGetV(&blurVerts[2]) + bottomOff, 1.0f);
+		verts = blurVerts;
+	}
+
+	// Second color - add
+	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
+	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDSRCALPHA);
+	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
+	RwIm2DVertexSetIntRGBA(&verts[0], rgba2.red, rgba2.green, rgba2.blue, rgba2.alpha);
+	RwIm2DVertexSetIntRGBA(&verts[1], rgba2.red, rgba2.green, rgba2.blue, rgba2.alpha);
+	RwIm2DVertexSetIntRGBA(&verts[2], rgba2.red, rgba2.green, rgba2.blue, rgba2.alpha);
+	RwIm2DVertexSetIntRGBA(&verts[3], rgba2.red, rgba2.green, rgba2.blue, rgba2.alpha);
+	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDSRCALPHA);
+ 	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
+	RwIm2DRenderIndexedPrimitive(rwPRIMTYPETRILIST, verts, 4, colorfilterIndices, 6);
+
+	// Restore state
+	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
+	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)TRUE);
+	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
+	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, (void*)NULL);
+	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDSRCALPHA);
+	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDINVSRCALPHA);
+
+	overrideColorMod = -1;
+	overrideAlphaMod = -1;
+}
 
 void
 CPostEffects::SetFilterMainColour_PS2(RwRaster *raster, RwRGBA color)
 {
-	static float colorScale = 255.0f/128.0f;
-	CPostEffects::ImmediateModeRenderStatesStore();
-	CPostEffects::ImmediateModeRenderStatesSet();
-	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, 0);
-	RwD3D9SetPixelShaderConstant(0, &colorScale, 1);
-	overrideIm2dPixelShader = simplePS;
-	CPostEffects::DrawQuad(0, 0, RwRasterGetWidth(raster), RwRasterGetHeight(raster),
-	                       color.red, color.green, color.blue, color.alpha, raster);
-	overrideIm2dPixelShader = NULL;
-	CPostEffects::ImmediateModeRenderStatesReStore();
+	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERNEAREST);
+	RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)FALSE);
+	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)FALSE);
+	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
+	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, pRasterFrontBuffer);
+	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)FALSE);
+	RwIm2DVertexSetIntRGBA(&colorfilterVerts[0], color.red, color.green, color.blue, color.alpha);
+	RwIm2DVertexSetIntRGBA(&colorfilterVerts[1], color.red, color.green, color.blue, color.alpha);
+	RwIm2DVertexSetIntRGBA(&colorfilterVerts[2], color.red, color.green, color.blue, color.alpha);
+	RwIm2DVertexSetIntRGBA(&colorfilterVerts[3], color.red, color.green, color.blue, color.alpha);
+	overrideColorMod = D3DTOP_MODULATE2X;
+	RwIm2DRenderIndexedPrimitive(rwPRIMTYPETRILIST, colorfilterVerts, 4, colorfilterIndices, 6);
+	overrideColorMod = -1;
+
+	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)TRUE);
+	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
+	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, nil);
 }
 
 void
 CPostEffects::InfraredVision_PS2(RwRGBA c1, RwRGBA c2)
 {
 	if(config->infraredVision != 0){
-		CPostEffects::InfraredVision(c1, c2);
+		InfraredVision(c1, c2);
 		return;
 	}
 
 	CPostEffects::ImmediateModeRenderStatesStore();
-	CPostEffects::ImmediateModeRenderStatesSet();
+	ImmediateModeRenderStatesSet();
 
-	float r = CPostEffects::m_fInfraredVisionFilterRadius;
+	float r = m_fInfraredVisionFilterRadius;
 	// not sure this scales correctly, but it looks ok (need better brain)
-	float ru = r * RsGlobal->MaximumWidth  / RwRasterGetWidth(visionRaster)  * 1024.0f / 640.0f;
-	float rv = r * RsGlobal->MaximumHeight / RwRasterGetHeight(visionRaster) * 512.0f  / 448.0f;
+	float ru = r * RsGlobal->MaximumWidth  / RwRasterGetWidth(ms_imf.frontBuffer)  * 1024.0f / 640.0f;
+	float rv = r * RsGlobal->MaximumHeight / RwRasterGetHeight(ms_imf.frontBuffer) * 512.0f  / 448.0f;
 	float uoff[4] = { -ru, ru, ru, -ru };
 	float voff[4] = { -rv, -rv, rv, rv };
 
-	float umin, vmin, umax, vmax;
-	umin = 0.0f;
-	vmin = 0.0f;
-	umax = 2.0f;
-	vmax = 2.0f;
+	// PS2 draws the filter triangle triangle...we draw the quad
 	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
 	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
 	for(int i = 0; i < 4; i++){
-		RwCameraEndUpdate(Camera);
-		RwRasterPushContext(visionRaster);
-		RwRasterRenderFast(RwCameraGetRaster(Camera), 0, 0);
-		RwRasterPopContext();
-		RwCameraBeginUpdate(Camera);
+		DrawQuadSetUVs(ms_imf.tri_umin + uoff[i], ms_imf.tri_vmin + voff[i],
+		               ms_imf.tri_umax + uoff[i], ms_imf.tri_vmin + voff[i],
+		               ms_imf.tri_umax + uoff[i], ms_imf.tri_vmax + voff[i],
+		               ms_imf.tri_umin + uoff[i], ms_imf.tri_vmax + voff[i]);
+		DrawQuad(0, 0, RwRasterGetWidth(ms_imf.frontBuffer)*2, RwRasterGetHeight(ms_imf.frontBuffer)*2,
+		                       c1.red, c1.green, c1.blue, 0xFFu, ms_imf.frontBuffer);
 
-		postfxQuad[0].u = umin + uoff[i];
-		postfxQuad[0].v = vmin + voff[i];
-		postfxQuad[3].u = umax + uoff[i];
-		postfxQuad[3].v = vmax + voff[i];
-		postfxQuad[1].u = postfxQuad[3].u;
-		postfxQuad[1].v = postfxQuad[0].v;
-		postfxQuad[2].u = postfxQuad[0].u;
-		postfxQuad[2].v = postfxQuad[3].v;
-		CPostEffects::DrawQuad(0, 0, RwRasterGetWidth(visionRaster)*2, RwRasterGetHeight(visionRaster)*2,
-		                       c1.red, c1.green, c1.blue, 0xFFu, visionRaster);
+		UpdateFrontBuffer();
 	}
-	postfxQuad[0].u = 0.0f;
-	postfxQuad[0].v = 0.0f;
-	postfxQuad[1].u = 1.0f;
-	postfxQuad[1].v = 0.0f;
-	postfxQuad[2].u = 0.0f;
-	postfxQuad[2].v = 1.0f;
-	postfxQuad[3].u = 1.0f;
-	postfxQuad[3].v = 1.0f;
-	CPostEffects::ImmediateModeRenderStatesReStore();
+	DrawQuadSetDefaultUVs();
+	ImmediateModeRenderStatesReStore();
 
-	RwCameraEndUpdate(Camera);
-	RwRasterPushContext(visionRaster);
-	RwRasterRenderFast(RwCameraGetRaster(Camera), 0, 0);
-	RwRasterPopContext();
-	RwCameraBeginUpdate(Camera);
-	CPostEffects::SetFilterMainColour_PS2(visionRaster, c2);
+	SetFilterMainColour_PS2(ms_imf.frontBuffer, c2);
+	UpdateFrontBuffer();
 }
-
-float &CTimer__ms_fTimeStep = *(float*)0xB7CB5C;
 
 void
 CPostEffects::NightVision_PS2(RwRGBA color)
@@ -748,20 +931,16 @@ CPostEffects::NightVision_PS2(RwRGBA color)
 		RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
 		RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
 		int n = CPostEffects::m_fNightVisionSwitchOnFXCount;
-		while(n--){
-		        float w = RwRasterGetWidth(visionRaster);
-		        float h = RwRasterGetHeight(visionRaster);
-		        CPostEffects::DrawQuad(0.0f, 0.0f, w, h, 8, 8, 8, 0xFF, visionRaster);
-		}
+		while(n--)
+		        CPostEffects::DrawQuad(0.0f, 0.0f,
+				RwRasterGetWidth(ms_imf.frontBuffer), RwRasterGetHeight(ms_imf.frontBuffer),
+				8, 8, 8, 255, ms_imf.frontBuffer);
 		CPostEffects::ImmediateModeRenderStatesReStore();
 	}
 
-	RwCameraEndUpdate(Camera);
-	RwRasterPushContext(visionRaster);
-	RwRasterRenderFast(RwCameraGetRaster(Camera), 0, 0);
-	RwRasterPopContext();
-	RwCameraBeginUpdate(Camera);
-	CPostEffects::SetFilterMainColour_PS2(visionRaster, color);
+	UpdateFrontBuffer();
+	CPostEffects::SetFilterMainColour_PS2(ms_imf.frontBuffer, color);
+	UpdateFrontBuffer();
 }
 
 
@@ -800,139 +979,34 @@ CPostEffects::Grain_PS2(int strength, bool generate)
 		RwRasterUnlock(grainRaster);
 	}
 
-	CPostEffects::ImmediateModeRenderStatesStore();
-	CPostEffects::ImmediateModeRenderStatesSet();
+	ImmediateModeRenderStatesStore();
+	ImmediateModeRenderStatesSet();
 	RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
-//	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
-	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERNEAREST);
+	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
+
+	float umin = 0.0f;
+	float vmin = 0.0f;
 	float umax = 5.0f * RsGlobal->MaximumWidth/640.0f;
 	float vmax = 7.0f * RsGlobal->MaximumHeight/448.0f;
-	postfxQuad[0].u = 0.0f;
-	postfxQuad[0].v = 0.0f;
-	postfxQuad[1].u = umax;
-	postfxQuad[1].v = 0.0f;
-	postfxQuad[2].u = 0.0f;
-	postfxQuad[2].v = vmax;
-	postfxQuad[3].u = umax;
-	postfxQuad[3].v = vmax;
+
+	DrawQuadSetUVs(umin, vmin,
+		umax, vmin,
+		umax, vmax,
+		umin, vmax);
 
 	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)D3DBLEND_DESTCOLOR);
 	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)D3DBLEND_SRCALPHA);
 
-	// colors unused
-	overrideIm2dPixelShader = grainPS;
+	overrideColorMod = D3DTOP_SELECTARG2;	// ignore texture color
+	overrideAlphaMod = D3DTOP_MODULATE2X;
 	CPostEffects::DrawQuad(0.0, 0.0, RsGlobal->MaximumWidth, RsGlobal->MaximumHeight,
 	                       0xFFu, 0xFFu, 0xFFu, 0xFF, grainRaster);
-	overrideIm2dPixelShader = NULL;
-	postfxQuad[0].u = 0.0f;
-	postfxQuad[0].v = 0.0f;
-	postfxQuad[1].u = 1.0f;
-	postfxQuad[1].v = 0.0f;
-	postfxQuad[2].u = 0.0f;
-	postfxQuad[2].v = 1.0f;
-	postfxQuad[3].u = 1.0f;
-	postfxQuad[3].v = 1.0f;
+	overrideColorMod = -1;
+	overrideAlphaMod = -1;
+
+	DrawQuadSetDefaultUVs();
 	CPostEffects::ImmediateModeRenderStatesReStore();
 }
-
-struct Grade
-{
-	float r, g, b, a;
-};
-void interpolateColorcycle(Grade *red, Grade *green, Grade *blue);
-int colorcycleInitialized = 0;
-
-void
-renderMobile(void)
-{
-	float rasterWidth = RwRasterGetWidth(CPostEffects::pRasterFrontBuffer);
-	float rasterHeight = RwRasterGetHeight(CPostEffects::pRasterFrontBuffer);
-	float halfU = 0.5 / rasterWidth;
-	float halfV = 0.5 / rasterHeight;
-	float uMax = RsGlobal->MaximumWidth / rasterWidth;
-	float vMax = RsGlobal->MaximumHeight / rasterHeight;
-	int i = 0;
-
-	if(!colorcycleInitialized)
-		loadColorcycle();
-
-	RwCameraEndUpdate(Camera);
-	RwRasterPushContext(CPostEffects::pRasterFrontBuffer);
-	RwRasterRenderFast(RwCameraGetRaster(Camera), 0, 0);
-	RwRasterPopContext();
-	RwCameraBeginUpdate(Camera);
-
-	quadVertices[i].x = 1.0f;
-	quadVertices[i].y = -1.0f;
-	quadVertices[i].z = 0.0f;
-	quadVertices[i].rhw = 1.0f;
-	quadVertices[i].u = uMax + halfU;
-	quadVertices[i].v = vMax + halfV;
-	i++;
-
-	quadVertices[i].x = -1.0f;
-	quadVertices[i].y = -1.0f;
-	quadVertices[i].z = 0.0f;
-	quadVertices[i].rhw = 1.0f;
-	quadVertices[i].u = 0.0f + halfU;
-	quadVertices[i].v = vMax + halfV;
-	i++;
-
-	quadVertices[i].x = -1.0f;
-	quadVertices[i].y = 1.0f;
-	quadVertices[i].z = 0.0f;
-	quadVertices[i].rhw = 1.0f;
-	quadVertices[i].u = 0.0f + halfU;
-	quadVertices[i].v = 0.0f + halfV;
-	i++;
-
-	quadVertices[i].x = 1.0f;
-	quadVertices[i].y = 1.0f;
-	quadVertices[i].z = 0.0f;
-	quadVertices[i].rhw = 1.0f;
-	quadVertices[i].u = uMax + halfU;
-	quadVertices[i].v = 0.0f + halfV;
-	
-	static RwTexture *tempTexture = NULL;
-	if(tempTexture == NULL){
-		tempTexture = RwTextureCreate(NULL);
-		tempTexture->filterAddressing = 0x1102;
-	}
-	tempTexture->raster = CPostEffects::pRasterFrontBuffer;
-	RwD3D9SetTexture(tempTexture, 0);
-
-	RwD3D9SetVertexDeclaration(quadVertexDecl);
-
-	RwD3D9SetVertexShader(postfxVS);
-	RwD3D9SetPixelShader(gradingPS);
-
-	Grade red, green, blue;
-	interpolateColorcycle(&red, &green, &blue);
-	float mult[3], add[3];
-
-	mult[0] = red.r + red.g + red.b;
-	mult[1] = green.r + green.g + blue.b;
-	mult[2] = blue.r + blue.g + blue.b;
-	add[0] = red.a;
-	add[1] = green.a;
-	add[2] = blue.a;
-	RwD3D9SetPixelShaderConstant(0, &red, 1);
-	RwD3D9SetPixelShaderConstant(1, &green, 1);
-	RwD3D9SetPixelShaderConstant(2, &blue, 1);
-	RwD3D9SetPixelShaderConstant(3, &mult, 1);
-	RwD3D9SetPixelShaderConstant(4, &add, 1);
-
-	RwD3D9SetRenderState(D3DRS_ALPHABLENDENABLE, 0);
-	RwD3D9SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
-	RwD3D9DrawIndexedPrimitiveUP(D3DPT_TRIANGLELIST, 0, 6, 2, quadIndices, quadVertices, sizeof(QuadVertex));
-
-	RwD3D9SetRenderState(D3DRS_ALPHABLENDENABLE, 1);
-
-	RwD3D9SetVertexShader(NULL);
-	RwD3D9SetPixelShader(NULL);
-}
-
-WRAPPER char ReloadPlantConfig(void) { EAXJMP(0x5DD780); }
 
 void
 CPostEffects::ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
@@ -942,12 +1016,8 @@ CPostEffects::ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 		if(GetAsyncKeyState(config->keys[0]) & 0x8000){
 			if(!keystate){
 				keystate = true;
-				if(numConfigs == 0 || config == &configs[numConfigs-1])
-					config = &configs[0];
-				else
-					config++;
-				resetValues();
-				//SetCloseFarAlphaDist(3.0, 1234.0); // second value overriden
+				currentConfig = (currentConfig+1) % numConfigs;
+				setConfig();
 			}
 		}else
 			keystate = false;
@@ -958,31 +1028,49 @@ CPostEffects::ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 		if(GetAsyncKeyState(config->keys[1]) & 0x8000){
 			if(!keystate){
 				keystate = true;
-				if(numConfigs == 0)
-					readIni(0);
-				else
-					for(int i = 1; i <= numConfigs; i++)
-						readIni(i);
-				resetValues();
-				//SetCloseFarAlphaDist(3.0, 1234.0); // second value overriden
+				reloadAllInis();
 			}
 		}else
 			keystate = false;
 	}
 
-	vcsblurrgb = rgb2;
-	switch(config->colorFilter){
-	case 0:	CPostEffects::ColourFilter_Generic(rgb1, rgb2, colorFilterPS);
-		break;
-	case 1:	CPostEffects::ColourFilter(rgb1, rgb2);
-		break;
-	case 2:	renderMobile();
-		break;
-	case 3:	CPostEffects::ColourFilter_Generic(rgb1, rgb2, iiiTrailsPS);
-		break;
-	case 4:	CPostEffects::ColourFilter_Generic(rgb1, rgb2, vcTrailsPS);
-		break;
+	// Get Alphas into PS2 range always
+	if(config->usePCTimecyc){
+		rgb1.alpha /= 2;
+		rgb2.alpha /= 2;
 	}
+
+#ifdef VCS
+	vcsblurrgb = rgb2;
+#endif
+	switch(config->colorFilter){
+	case COLORFILTER_PS2:
+		CPostEffects::ColourFilter_PS2(rgb1, rgb2);
+		break;
+	case COLORFILTER_PC:
+		// this effects expects PC alphas
+		rgb1.alpha *= 2;
+		rgb2.alpha *= 2;
+		CPostEffects::ColourFilter(rgb1, rgb2);
+		break;
+	case COLORFILTER_MOBILE:
+		// this effects ignores alphas
+		CPostEffects::ColourFilter_Mobile(rgb1, rgb2);
+		break;
+	case COLORFILTER_III:
+		// this effects expects PC alphas
+		rgb1.alpha *= 2;
+		rgb2.alpha *= 2;
+		CPostEffects::ColourFilter_Generic(rgb1, rgb2, iiiTrailsPS);
+		break;
+	case COLORFILTER_VC:
+		// this effects ignores alphas
+		CPostEffects::ColourFilter_Generic(rgb1, rgb2, vcTrailsPS);
+		break;
+	default:
+		return;
+	}
+	UpdateFrontBuffer();
 
 	//static int doramp = 0;
 	//{
@@ -1005,54 +1093,17 @@ CPostEffects::Initialise(void)
 {
 	Initialise_orig();
 	InjectHook(0x7FB824, Im2dSetPixelShader_hook);
+	InjectHook(0x7FB885, Im2DColorModulationHook);
+	InjectHook(0x7FB8A6, Im2DAlphaModulationHook);
 
 	CreateShaders();
 
-	grainRaster = RwRasterCreate(64, 64, 32, 0x504);
-
-	static const D3DVERTEXELEMENT9 vertexElements[] =
-	{
-		{ 0, 0, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
-		{ 0, 16, D3DDECLTYPE_D3DCOLOR, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_COLOR, 0 },
-		{ 0, 20, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
-		{ 0, 28, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 1 },
-		D3DDECL_END()
-	};
-	RwD3D9CreateVertexDeclaration(vertexElements, &quadVertexDecl);
-
-	static const D3DVERTEXELEMENT9 screenVertexElements[] =
-	{
-		{ 0, 0, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITIONT, 0 },
-		{ 0, 16, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
-		D3DDECL_END()
-	};
-	RwD3D9CreateVertexDeclaration(screenVertexElements, &screenVertexDecl);
-
-	target1 = RwRasterCreate(4,
-	                         4,
-	                         CPostEffects::pRasterFrontBuffer->depth, 5);
-	target2 = RwRasterCreate(4,
-	                         4,
-	                         CPostEffects::pRasterFrontBuffer->depth, 5);
-	smallRect.x = 0;
-	smallRect.y = 0;
-	smallRect.w = Camera->frameBuffer->width/4;
-	smallRect.h = Camera->frameBuffer->height/4;
+	grainRaster = RwRasterCreate(64, 64, 32, rwRASTERTYPETEXTURE | rwRASTERFORMAT8888);
 }
 
 
 
-
-
-
-// Mobile stuff, partly taken from NTAuthority
-
-short &clockSecond = *(short*)0xB70150;
-byte &clockMinute = *(byte*)0xB70152;
-byte &clockHour = *(byte*)0xB70153;
-short &oldWeather = *(short*)0xC81320;
-short &newWeather = *(short*)0xC8131C;
-float &weatherInterp = *(float*)0xC8130C;
+// Colorcycle stuff, partly taken from NTAuthority...at least originally
 
 class CFileMgr
 {
@@ -1072,74 +1123,122 @@ WRAPPER void* CFileMgr::OpenFile(const char* filename, const char* mode) { EAXJM
 WRAPPER void  CFileMgr::CloseFile(void* file) { EAXJMP(0x5389D0); }
 WRAPPER char* CFileLoader::LoadLine(void* file) { EAXJMP(0x536F80); }
 
+static int &CTimeCycle__m_ExtraColourWeatherType = *(int*)0xB79E40;
+static int &CTimeCycle__m_ExtraColour = *(int*)0xB79E44;
+static int &CTimeCycle__m_bExtraColourOn = *(int*)0xB7C484;
+static float &CTimeCycle__m_ExtraColourInter = *(float*)0xB79E3C;
+static float &CWeather__UnderWaterness = *(float*)0xC8132C;
+static float &CWeather__InTunnelness = *(float*)0xC81334;
+static int &tunnelWeather = *(int*)0x8CDEE0;
 
-Grade redGrade[8][23];
-Grade greenGrade[8][23];
-Grade blueGrade[8][23];
 
-float blerp[4];
 
-int
-houridx(int hour)
+Grade Colorcycle::redGrade[NUMHOURS][NUMWEATHERS];
+Grade Colorcycle::greenGrade[NUMHOURS][NUMWEATHERS];
+Grade Colorcycle::blueGrade[NUMHOURS][NUMWEATHERS];
+bool Colorcycle::initialised;
+
+GradeColorset::GradeColorset(int h, int w)
 {
-	switch(hour){
-	default:
-	case 0: case 1: case 2: case 3: case 4:
-		return 0;
-	case 5: return 1;
-	case 6: return 2;
-	case 7: case 8: case 9: case 10: case 11:
-		return 3;
-	case 12: case 13: case 14: case 15: case 16: case 17: case 18:
-		return 4;
-	case 19: return 5;
-	case 20: case 21:
-		return 6;
-	case 22: case 23:
-		return 7;
-	}
+	this->red = Colorcycle::redGrade[h][w];
+	this->green = Colorcycle::greenGrade[h][w];
+	this->blue = Colorcycle::blueGrade[h][w];
 }
 
 void
-interpolateGrade(Grade *out, Grade *a, Grade *b)
+GradeColorset::Interpolate(GradeColorset *a, GradeColorset *b, float fa, float fb)
 {
-	out->r = a[oldWeather].r*blerp[0] +
-	         b[oldWeather].r*blerp[1] +
-	         a[newWeather].r*blerp[2] +
-	         b[newWeather].r*blerp[3];
-	out->g = a[oldWeather].g*blerp[0] +
-	         b[oldWeather].g*blerp[1] +
-	         a[newWeather].g*blerp[2] +
-	         b[newWeather].g*blerp[3];
-	out->b  = a[oldWeather].b*blerp[0] +
-	          b[oldWeather].b*blerp[1] +
-	          a[newWeather].b*blerp[2] +
-	          b[newWeather].b*blerp[3];
-	out->a = a[oldWeather].a*blerp[0] +
-	         b[oldWeather].a*blerp[1] +
-	         a[newWeather].a*blerp[2] +
-	         b[newWeather].a*blerp[3];
+	this->red.r = fa * a->red.r + fb * b->red.r;
+	this->red.g = fa * a->red.g + fb * b->red.g;
+	this->red.b = fa * a->red.b + fb * b->red.b;
+	this->red.a = fa * a->red.a + fb * b->red.a;
+	this->green.r = fa * a->green.r + fb * b->green.r;
+	this->green.g = fa * a->green.g + fb * b->green.g;
+	this->green.b = fa * a->green.b + fb * b->green.b;
+	this->green.a = fa * a->green.a + fb * b->green.a;
+	this->blue.r = fa * a->blue.r + fb * b->blue.r;
+	this->blue.g = fa * a->blue.g + fb * b->blue.g;
+	this->blue.b = fa * a->blue.b + fb * b->blue.b;
+	this->blue.a = fa * a->blue.a + fb * b->blue.a;
+}
+
+static int timecycleHours[] = { 0, 5, 6, 7, 12, 19, 20, 22, 24 };
+
+void
+Colorcycle::Update(GradeColorset *colorset)
+{
+	float time;
+	int curHourSel, nextHourSel;
+	int curHour, nextHour;
+	float timeInterp, invTimeInterp, weatherInterp, invWeatherInterp;
+
+	time = CClock__ms_nGameClockMinutes / 60.0f
+	     + CClock__ms_nGameClockSeconds / 3600.0f
+	     + CClock__ms_nGameClockHours;
+	if(time >= 23.999f)
+		time = 23.999f;
+
+	for(curHourSel = 0; time >= timecycleHours[curHourSel+1]; curHourSel++);
+	nextHourSel = (curHourSel + 1) % NUMHOURS;
+	curHour = timecycleHours[curHourSel];
+	nextHour = timecycleHours[curHourSel+1];
+	timeInterp = (time - curHour) / (float)(nextHour - curHour);
+	invTimeInterp = 1.0f - timeInterp;
+	weatherInterp = CWeather__InterpolationValue;
+	invWeatherInterp = 1.0f - weatherInterp;
+	GradeColorset curold(curHourSel, CWeather__OldWeatherType);
+	GradeColorset nextold(nextHourSel, CWeather__OldWeatherType);
+	GradeColorset curnew(curHourSel, CWeather__NewWeatherType);
+	GradeColorset nextnew(nextHourSel, CWeather__NewWeatherType);
+
+	// Skipping smog weather handling
+	GradeColorset oldInterp, newInterp;
+	oldInterp.Interpolate(&curold, &nextold, invTimeInterp, timeInterp);
+	newInterp.Interpolate(&curnew, &nextnew, invTimeInterp, timeInterp);
+	colorset->Interpolate(&oldInterp, &newInterp, invWeatherInterp, weatherInterp);
+
+	float inc = CTimer__ms_fTimeStep/120.0f;
+	if(CTimeCycle__m_bExtraColourOn){
+		CTimeCycle__m_ExtraColourInter += inc;
+		if(CTimeCycle__m_ExtraColourInter > 1.0f)
+			CTimeCycle__m_ExtraColourInter = 1.0f;
+	}else{
+		CTimeCycle__m_ExtraColourInter -= inc;
+		if(CTimeCycle__m_ExtraColourInter < 0.0f)
+			CTimeCycle__m_ExtraColourInter = 0.0f;
+	}
+	if(CTimeCycle__m_ExtraColourInter > 0.0f){
+		GradeColorset extraset(CTimeCycle__m_ExtraColour, CTimeCycle__m_ExtraColourWeatherType);
+		colorset->Interpolate(colorset, &extraset, 1.0f-CTimeCycle__m_ExtraColourInter, CTimeCycle__m_ExtraColourInter);
+	}
+
+	if(CWeather__UnderWaterness > 0.0f){
+		GradeColorset curuwset(curHourSel, 20);
+		GradeColorset nextuwset(nextHourSel, 20);
+		GradeColorset tmpset;
+		tmpset.Interpolate(&curuwset, &nextuwset, invTimeInterp, timeInterp);
+		colorset->Interpolate(colorset, &tmpset, 1.0f-CWeather__UnderWaterness, CWeather__UnderWaterness);
+	}
+
+	if(CWeather__InTunnelness > 0.0f){
+		GradeColorset tunnelset(tunnelWeather % NUMHOURS, tunnelWeather / NUMHOURS + EXTRASTART);
+		colorset->Interpolate(colorset, &tunnelset, 1.0f-CWeather__InTunnelness, CWeather__InTunnelness);
+	}
+
 }
 
 void
 interpolateColorcycle(Grade *red, Grade *green, Grade *blue)
 {
-	int nextHour = (clockHour+1)%24;
-	float timeInterp = (clockSecond/60.0f + clockMinute)/60.0f;
-	blerp[0] = (1.0f-timeInterp)*(1.0f-weatherInterp);
-	blerp[1] = timeInterp*(1.0f-weatherInterp);
-	blerp[2] = (1.0f-timeInterp)*weatherInterp;
-	blerp[3] = timeInterp*weatherInterp;
-	nextHour = houridx(nextHour);
-	int thisHour = houridx(clockHour);
-	//printf("%d %d %f %f %f %f\n", thisHour, nextHour, blerp[0], blerp[1], blerp[2], blerp[3]);
-	interpolateGrade(red, redGrade[thisHour], redGrade[nextHour]);
-	interpolateGrade(green, greenGrade[thisHour], greenGrade[nextHour]);
-	interpolateGrade(blue, blueGrade[thisHour], blueGrade[nextHour]);
+	GradeColorset cset;
+	Colorcycle::Update(&cset);
+	*red = cset.red;
+	*green = cset.green;
+	*blue = cset.blue;
 }
 
 void
-loadColorcycle(void)
+Colorcycle::Initialise(void)
 {
 	void *f = CFileMgr::OpenFile("data/colorcycle.dat", "r");
 	char *line;
@@ -1182,5 +1281,5 @@ loadColorcycle(void)
 		}
 	}
 	CFileMgr::CloseFile(f);
-	colorcycleInitialized = 1;
+	initialised = true;
 }

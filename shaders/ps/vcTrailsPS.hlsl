@@ -2,8 +2,7 @@ float4 main(uniform sampler2D Diffuse : register(s0),
             uniform float4 RGB1 : register(c0),
             uniform float4 RGB2 : register(c1),
 
-            in float2 Tex0 : TEXCOORD0,
-            in float2 Tex1 : TEXCOORD1) : COLOR0
+            in float2 Tex0 : TEXCOORD0) : COLOR0
 {
 	// GTA VC trails
 	float a = 30/255.0f;

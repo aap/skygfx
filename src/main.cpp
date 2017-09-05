@@ -1,14 +1,26 @@
 #include "skygfx.h"
 #include "neo.h"
 #include "ini_parser.hpp"
+#include "debugmenu_public.h"
 
 HMODULE dllModule;
+DebugMenuAPI gDebugMenuAPI;
 char asipath[MAX_PATH];
 
-int numConfigs;
-Config *config, configs[10];
-bool ps2grassFiles, usePCTimecyc, disableClouds, disableGamma, neoWaterDrops, fixPcCarLight;
+// Only-once settings
+bool ps2grassFiles;
+bool disableClouds;
+bool disableGamma;
+bool fixPcCarLight;
 int transparentLockon;
+bool iCanHasNeoDrops = true;
+bool iCanHasbuildingPipe = true;
+bool iCanHasvehiclePipe = true;
+bool iCanHasSunGlare = true;
+
+int numConfigs;
+int currentConfig;
+Config *config, configs[10];
 int original_bRadiosity = 0;
 
 void *grassPixelShader;
@@ -16,13 +28,15 @@ void *simplePS;
 void *gpCurrentShaderForDefaultCallbacks;
 //void (*TimecycInit)(void) = (void (*)(void))0x5BBAC0;
 
-int &colourLeftVOffset = *(int*)0x8D5150;
-int &colourRightVOffset = *(int*)0x8D5154;
-int &colourTopVOffset = *(int*)0x8D5158;
-int &colourBottomVOffset = *(int*)0x8D515C;
-
 float *gfLaRiotsLightMult = (float*)0x8CD060;
 float *ambientColors = (float*)0xB7C4A0;
+
+static int defaultColourLeftUOffset;
+static int defaultColourRightUOffset;
+static int defaultColourTopVOffset;
+static int defaultColourBottomVOffset;
+
+void refreshMenu(void);
 
 extern "C" {
 __declspec(dllexport) Config*
@@ -134,12 +148,15 @@ WRAPPER double CTimeCycle_GetAmbientBlue(void) { EAXJMP(0x560350); }
 void
 resetValues(void)
 {
-	CPostEffects__m_RadiosityFilterPasses = config->radiosityFilterPasses;
-	CPostEffects__m_RadiosityRenderPasses = config->radiosityRenderPasses;
-//	CPostEffects__m_RadiosityIntensityLimit = config->radiosityIntensityLimit;	// only used for timecycle override
-	CPostEffects__m_RadiosityIntensity = config->radiosityIntensity;
-	CPostEffects__m_RadiosityFilterUCorrection = config->radiosityFilterUCorrection;
-	CPostEffects__m_RadiosityFilterVCorrection = config->radiosityFilterVCorrection;
+	CPostEffects::m_bRadiosity = config->doRadiosity;
+	CPostEffects::m_RadiosityFilterPasses = config->radiosityFilterPasses;
+	CPostEffects::m_RadiosityRenderPasses = config->radiosityRenderPasses;
+	CPostEffects::m_RadiosityIntensity = config->radiosityIntensity;
+
+	CPostEffects::m_colourLeftUOffset = config->offLeft;
+	CPostEffects::m_colourRightUOffset = config->offRight;
+	CPostEffects::m_colourTopVOffset = config->offTop;
+	CPostEffects::m_colourBottomVOffset = config->offBottom;
 
 	if(config->grainFilter == 0){
 		CPostEffects::m_InfraredVisionGrainStrength = 0x18;
@@ -156,6 +173,13 @@ resetValues(void)
 	//	Patch<float>(0x735F8B, 1.0f);
 
 	//*(int*)0x8D37D0 = config->detailedWaterDist;
+}
+
+void
+refreshIni(void)
+{
+	resetValues();
+	refreshMenu();
 }
 
 
@@ -366,17 +390,6 @@ CPlantMgr_Initialise(void)
 	}
 	return ret;
 }
-
-/*
-WRAPPER void CRenderer__RenderEverythingBarRoads_orig(void) { EAXJMP(0x553AA0); }
-
-void CRenderer__RenderEverythingBarRoads(void)
-{
-	reflTexDone = FALSE;
-	CRenderer__RenderEverythingBarRoads_orig();
-	reflTexDone = TRUE;
-}
-*/
 
 struct FX
 {
@@ -638,9 +651,8 @@ readIni(int n)
 	c->keys[0] = readhex(cfg.get("SkyGfx", "keySwitch", "0x0").c_str());
 	c->keys[1] = readhex(cfg.get("SkyGfx", "keyReload", "0x0").c_str());
 
-	int ps2Modulate, dualPass;
-	ps2Modulate = readint(cfg.get("SkyGfx", "ps2Modulate", ""), 0);
-	dualPass = readint(cfg.get("SkyGfx", "dualPass", ""), 0);
+	config->ps2ModulateGlobal = readint(cfg.get("SkyGfx", "ps2Modulate", ""), 0);
+	config->dualPassGlobal = readint(cfg.get("SkyGfx", "dualPass", ""), 0);
 
 	static StrAssoc buildPipeMap[] = {
 		{"PS2",     0},
@@ -648,8 +660,13 @@ readIni(int n)
 		{"",       -1},
 	};
 	c->buildingPipe = StrAssoc::get(buildPipeMap, cfg.get("SkyGfx", "buildingPipe", "").c_str());
-	c->ps2ModulateBuilding = readint(cfg.get("SkyGfx", "ps2ModulateBuilding", ""), ps2Modulate);
-	c->dualPassBuilding = readint(cfg.get("SkyGfx", "dualPassBuilding", ""), dualPass);
+	if(c->buildingPipe < 0){
+		iCanHasbuildingPipe = false;
+		c->buildingPipe = 0;
+	}
+
+	c->ps2ModulateBuilding = readint(cfg.get("SkyGfx", "ps2ModulateBuilding", ""), config->ps2ModulateGlobal);
+	c->dualPassBuilding = readint(cfg.get("SkyGfx", "dualPassBuilding", ""), config->dualPassGlobal);
 
 	static StrAssoc vehPipeMap[] = {
 		{"PS2",     0},
@@ -660,7 +677,12 @@ readIni(int n)
 		{"",       -1},
 	};
 	c->vehiclePipe = StrAssoc::get(vehPipeMap, cfg.get("SkyGfx", "vehiclePipe", "").c_str());
-	c->dualPassVehicle = readint(cfg.get("SkyGfx", "dualPassVehicle", ""), dualPass);
+	if(c->vehiclePipe < 0){
+		iCanHasvehiclePipe = false;
+		c->vehiclePipe = 0;
+	}
+
+	c->dualPassVehicle = readint(cfg.get("SkyGfx", "dualPassVehicle", ""), config->dualPassGlobal);
 	c->neoShininess = readfloat(cfg.get("SkyGfx", "neoShininess", ""), 0.75);
 	c->neoSpecularity = readfloat(cfg.get("SkyGfx", "neoSpecularity", ""), 0.75);
 	envMapSize = readint(cfg.get("SkyGfx", "neoEnvMapSize", ""), 128);
@@ -668,9 +690,13 @@ readIni(int n)
 	while(i < envMapSize) i *= 2;
 	envMapSize = i;
 	c->doglare = readint(cfg.get("SkyGfx", "sunGlare", ""), -1);
+	if(c->doglare < 0){
+		iCanHasSunGlare = false;
+		c->doglare = 0;
+	}
 
-	c->ps2ModulateGrass = readint(cfg.get("SkyGfx", "ps2ModulateGrass", ""), ps2Modulate);
-	c->dualPassGrass = readint(cfg.get("SkyGfx", "dualPassGrass", ""), dualPass);
+	c->ps2ModulateGrass = readint(cfg.get("SkyGfx", "ps2ModulateGrass", ""), config->ps2ModulateGlobal);
+	c->dualPassGrass = readint(cfg.get("SkyGfx", "dualPassGrass", ""), config->dualPassGlobal);
 	c->grassAddAmbient = readint(cfg.get("SkyGfx", "grassAddAmbient", ""), 0);
 	ps2grassFiles = readint(cfg.get("SkyGfx", "ps2grassFiles", ""), 0);
 	c->fixGrassPlacement = readint(cfg.get("SkyGfx", "grassFixPlacement", ""), 0);
@@ -683,8 +709,8 @@ readIni(int n)
 		{"true",    1},
 		{"",       -1},
 	};
-	c->dualPassDefault = readint(cfg.get("SkyGfx", "dualPassDefault", ""), dualPass);
-	c->dualPassPed = readint(cfg.get("SkyGfx", "dualPassPed", ""), dualPass);
+	c->dualPassDefault = readint(cfg.get("SkyGfx", "dualPassDefault", ""), config->dualPassGlobal);
+	c->dualPassPed = readint(cfg.get("SkyGfx", "dualPassPed", ""), config->dualPassGlobal);
 	c->pedShadows = StrAssoc::get(boolMap, cfg.get("SkyGfx", "pedShadows", "").c_str());
 	c->stencilShadows = StrAssoc::get(boolMap, cfg.get("SkyGfx", "stencilShadows", "").c_str());
 	disableClouds = readint(cfg.get("SkyGfx", "disableClouds", ""), 0);
@@ -693,16 +719,16 @@ readIni(int n)
 	c->lightningIlluminatesWorld = readint(cfg.get("SkyGfx", "lightningIlluminatesWorld", ""), 0);
 
 	static StrAssoc colorFilterMap[] = {
-		{"PS2",     0},
-		{"PC",      1},
-		{"Mobile",  2},
-		{"III",     3},
-		{"VC",      4},
-#ifdef DEBUG
-		{"VCS",     5},
+		{"None",    COLORFILTER_NONE},
+		{"PS2",     COLORFILTER_PS2},
+		{"PC",      COLORFILTER_PC},
+		{"Mobile",  COLORFILTER_MOBILE},
+		{"III",     COLORFILTER_III},
+		{"VC",      COLORFILTER_VC},
+#ifdef VCS
+		{"VCS",     COLORFILTER_VCS},
 #endif
-		{"None",    6},
-		{"",        1},
+		{"",        COLORFILTER_PC},
 	};
 	static StrAssoc ps2pcMap[] = {
 		{"PS2",     0},
@@ -710,20 +736,20 @@ readIni(int n)
 		{"",        1},
 	};
 	c->colorFilter = StrAssoc::get(colorFilterMap, cfg.get("SkyGfx", "colorFilter", "").c_str());
-	ps2pcMap[2].val = c->colorFilter == 0 ? 0 : 1;
+	ps2pcMap[2].val = c->colorFilter == COLORFILTER_PS2 ? 0 : 1;
 	c->infraredVision = StrAssoc::get(ps2pcMap, cfg.get("SkyGfx", "infraredVision", "").c_str());
 	c->nightVision = StrAssoc::get(ps2pcMap, cfg.get("SkyGfx", "nightVision", "").c_str());
 	c->grainFilter = StrAssoc::get(ps2pcMap, cfg.get("SkyGfx", "grainFilter", "").c_str());
-	usePCTimecyc = readint(cfg.get("SkyGfx", "usePCTimecyc", ""), 0);
+	c->usePCTimecyc = readint(cfg.get("SkyGfx", "usePCTimecyc", ""), 0);
 
 	tmpint = readint(cfg.get("SkyGfx", "blurLeft", ""), 4000);
-	c->offLeft = tmpint == 4000 ? colourLeftVOffset : tmpint;
+	c->offLeft = tmpint == 4000 ? defaultColourLeftUOffset : tmpint;
 	tmpint = readint(cfg.get("SkyGfx", "blurTop", ""), 4000);
-	c->offTop = tmpint == 4000 ? colourTopVOffset : tmpint;
+	c->offTop = tmpint == 4000 ? defaultColourTopVOffset : tmpint;
 	tmpint = readint(cfg.get("SkyGfx", "blurRight", ""), 4000);
-	c->offRight = tmpint == 4000 ? colourRightVOffset : tmpint;
+	c->offRight = tmpint == 4000 ? defaultColourRightUOffset : tmpint;
 	tmpint = readint(cfg.get("SkyGfx", "blurBottom", ""), 4000);
-	c->offBottom = tmpint == 4000 ? colourBottomVOffset : tmpint;
+	c->offBottom = tmpint == 4000 ? defaultColourBottomVOffset : tmpint;
 
 	tmpint = readint(cfg.get("SkyGfx", "doRadiosity", ""), 4000);
 	c->doRadiosity = tmpint == 4000 ? original_bRadiosity : tmpint;	// saved value from stream.ini
@@ -736,10 +762,12 @@ readIni(int n)
 	c->radiosityFilterPasses = readint(cfg.get("SkyGfx", "radiosityFilterPasses", ""), 2);
 	c->radiosityRenderPasses = readint(cfg.get("SkyGfx", "radiosityRenderPasses", ""), 1);
 	c->radiosityIntensity = readint(cfg.get("SkyGfx", "radiosityIntensity", ""), 0x23);
-	c->radiosityFilterUCorrection = readint(cfg.get("SkyGfx", "radiosityFilterUCorrection", ""), 2);
-	c->radiosityFilterVCorrection = readint(cfg.get("SkyGfx", "radiosityFilterVCorrection", ""), 2);
 
-	neoWaterDrops = readint(cfg.get("SkyGfx", "neoWaterDrops", ""), 0);
+	c->neoWaterDrops = readint(cfg.get("SkyGfx", "neoWaterDrops", ""), -1);
+	if(c->neoWaterDrops < 0){
+		iCanHasNeoDrops = false;
+		c->neoWaterDrops = 0;
+	}
 	c->neoBloodDrops = readint(cfg.get("SkyGfx", "neoBloodDrops", ""), 0);
 	fixPcCarLight = readint(cfg.get("SkyGfx", "fixPcCarLight", ""), 0);
 }
@@ -747,14 +775,33 @@ readIni(int n)
 void
 readInis(void)
 {
-	original_bRadiosity = doRadiosity;
-	doRadiosity = 1;
+	original_bRadiosity = CPostEffects::m_bRadiosity;
 	if(numConfigs == 0)
 		readIni(0);
 	else
 		for(int i = 1; i <= numConfigs; i++)
 			readIni(i);
-	resetValues();
+	refreshIni();
+}
+
+void
+setConfig(void)
+{
+	if(currentConfig >= 0 && currentConfig < numConfigs){
+		config = &configs[currentConfig];
+		refreshIni();
+	}
+}
+
+void
+reloadAllInis(void)
+{
+	if(numConfigs == 0)
+		readIni(0);
+	else
+		for(int i = 1; i <= numConfigs; i++)
+			readIni(i);
+	refreshIni();
 }
 
 // load asi ini again after having read stream ini as we need to know radiosity settings
@@ -767,13 +814,152 @@ afterStreamIni(void)
 	}
 }
 
-static BOOL (*IsAlreadyRunning)();
+#define MENUSETTINGS \
+	X(ps2ModulateGlobal)		\
+	X(ps2ModulateBuilding)		\
+	X(ps2ModulateGrass)			\
+	X(dualPassGlobal)				\
+	X(dualPassDefault)				\
+	X(dualPassBuilding)			\
+	X(dualPassVehicle)			\
+	X(dualPassPed)			\
+	X(dualPassGrass)				\
+	X(buildingPipe)				\
+	X(vehiclePipe)				\
+	X(neoShininess)				\
+	X(neoSpecularity)			\
+	X(doglare)						\
+	X(fixGrassPlacement)			\
+	X(grassAddAmbient)			\
+	X(backfaceCull)			\
+	X(pedShadows)					\
+	X(stencilShadows)				\
+	X(colorFilter)					\
+	X(doRadiosity)					\
+	X(lightningIlluminatesWorld)		\
+	X(neoWaterDrops)			\
+	X(neoBloodDrops)			\
+	X(infraredVision)				\
+	X(nightVision)					\
+	X(grainFilter)					\
+	X(offLeft)					\
+	X(offRight)				\
+	X(offTop)					\
+	X(offBottom)				\
+	X(radiosityFilterPasses)		\
+	X(radiosityRenderPasses)		\
+	X(radiosityIntensity)
 
+struct SkyGfxMenu
+{
+#define X(NAME) DebugMenuEntry *NAME;
+MENUSETTINGS
+#undef X
+};
+SkyGfxMenu menu;
+
+void
+refreshMenu(void)
+{
+#define X(NAME) DebugMenuEntrySetAddress(menu.NAME, &config->NAME);
+MENUSETTINGS
+#undef X
+}
+
+void
+toggledDual(void)
+{
+	// override, we can't do better
+	config->dualPassBuilding = config->dualPassGlobal;
+	config->dualPassVehicle = config->dualPassGlobal;
+	config->dualPassPed = config->dualPassGlobal;
+	config->dualPassGrass = config->dualPassGlobal;
+	config->dualPassDefault = config->dualPassGlobal;
+}
+
+void
+toggledModulation(void)
+{
+	// override, we can't do better
+	config->ps2ModulateBuilding = config->ps2ModulateGlobal;
+	config->ps2ModulateGrass = config->ps2ModulateGlobal;
+}
+
+void
+installMenu(void)
+{
+	DebugMenuEntry *e;
+	if(DebugMenuLoad()){
+		static const char *ps2pcStr[] = { "PS2", "PC" };
+		static const char *buildPipeStr[] = { "PS2", "PC" };
+		static const char *vehPipeStr[] = { "PS2", "PC", "Xbox", "Spec", "Neo" };
+		static const char *colFilterStr[] = { "None", "PS2", "PC", "Mobile", "III", "VC", "VCS" };
+		static const char *lightningStr[] = { "Sky only", "Sky and objects" };
+		static const char *shadStr[] = { "Default", "PS2", "PC" };
+		e = DebugMenuAddVar("SkyGFX", "Config", &currentConfig, setConfig, 1, 0, numConfigs-1, nil);
+		DebugMenuEntrySetWrap(e, true);
+		DebugMenuAddCmd("SkyGFX", "Reload Inis", reloadAllInis);
+
+		menu.dualPassGlobal = DebugMenuAddVarBool32("SkyGFX", "Dual-pass Global", &config->dualPassGlobal, toggledDual);
+		menu.ps2ModulateGlobal = DebugMenuAddVarBool32("SkyGFX", "PS2-modulate Global", &config->ps2ModulateGlobal, toggledModulation);
+		if(iCanHasbuildingPipe){
+			menu.buildingPipe = DebugMenuAddVar("SkyGFX", "Building Pipeline", &config->buildingPipe, nil, 1, 0, 1, buildPipeStr);
+			DebugMenuEntrySetWrap(menu.buildingPipe, true);
+		}
+		if(iCanHasvehiclePipe){
+			menu.vehiclePipe = DebugMenuAddVar("SkyGFX", "Vehicle Pipeline", &config->vehiclePipe, nil, 1, 0, 4, vehPipeStr);
+			DebugMenuEntrySetWrap(menu.vehiclePipe, true);
+		}
+		menu.grassAddAmbient = DebugMenuAddVarBool32("SkyGFX", "Add Ambient to Grass", &config->grassAddAmbient, nil);
+		menu.backfaceCull = DebugMenuAddVarBool32("SkyGFX", "Grass Backface Culling", &config->backfaceCull, nil);
+		menu.pedShadows = DebugMenuAddVar("SkyGFX", "Ped Shadows", &config->pedShadows, nil, 1, -1, 1, shadStr);
+		DebugMenuEntrySetWrap(menu.pedShadows, true);
+		menu.stencilShadows = DebugMenuAddVar("SkyGFX", "Stencil Shadows", &config->stencilShadows, nil, 1, -1, 1, shadStr);
+		DebugMenuEntrySetWrap(menu.stencilShadows, true);
+		// TODO: allow III/VC somehow?
+		menu.colorFilter = DebugMenuAddVar("SkyGFX", "Colour filter", &config->colorFilter, resetValues, 1, COLORFILTER_NONE, COLORFILTER_MOBILE, colFilterStr);
+		DebugMenuEntrySetWrap(menu.colorFilter, true);
+		menu.doRadiosity = DebugMenuAddVarBool32("SkyGFX", "Radiosity", &config->doRadiosity, resetValues);
+		if(iCanHasNeoDrops){
+			menu.neoWaterDrops = DebugMenuAddVarBool32("SkyGFX", "Neo Water drops", &config->neoWaterDrops, nil);
+			menu.neoBloodDrops = DebugMenuAddVarBool32("SkyGFX", "Neo-style Blood drops", &config->neoBloodDrops, nil);
+		}
+
+		DebugMenuAddVarBool8("SkyGFX| Misc", "Blur PS2 Colour Filter", (int8_t*)&CPostEffects::m_bBlurColourFilter, nil);
+		if(iCanHasSunGlare)
+			menu.doglare = DebugMenuAddVarBool32("SkyGFX| Misc", "Sun Glare", &config->doglare, nil);
+		menu.neoShininess = DebugMenuAddVar("SkyGFX| Misc", "Neo Car Shininess", &config->neoShininess, nil, 0.1f, 0.0f, 10.0f);
+		menu.neoSpecularity = DebugMenuAddVar("SkyGFX| Misc", "Neo Car Specularity", &config->neoSpecularity, nil, 0.1f, 0.0f, 10.0f);
+		menu.fixGrassPlacement = DebugMenuAddVarBool32("SkyGFX| Misc", "Fix Grass Placement", &config->fixGrassPlacement, nil);
+		menu.lightningIlluminatesWorld = DebugMenuAddVar("SkyGFX| Misc", "Lightning illuminates", &config->lightningIlluminatesWorld, nil, 1, 0, 1, lightningStr);
+		DebugMenuEntrySetWrap(menu.lightningIlluminatesWorld, true);
+
+		menu.dualPassDefault = DebugMenuAddVarBool32("SkyGFX| Advanced", "Dual-pass Default", &config->dualPassDefault, nil);
+		menu.dualPassBuilding = DebugMenuAddVarBool32("SkyGFX| Advanced", "Dual-pass Buildings", &config->dualPassBuilding, nil);
+		menu.dualPassVehicle = DebugMenuAddVarBool32("SkyGFX| Advanced", "Dual-pass Vehicles", &config->dualPassVehicle, nil);
+		menu.dualPassPed = DebugMenuAddVarBool32("SkyGFX| Advanced", "Dual-pass Peds", &config->dualPassPed, nil);
+		menu.dualPassGrass = DebugMenuAddVarBool32("SkyGFX| Advanced", "Dual-pass Grass", &config->dualPassGrass, nil);
+		menu.ps2ModulateBuilding = DebugMenuAddVarBool32("SkyGFX| Advanced", "PS2-modulate Buildings", &config->ps2ModulateBuilding, nil);
+		menu.ps2ModulateGrass = DebugMenuAddVarBool32("SkyGFX| Advanced", "PS2-modulate Grass", &config->ps2ModulateGrass, nil);
+		menu.infraredVision = DebugMenuAddVar("SkyGFX| Advanced", "Infrared vision", &config->infraredVision, nil, 1, 0, 1, ps2pcStr);
+		DebugMenuEntrySetWrap(menu.infraredVision, true);
+		menu.nightVision = DebugMenuAddVar("SkyGFX| Advanced", "Night vision", &config->nightVision, nil, 1, 0, 1, ps2pcStr);
+		DebugMenuEntrySetWrap(menu.nightVision, true);
+		menu.grainFilter = DebugMenuAddVar("SkyGFX| Advanced", "Grain filter", &config->grainFilter, resetValues, 1, 0, 1, ps2pcStr);
+		DebugMenuEntrySetWrap(menu.grainFilter, true);
+
+		//void privatepatches(void);
+		//privatepatches();
+	}
+}
+
+static BOOL (*IsAlreadyRunning)();
 BOOL
 InjectDelayedPatches()
 {
 	if(!IsAlreadyRunning()){
 		// post init stuff
+		currentConfig = 0;
 		config = &configs[0];
 		findInis();
 		if(numConfigs == 0)
@@ -784,17 +970,16 @@ InjectDelayedPatches()
 
 		InterceptCall(&InitialiseGame, InitialiseGame_hook, 0x748CFB);
 
-		if(usePCTimecyc){
-			Nop(0x5BBF6F, 2);
-			Nop(0x5BBF83, 2);
-		}
+		// Stop timecycle from converting colour filter alphas
+		Nop(0x5BBF6F, 2);
+		Nop(0x5BBF83, 2);
 
 		// custom building pipeline
-		if(config->buildingPipe >= 0)
+		if(iCanHasbuildingPipe)
 			hookBuildingPipe();
 
 		// custom vehicle pipeline
-		if(config->vehiclePipe >= 0)
+		if(iCanHasvehiclePipe)
 			hookVehiclePipe();
 
 		if(ps2grassFiles){
@@ -844,11 +1029,11 @@ InjectDelayedPatches()
 		if(disableGamma)
 			InjectHook(0x74721C, 0x7472F3, PATCH_JUMP);
 
-		if(neoWaterDrops)
+		if(iCanHasNeoDrops)
 			hookWaterDrops();
 
 		// sun glare on cars
-		if(config->doglare >= 0)
+		if(iCanHasSunGlare)
 			InjectHook(0x6ABCFD, doglare, PATCH_JUMP);
 
 		// remove black background of lockon siphon
@@ -856,6 +1041,8 @@ InjectDelayedPatches()
 			InjectHook(0x742E33, 0x742EC1, PATCH_JUMP);
 			InjectHook(0x742FE0, 0x743085, PATCH_JUMP);
 		}
+
+		installMenu();
 
 		return FALSE;
 	}
@@ -881,6 +1068,11 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 
 		for(int i = 0; i < 10; i++)
 			configs[i].version = VERSION;
+
+		defaultColourLeftUOffset = CPostEffects::m_colourLeftUOffset;
+		defaultColourRightUOffset = CPostEffects::m_colourRightUOffset;
+		defaultColourTopVOffset = CPostEffects::m_colourTopVOffset;
+		defaultColourBottomVOffset = CPostEffects::m_colourBottomVOffset;
 
 		IsAlreadyRunning = (BOOL(*)())(*(int*)(0x74872D+1) + 0x74872D + 5);
 		InjectHook(0x74872D, InjectDelayedPatches);
@@ -910,10 +1102,9 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		// postfx
 		InterceptCall(&CPostEffects::Initialise_orig, CPostEffects::Initialise, 0x5BD779);
 		InjectHook(0x704D1E, CPostEffects::ColourFilter_switch);
-		InjectHook(0x704D5D, CPostEffects::Radiosity_PS2);
-		InjectHook(0x704FB3, CPostEffects::Radiosity_PS2);
-		// fix speedfx
-		InjectHook(0x704E8A, CPostEffects::SpeedFX_Fix);
+		InjectHook(0x704D5D, CPostEffects::Radiosity);
+		InjectHook(0x704FB3, CPostEffects::Radiosity);
+		InjectHook(0x704D48, CPostEffects::DarknessFilter_fix);
 
 		// infrared vision
 		InjectHook(0x704F4B, CPostEffects::InfraredVision_PS2);

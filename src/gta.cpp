@@ -9,11 +9,15 @@ RpLight **pExtraDirectionals = (RpLight**)0xC886F0;
 int &NumExtraDirLightsInWorld = *(int*)0xC88708;
 D3DLIGHT9 &gCarEnvMapLight = *(D3DLIGHT9*)0xC02CB0;
 
-char &doRadiosity = *(char*)0xC402CC;
-
 RwTexture *&gpWhiteTexture = *(RwTexture**)0xB4E3EC;
-//RwBool reflTexDone;
-//RwRaster *reflTex;
+
+
+int16 &CClock__ms_nGameClockSeconds = *(short*)0xB70150;
+uint8 &CClock__ms_nGameClockMinutes = *(byte*)0xB70152;
+uint8 &CClock__ms_nGameClockHours = *(byte*)0xB70153;
+int16 &CWeather__OldWeatherType = *(short*)0xC81320;
+int16 &CWeather__NewWeatherType = *(short*)0xC8131C;
+float &CWeather__InterpolationValue = *(float*)0xC8130C;
 
 void **rwengine = *(void***)0x58FFC0;
 RwInt32 &CCustomCarEnvMapPipeline__ms_envMapPluginOffset = *(RwInt32*)0x8D12C4;
@@ -27,12 +31,6 @@ int &dword_C9BC60 = *(int*)0xC9BC60;
 RxPipeline *&skinPipe = *(RxPipeline**)0xC978C4;
 RxPipeline *&CCustomCarEnvMapPipeline__ObjPipeline = *(RxPipeline**)0xC02D24;
 
-int &CPostEffects__m_RadiosityFilterPasses = *(int*)0x8D510C;
-int &CPostEffects__m_RadiosityRenderPasses = *(int*)0x8D5110;
-int &CPostEffects__m_RadiosityIntensityLimit = *(int*)0x8D5114;
-int &CPostEffects__m_RadiosityIntensity = *(int*)0x8D5118;
-int &CPostEffects__m_RadiosityFilterUCorrection = *(int*)0x8D511C;
-int &CPostEffects__m_RadiosityFilterVCorrection = *(int*)0x8D5120;
 
 WRAPPER RwMatrix *RwFrameGetLTM(RwFrame * frame) { EAXJMP(0x7F0990); }
 WRAPPER RpMaterial *RpMaterialSetTexture(RpMaterial *mat, RwTexture *tex) { EAXJMP(0x74DBC0); }
