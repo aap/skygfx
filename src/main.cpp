@@ -857,13 +857,16 @@ MENUSETTINGS
 #undef X
 };
 SkyGfxMenu menu;
+bool hasMenu = false;
 
 void
 refreshMenu(void)
 {
+	if(hasMenu){
 #define X(NAME) DebugMenuEntrySetAddress(menu.NAME, &config->NAME);
 MENUSETTINGS
 #undef X
+	}
 }
 
 void
@@ -948,6 +951,7 @@ installMenu(void)
 		menu.grainFilter = DebugMenuAddVar("SkyGFX|Advanced", "Grain filter", &config->grainFilter, resetValues, 1, 0, 1, ps2pcStr);
 		DebugMenuEntrySetWrap(menu.grainFilter, true);
 
+		hasMenu = true;
 		//void privatepatches(void);
 		//privatepatches();
 	}
