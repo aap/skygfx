@@ -925,27 +925,27 @@ installMenu(void)
 			menu.neoBloodDrops = DebugMenuAddVarBool32("SkyGFX", "Neo-style Blood drops", &config->neoBloodDrops, nil);
 		}
 
-		DebugMenuAddVarBool8("SkyGFX| Misc", "Blur PS2 Colour Filter", (int8_t*)&CPostEffects::m_bBlurColourFilter, nil);
+		DebugMenuAddVarBool8("SkyGFX|Misc", "Blur PS2 Colour Filter", (int8_t*)&CPostEffects::m_bBlurColourFilter, nil);
 		if(iCanHasSunGlare)
-			menu.doglare = DebugMenuAddVarBool32("SkyGFX| Misc", "Sun Glare", &config->doglare, nil);
-		menu.neoShininess = DebugMenuAddVar("SkyGFX| Misc", "Neo Car Shininess", &config->neoShininess, nil, 0.1f, 0.0f, 10.0f);
-		menu.neoSpecularity = DebugMenuAddVar("SkyGFX| Misc", "Neo Car Specularity", &config->neoSpecularity, nil, 0.1f, 0.0f, 10.0f);
-		menu.fixGrassPlacement = DebugMenuAddVarBool32("SkyGFX| Misc", "Fix Grass Placement", &config->fixGrassPlacement, nil);
-		menu.lightningIlluminatesWorld = DebugMenuAddVar("SkyGFX| Misc", "Lightning illuminates", &config->lightningIlluminatesWorld, nil, 1, 0, 1, lightningStr);
+			menu.doglare = DebugMenuAddVarBool32("SkyGFX|Misc", "Sun Glare", &config->doglare, nil);
+		menu.neoShininess = DebugMenuAddVar("SkyGFX|Misc", "Neo Car Shininess", &config->neoShininess, nil, 0.1f, 0.0f, 10.0f);
+		menu.neoSpecularity = DebugMenuAddVar("SkyGFX|Misc", "Neo Car Specularity", &config->neoSpecularity, nil, 0.1f, 0.0f, 10.0f);
+		menu.fixGrassPlacement = DebugMenuAddVarBool32("SkyGFX|Misc", "Fix Grass Placement", &config->fixGrassPlacement, nil);
+		menu.lightningIlluminatesWorld = DebugMenuAddVar("SkyGFX|Misc", "Lightning illuminates", &config->lightningIlluminatesWorld, nil, 1, 0, 1, lightningStr);
 		DebugMenuEntrySetWrap(menu.lightningIlluminatesWorld, true);
 
-		menu.dualPassDefault = DebugMenuAddVarBool32("SkyGFX| Advanced", "Dual-pass Default", &config->dualPassDefault, nil);
-		menu.dualPassBuilding = DebugMenuAddVarBool32("SkyGFX| Advanced", "Dual-pass Buildings", &config->dualPassBuilding, nil);
-		menu.dualPassVehicle = DebugMenuAddVarBool32("SkyGFX| Advanced", "Dual-pass Vehicles", &config->dualPassVehicle, nil);
-		menu.dualPassPed = DebugMenuAddVarBool32("SkyGFX| Advanced", "Dual-pass Peds", &config->dualPassPed, nil);
-		menu.dualPassGrass = DebugMenuAddVarBool32("SkyGFX| Advanced", "Dual-pass Grass", &config->dualPassGrass, nil);
-		menu.ps2ModulateBuilding = DebugMenuAddVarBool32("SkyGFX| Advanced", "PS2-modulate Buildings", &config->ps2ModulateBuilding, nil);
-		menu.ps2ModulateGrass = DebugMenuAddVarBool32("SkyGFX| Advanced", "PS2-modulate Grass", &config->ps2ModulateGrass, nil);
-		menu.infraredVision = DebugMenuAddVar("SkyGFX| Advanced", "Infrared vision", &config->infraredVision, nil, 1, 0, 1, ps2pcStr);
+		menu.dualPassDefault = DebugMenuAddVarBool32("SkyGFX|Advanced", "Dual-pass Default", &config->dualPassDefault, nil);
+		menu.dualPassBuilding = DebugMenuAddVarBool32("SkyGFX|Advanced", "Dual-pass Buildings", &config->dualPassBuilding, nil);
+		menu.dualPassVehicle = DebugMenuAddVarBool32("SkyGFX|Advanced", "Dual-pass Vehicles", &config->dualPassVehicle, nil);
+		menu.dualPassPed = DebugMenuAddVarBool32("SkyGFX|Advanced", "Dual-pass Peds", &config->dualPassPed, nil);
+		menu.dualPassGrass = DebugMenuAddVarBool32("SkyGFX|Advanced", "Dual-pass Grass", &config->dualPassGrass, nil);
+		menu.ps2ModulateBuilding = DebugMenuAddVarBool32("SkyGFX|Advanced", "PS2-modulate Buildings", &config->ps2ModulateBuilding, nil);
+		menu.ps2ModulateGrass = DebugMenuAddVarBool32("SkyGFX|Advanced", "PS2-modulate Grass", &config->ps2ModulateGrass, nil);
+		menu.infraredVision = DebugMenuAddVar("SkyGFX|Advanced", "Infrared vision", &config->infraredVision, nil, 1, 0, 1, ps2pcStr);
 		DebugMenuEntrySetWrap(menu.infraredVision, true);
-		menu.nightVision = DebugMenuAddVar("SkyGFX| Advanced", "Night vision", &config->nightVision, nil, 1, 0, 1, ps2pcStr);
+		menu.nightVision = DebugMenuAddVar("SkyGFX|Advanced", "Night vision", &config->nightVision, nil, 1, 0, 1, ps2pcStr);
 		DebugMenuEntrySetWrap(menu.nightVision, true);
-		menu.grainFilter = DebugMenuAddVar("SkyGFX| Advanced", "Grain filter", &config->grainFilter, resetValues, 1, 0, 1, ps2pcStr);
+		menu.grainFilter = DebugMenuAddVar("SkyGFX|Advanced", "Grain filter", &config->grainFilter, resetValues, 1, 0, 1, ps2pcStr);
 		DebugMenuEntrySetWrap(menu.grainFilter, true);
 
 		//void privatepatches(void);
