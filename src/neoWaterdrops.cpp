@@ -515,7 +515,6 @@ void WaterDrops::MoveDrop(WaterDropMoving *moving)
 		moving->dist += ms_vecLen;
 		if (moving->dist > 20.0f)
 			NewTrace(moving);
-		// flipped sign, why no longer check for look right/left? [aap]
 		drop->x -= ms_vec.x;
 		drop->y += ms_vec.y;
 	}

@@ -148,3 +148,5 @@ WRAPPER RwMatrix *RwMatrixRotate(RwMatrix*, const RwV3d*, RwReal, RwOpCombineTyp
 WRAPPER RwFrame *RwFrameUpdateObjects(RwFrame*) { EAXJMP(0x7F0910); }
 WRAPPER RwFrame *RwFrameSetIdentity(RwFrame*) { EAXJMP(0x7F10B0); }
 WRAPPER RwMatrix *RwMatrixOrthoNormalize(RwMatrix*, const RwMatrix*) { EAXJMP(0x7F1920); }
+WRAPPER RwMatrix *RwMatrixTransform(RwMatrix*, const RwMatrix*, RwOpCombineType) { EAXJMP(0x7F25A0); }
+WRAPPER RwMatrix *RwMatrixOptimize(RwMatrix*, const RwMatrixTolerance*) { EAXJMP(0x7F17E0); }

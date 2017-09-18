@@ -200,6 +200,7 @@ struct CPostEffects
 	static void DrawQuadSetUVs(float utl, float vtl, float utr, float vtr, float ubr, float vbr, float ubl, float vbl);
 	static void DrawQuadSetDefaultUVs(void);
 	static void SpeedFX(float);
+	static void DrawFinalEffects(void);
 
 	static Imf &ms_imf;
 
@@ -253,6 +254,11 @@ struct CPostEffects
 
 	/* My own */
 	static bool m_bBlurColourFilter;
+	// YCbCr color filter
+	static bool m_bYCbCrFilter;
+	static float m_lumaScale, m_lumaOffset;
+	static float m_cbScale, m_cbOffset;
+	static float m_crScale, m_crOffset;
 
 	static void UpdateFrontBuffer(void);
 };

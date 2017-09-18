@@ -71,6 +71,14 @@ uint8 &CPostEffects::m_SpeedFXAlpha = *(uint8*)0x8D5104;
 
 /* My own */
 bool CPostEffects::m_bBlurColourFilter = true;
+bool CPostEffects::m_bYCbCrFilter = true;
+float CPostEffects::m_lumaScale = 219.0f/255.0f;
+float CPostEffects::m_lumaOffset = 16.0f/255.0f;
+float CPostEffects::m_cbScale = 1.23f;
+float CPostEffects::m_cbOffset = 0.0f;
+float CPostEffects::m_crScale = 1.23f;
+float CPostEffects::m_crOffset = 0.0f;
+
 
 
 /////
@@ -1085,6 +1093,84 @@ CPostEffects::ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 	//}
 	//if(doramp)
 	//	renderRamp();
+}
+
+static RwMatrix RGB2YUV = {
+	{  0.299f,	-0.168736f,	 0.500f }, 0,
+	{  0.587f,	-0.331264f,	-0.418688f }, 0,
+	{  0.114f,	 0.500f,	-0.081312f }, 0,
+	{  0.000f,	 0.000f,	 0.000f }, 0,
+};
+
+static RwMatrix YUV2RGB = {
+	{  1.000f,	 1.000f,	 1.000f }, 0,
+	{  0.000f,	-0.344136f,	 1.772f }, 0,
+	{  1.402f,	-0.714136f,	 0.000f }, 0,
+	{  0.000f,	 0.000f,	 0.000f }, 0,
+};
+
+void
+CPostEffects::DrawFinalEffects(void)
+{
+	if(!m_bYCbCrFilter)
+		return;
+
+	UpdateFrontBuffer();
+
+	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERNEAREST);
+	RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)FALSE);
+	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)FALSE);
+	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
+	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, (void*)CPostEffects::pRasterFrontBuffer);
+	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)FALSE);
+
+	RwMatrix m = RGB2YUV;
+
+	RwMatrix m2;
+	m2.right.x = m_lumaScale;
+	m2.up.x = 0.0f;
+	m2.at.x = 0.0f;
+	m2.pos.x = m_lumaOffset;
+	m2.right.y = 0.0f;
+	m2.up.y = m_cbScale;
+	m2.at.y = 0.0f;
+	m2.pos.y = m_cbOffset;
+	m2.right.z = 0.0f;
+	m2.up.z = 0.0f;
+	m2.at.z = m_crScale;
+	m2.pos.z = m_crOffset;
+
+	RwMatrixOptimize(&m2, nil);
+
+	RwMatrixTransform(&m, &m2, rwCOMBINEPOSTCONCAT);
+	RwMatrixTransform(&m, &YUV2RGB, rwCOMBINEPOSTCONCAT);
+	Grade red, green, blue;
+	red.r = m.right.x;
+	red.g = m.up.x;
+	red.b = m.at.x;
+	red.a = m.pos.x;
+	green.r = m.right.y;
+	green.g = m.up.y;
+	green.b = m.at.y;
+	green.a = m.pos.y;
+	blue.r = m.right.z;
+	blue.g = m.up.z;
+	blue.b = m.at.z;
+	blue.a = m.pos.z;
+
+	RwD3D9SetPixelShaderConstant(0, &red, 1);
+	RwD3D9SetPixelShaderConstant(1, &green, 1);
+	RwD3D9SetPixelShaderConstant(2, &blue, 1);
+
+	overrideIm2dPixelShader = gradingPS;
+	RwIm2DRenderIndexedPrimitive(rwPRIMTYPETRILIST, colorfilterVerts, 4, colorfilterIndices, 6);
+	overrideIm2dPixelShader = nil;
+
+	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
+	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)TRUE);
+	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
+	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, (void*)NULL);
+	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
 }
 
 void (*CPostEffects::Initialise_orig)(void);

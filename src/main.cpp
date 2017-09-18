@@ -903,6 +903,14 @@ installMenu(void)
 		DebugMenuEntrySetWrap(e, true);
 		DebugMenuAddCmd("SkyGFX", "Reload Inis", reloadAllInis);
 
+		DebugMenuAddVarBool8("YCbCr", "Enable colour filter", (int8_t*)&CPostEffects::m_bYCbCrFilter, nil);
+		DebugMenuAddVar("YCbCr", "Y scale", &CPostEffects::m_lumaScale, nil, 0.004f, 0.0f, 10.0f);
+		DebugMenuAddVar("YCbCr", "Y offset", &CPostEffects::m_lumaOffset, nil, 0.004f, -1.0f, 1.0f);
+		DebugMenuAddVar("YCbCr", "Cb scale", &CPostEffects::m_cbScale, nil, 0.004f, 0.0f, 10.0f);
+		DebugMenuAddVar("YCbCr", "Cb offset", &CPostEffects::m_cbOffset, nil, 0.004f, -1.0f, 1.0f);
+		DebugMenuAddVar("YCbCr", "Cr scale", &CPostEffects::m_crScale, nil, 0.004f, 0.0f, 10.0f);
+		DebugMenuAddVar("YCbCr", "Cr offset", &CPostEffects::m_crOffset, nil, 0.004f, -1.0f, 1.0f);
+
 		menu.dualPassGlobal = DebugMenuAddVarBool32("SkyGFX", "Dual-pass Global", &config->dualPassGlobal, toggledDual);
 		menu.ps2ModulateGlobal = DebugMenuAddVarBool32("SkyGFX", "PS2-modulate Global", &config->ps2ModulateGlobal, toggledModulation);
 		if(iCanHasbuildingPipe){
@@ -1120,6 +1128,8 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		InjectHook(0x705078, CPostEffects::Grain_PS2);
 		// unused
 		InjectHook(0x705091, CPostEffects::Grain_PS2);
+
+		InjectHook(0x53EBE9, CPostEffects::DrawFinalEffects);
 
 		// fix pointlight fog
 		InjectHook(0x700B6B, CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect);
