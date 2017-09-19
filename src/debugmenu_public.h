@@ -73,16 +73,16 @@ inline bool DebugMenuLoad(void)
 {
 	if(gDebugMenuAPI.isLoaded)
 		return true;
-	HMODULE mod = LoadLibrary("debugmenu.dll");
+	HMODULE mod = LoadLibraryA("debugmenu");
 	if(mod == 0){
 		char modulePath[MAX_PATH];
 		HMODULE dllModule;
-		GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)&gDebugMenuAPI, &dllModule);
-		GetModuleFileName(dllModule, modulePath, MAX_PATH);
-		char *p = strrchr(modulePath, '\\');
+		GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCTSTR)&gDebugMenuAPI, &dllModule);
+		GetModuleFileNameA(dllModule, modulePath, MAX_PATH);
+		char *p = strchr(modulePath, '\\');
 		if(p) p[1] = '\0';
-		strcat(modulePath, "debugmenu.dll");
-		mod = LoadLibrary(modulePath);
+		strcat(modulePath, "debugmenu");
+		mod = LoadLibraryA(modulePath);
 	}
 	if(mod == 0)
 		return false;

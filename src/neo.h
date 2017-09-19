@@ -197,6 +197,7 @@ public:
 
 	static void RegisterSplash(CPlaceable_III *plc, float distance = 20.0f);
 	static void WaterDrops::RegisterSplash(RwV3d* point, float distance = 20.0f, int duration = 14);
+	static bool NoDrops(void);
 	static bool NoRain(void);
 
 	// Rendering

@@ -27,6 +27,7 @@ enum {
 
 };
 
+float &CCoronas__LightsMult = *(float*)0x8D4B5C;
 bool &CWeather__LightningFlash = *(bool*)0xC812CC;
 WRAPPER bool CPostEffects__IsVisionFXActive(void) { EAXJMP(0x7034F0); }
 
@@ -38,10 +39,11 @@ CustomBuildingPipeline__Update(void)
 {
 	CustomBuildingPipeline__Update_orig();
 
+
 	// do *not* use pAmbient light. It causes so many problems
-	buildingAmbient.red = CTimeCycle_GetAmbientRed();
-	buildingAmbient.green = CTimeCycle_GetAmbientGreen();
-	buildingAmbient.blue = CTimeCycle_GetAmbientBlue();
+	buildingAmbient.red = CTimeCycle_GetAmbientRed()*CCoronas__LightsMult;
+	buildingAmbient.green = CTimeCycle_GetAmbientGreen()*CCoronas__LightsMult;
+	buildingAmbient.blue = CTimeCycle_GetAmbientBlue()*CCoronas__LightsMult;
 
 	if(config->lightningIlluminatesWorld && CWeather__LightningFlash && !CPostEffects__IsVisionFXActive())
 		buildingAmbient = { 1.0, 1.0, 1.0, 0.0 };

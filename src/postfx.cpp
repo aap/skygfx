@@ -71,7 +71,7 @@ uint8 &CPostEffects::m_SpeedFXAlpha = *(uint8*)0x8D5104;
 
 /* My own */
 bool CPostEffects::m_bBlurColourFilter = true;
-bool CPostEffects::m_bYCbCrFilter = true;
+bool CPostEffects::m_bYCbCrFilter = false;
 float CPostEffects::m_lumaScale = 219.0f/255.0f;
 float CPostEffects::m_lumaOffset = 16.0f/255.0f;
 float CPostEffects::m_cbScale = 1.23f;
@@ -1327,6 +1327,25 @@ void
 Colorcycle::Initialise(void)
 {
 	void *f = CFileMgr::OpenFile("data/colorcycle.dat", "r");
+	if(f == nil){
+		for(int i = 0; i < 23; i++)
+			for(int j = 0; j < 8; j++){
+				redGrade[j][i].r = 1.0f;
+				redGrade[j][i].g = 0.0f;
+				redGrade[j][i].b = 0.0f;
+				redGrade[j][i].a = 0.0f;
+				greenGrade[j][i].r = 0.0f;
+				greenGrade[j][i].g = 1.0f;
+				greenGrade[j][i].b = 0.0f;
+				greenGrade[j][i].a = 0.0f;
+				blueGrade[j][i].r = 0.0f;
+				blueGrade[j][i].g = 0.0f;
+				blueGrade[j][i].b = 1.0f;
+				blueGrade[j][i].a = 0.0f;
+			}
+		initialised = true;
+		return;
+	}
 	char *line;
 	for(int i = 0; i < 23; i++){
 		for(int j = 0; j < 8; j++){

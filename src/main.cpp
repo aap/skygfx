@@ -165,6 +165,15 @@ resetValues(void)
 		CPostEffects::m_InfraredVisionGrainStrength = 0x40;
 		CPostEffects::m_NightVisionGrainStrength = 0x30;
 	}
+
+	CPostEffects::m_bYCbCrFilter = config->bYCbCrFilter;
+	CPostEffects::m_lumaScale = config->lumaScale;
+	CPostEffects::m_lumaOffset = config->lumaOffset;
+	CPostEffects::m_crScale = config->crScale;
+	CPostEffects::m_crOffset = config->crOffset;
+	CPostEffects::m_cbScale = config->cbScale;
+	CPostEffects::m_cbOffset = config->cbOffset;
+
 	// night vision ambient green
 	// not if this is the correct switch, maybe ps2ModulateWorld?
 	//if(config->nightVision == 0)
@@ -770,6 +779,14 @@ readIni(int n)
 	}
 	c->neoBloodDrops = readint(cfg.get("SkyGfx", "neoBloodDrops", ""), 0);
 	fixPcCarLight = readint(cfg.get("SkyGfx", "fixPcCarLight", ""), 0);
+
+	c->bYCbCrFilter = readint(cfg.get("SkyGfx", "YCbCrCorrection", ""), 0);
+	c->lumaScale = readfloat(cfg.get("SkyGfx", "lumaScale", ""), 219.0f/255.0f);
+	c->lumaOffset = readfloat(cfg.get("SkyGfx", "lumaOffset", ""), 16.0f/255.0f);
+	c->cbScale = readfloat(cfg.get("SkyGfx", "CbScale", ""), 1.23f);
+	c->cbOffset = readfloat(cfg.get("SkyGfx", "CbOffset", ""), 0.0f);
+	c->crScale = readfloat(cfg.get("SkyGfx", "CrScale", ""), 1.23f);
+	c->crOffset = readfloat(cfg.get("SkyGfx", "CrOffset", ""), 0.0f);
 }
 
 void
@@ -903,14 +920,6 @@ installMenu(void)
 		DebugMenuEntrySetWrap(e, true);
 		DebugMenuAddCmd("SkyGFX", "Reload Inis", reloadAllInis);
 
-		DebugMenuAddVarBool8("YCbCr", "Enable colour filter", (int8_t*)&CPostEffects::m_bYCbCrFilter, nil);
-		DebugMenuAddVar("YCbCr", "Y scale", &CPostEffects::m_lumaScale, nil, 0.004f, 0.0f, 10.0f);
-		DebugMenuAddVar("YCbCr", "Y offset", &CPostEffects::m_lumaOffset, nil, 0.004f, -1.0f, 1.0f);
-		DebugMenuAddVar("YCbCr", "Cb scale", &CPostEffects::m_cbScale, nil, 0.004f, 0.0f, 10.0f);
-		DebugMenuAddVar("YCbCr", "Cb offset", &CPostEffects::m_cbOffset, nil, 0.004f, -1.0f, 1.0f);
-		DebugMenuAddVar("YCbCr", "Cr scale", &CPostEffects::m_crScale, nil, 0.004f, 0.0f, 10.0f);
-		DebugMenuAddVar("YCbCr", "Cr offset", &CPostEffects::m_crOffset, nil, 0.004f, -1.0f, 1.0f);
-
 		menu.dualPassGlobal = DebugMenuAddVarBool32("SkyGFX", "Dual-pass Global", &config->dualPassGlobal, toggledDual);
 		menu.ps2ModulateGlobal = DebugMenuAddVarBool32("SkyGFX", "PS2-modulate Global", &config->ps2ModulateGlobal, toggledModulation);
 		if(iCanHasbuildingPipe){
@@ -958,6 +967,14 @@ installMenu(void)
 		DebugMenuEntrySetWrap(menu.nightVision, true);
 		menu.grainFilter = DebugMenuAddVar("SkyGFX|Advanced", "Grain filter", &config->grainFilter, resetValues, 1, 0, 1, ps2pcStr);
 		DebugMenuEntrySetWrap(menu.grainFilter, true);
+
+		DebugMenuAddVarBool8("SkyGFX|ScreenFX", "Enable YCbCr tweak", (int8_t*)&config->bYCbCrFilter, resetValues);
+		DebugMenuAddVar("SkyGFX|ScreenFX", "Y scale", &config->lumaScale, resetValues, 0.004f, 0.0f, 10.0f);
+		DebugMenuAddVar("SkyGFX|ScreenFX", "Y offset", &config->lumaOffset, resetValues, 0.004f, -1.0f, 1.0f);
+		DebugMenuAddVar("SkyGFX|ScreenFX", "Cb scale", &config->cbScale, resetValues, 0.004f, 0.0f, 10.0f);
+		DebugMenuAddVar("SkyGFX|ScreenFX", "Cb offset", &config->cbOffset, resetValues, 0.004f, -1.0f, 1.0f);
+		DebugMenuAddVar("SkyGFX|ScreenFX", "Cr scale", &config->crScale, resetValues, 0.004f, 0.0f, 10.0f);
+		DebugMenuAddVar("SkyGFX|ScreenFX", "Cr offset", &config->crOffset, resetValues, 0.004f, -1.0f, 1.0f);
 
 		hasMenu = true;
 		//void privatepatches(void);

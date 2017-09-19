@@ -28,7 +28,7 @@ typedef int32_t int32;
 extern HMODULE dllModule;
 
 #define nil NULL
-#define VERSION 0x340
+#define VERSION 0x350
 
 struct Config {
 	// these are at fixed offsets
@@ -63,6 +63,11 @@ struct Config {
 	RwBool ps2ModulateGlobal, dualPassGlobal;
 
 	int keys[2];
+
+	bool bYCbCrFilter;
+	float lumaScale, lumaOffset;
+	float cbScale, cbOffset;
+	float crScale, crOffset;
 };
 extern int numConfigs;
 extern int currentConfig;
