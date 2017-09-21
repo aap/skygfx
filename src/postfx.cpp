@@ -148,9 +148,9 @@ struct GradeColorset
 struct Colorcycle
 {
 	static bool initialised;
-	static Grade redGrade[NUMHOURS][NUMWEATHERS];
-	static Grade greenGrade[NUMHOURS][NUMWEATHERS];
-	static Grade blueGrade[NUMHOURS][NUMWEATHERS];
+	static Grade redGrade[24][NUMWEATHERS];
+	static Grade greenGrade[24][NUMWEATHERS];
+	static Grade blueGrade[24][NUMWEATHERS];
 
 	static void Initialise(void);
 	static void Update(GradeColorset *colorset);
@@ -772,6 +772,7 @@ CPostEffects::ColourFilter_Mobile(RwRGBA rgba1, RwRGBA rgba2)
 	blue.r = blue.g = blue.a = 0.0f;
 */
 
+
 	RwD3D9SetPixelShaderConstant(0, &red, 1);
 	RwD3D9SetPixelShaderConstant(1, &green, 1);
 	RwD3D9SetPixelShaderConstant(2, &blue, 1);
@@ -1221,10 +1222,10 @@ static float &CWeather__InTunnelness = *(float*)0xC81334;
 static int &tunnelWeather = *(int*)0x8CDEE0;
 
 
-
-Grade Colorcycle::redGrade[NUMHOURS][NUMWEATHERS];
-Grade Colorcycle::greenGrade[NUMHOURS][NUMWEATHERS];
-Grade Colorcycle::blueGrade[NUMHOURS][NUMWEATHERS];
+// 24 instead of NUMHOURS because we might be using timecycle_24h with extended extra colour hours
+Grade Colorcycle::redGrade[24][NUMWEATHERS];
+Grade Colorcycle::greenGrade[24][NUMWEATHERS];
+Grade Colorcycle::blueGrade[24][NUMWEATHERS];
 bool Colorcycle::initialised;
 
 GradeColorset::GradeColorset(int h, int w)
@@ -1329,65 +1330,70 @@ interpolateColorcycle(Grade *red, Grade *green, Grade *blue)
 void
 Colorcycle::Initialise(void)
 {
-	void *f = CFileMgr::OpenFile("data/colorcycle.dat", "r");
-	if(f == nil){
-		for(int i = 0; i < 23; i++)
-			for(int j = 0; j < 8; j++){
-				redGrade[j][i].r = 1.0f;
-				redGrade[j][i].g = 0.0f;
-				redGrade[j][i].b = 0.0f;
-				redGrade[j][i].a = 0.0f;
-				greenGrade[j][i].r = 0.0f;
-				greenGrade[j][i].g = 1.0f;
-				greenGrade[j][i].b = 0.0f;
-				greenGrade[j][i].a = 0.0f;
-				blueGrade[j][i].r = 0.0f;
-				blueGrade[j][i].g = 0.0f;
-				blueGrade[j][i].b = 1.0f;
-				blueGrade[j][i].a = 0.0f;
-			}
-		initialised = true;
-		return;
-	}
-	char *line;
-	for(int i = 0; i < 23; i++){
-		for(int j = 0; j < 8; j++){
-			line = CFileLoader::LoadLine(f);
-			sscanf(line, "%f %f %f %f %f %f %f %f %f %f %f %f",
-			       &redGrade[j][i].r, &redGrade[j][i].g,
-			       &redGrade[j][i].b, &redGrade[j][i].a,
-			       &greenGrade[j][i].r, &greenGrade[j][i].g,
-			       &greenGrade[j][i].b, &greenGrade[j][i].a,
-			       &blueGrade[j][i].r, &blueGrade[j][i].g,
-			       &blueGrade[j][i].b, &blueGrade[j][i].a);
-			float sum;
-			sum = redGrade[j][i].r + redGrade[j][i].g + redGrade[j][i].b;
-			if(sum > 1.7f)
-				redGrade[j][i].a -= (sum - 1.7f)*0.13f;
-			sum = greenGrade[j][i].r + greenGrade[j][i].g + greenGrade[j][i].b;
-			if(sum > 1.7f)
-				greenGrade[j][i].a -= (sum - 1.7f)*0.13f;
-			sum = blueGrade[j][i].r + blueGrade[j][i].g + blueGrade[j][i].b;
-			if(sum > 1.7f)
-				blueGrade[j][i].a -= (sum - 1.7f)*0.13f;
-			redGrade[j][i].r *= 0.67f;
-			redGrade[j][i].g *= 0.67f;
-			redGrade[j][i].b *= 0.67f;
-			redGrade[j][i].a *= 0.67f;
-			greenGrade[j][i].r *= 0.67f;
-			greenGrade[j][i].g *= 0.67f;
-			greenGrade[j][i].b *= 0.67f;
-			greenGrade[j][i].a *= 0.67f;
-			blueGrade[j][i].r *= 0.67f;
-			blueGrade[j][i].g *= 0.67f;
-			blueGrade[j][i].b *= 0.67f;
-			blueGrade[j][i].a *= 0.67f;
-			//printf("%f %f %f %f X %f %f %f %f X %f %f %f %f\n",
-			//	redGrade[j][i].r, redGrade[j][i].g, redGrade[j][i].b, redGrade[j][i].a,
-			//	greenGrade[j][i].r, greenGrade[j][i].g, greenGrade[j][i].b, greenGrade[j][i].a,
-			//	blueGrade[j][i].r, blueGrade[j][i].g, blueGrade[j][i].b, blueGrade[j][i].a);
+	int have24h = GetModuleHandle("timecycle24") != 0 || GetModuleHandle("timecycle24.asi") != 0;
+	for(int i = 0; i < 24; i++)
+		for(int j = 0; j < NUMHOURS; j++){
+			redGrade[j][i].r = 1.0f;
+			redGrade[j][i].g = 0.0f;
+			redGrade[j][i].b = 0.0f;
+			redGrade[j][i].a = 0.0f;
+			greenGrade[j][i].r = 0.0f;
+			greenGrade[j][i].g = 1.0f;
+			greenGrade[j][i].b = 0.0f;
+			greenGrade[j][i].a = 0.0f;
+			blueGrade[j][i].r = 0.0f;
+			blueGrade[j][i].g = 0.0f;
+			blueGrade[j][i].b = 1.0f;
+			blueGrade[j][i].a = 0.0f;
 		}
+	void *f = CFileMgr::OpenFile("data/colorcycle.dat", "r");
+	if(f){
+		char *line;
+		for(int i = 0; i < NUMWEATHERS; i++){
+			for(int j = 0; j < NUMHOURS; j++){
+				line = CFileLoader::LoadLine(f);
+				sscanf(line, "%f %f %f %f %f %f %f %f %f %f %f %f",
+				       &redGrade[j][i].r, &redGrade[j][i].g,
+				       &redGrade[j][i].b, &redGrade[j][i].a,
+				       &greenGrade[j][i].r, &greenGrade[j][i].g,
+				       &greenGrade[j][i].b, &greenGrade[j][i].a,
+				       &blueGrade[j][i].r, &blueGrade[j][i].g,
+				       &blueGrade[j][i].b, &blueGrade[j][i].a);
+				float sum;
+				sum = redGrade[j][i].r + redGrade[j][i].g + redGrade[j][i].b;
+				if(sum > 1.7f)
+					redGrade[j][i].a -= (sum - 1.7f)*0.13f;
+				sum = greenGrade[j][i].r + greenGrade[j][i].g + greenGrade[j][i].b;
+				if(sum > 1.7f)
+					greenGrade[j][i].a -= (sum - 1.7f)*0.13f;
+				sum = blueGrade[j][i].r + blueGrade[j][i].g + blueGrade[j][i].b;
+				if(sum > 1.7f)
+					blueGrade[j][i].a -= (sum - 1.7f)*0.13f;
+				redGrade[j][i].r *= 0.67f;
+				redGrade[j][i].g *= 0.67f;
+				redGrade[j][i].b *= 0.67f;
+				redGrade[j][i].a *= 0.67f;
+				greenGrade[j][i].r *= 0.67f;
+				greenGrade[j][i].g *= 0.67f;
+				greenGrade[j][i].b *= 0.67f;
+				greenGrade[j][i].a *= 0.67f;
+				blueGrade[j][i].r *= 0.67f;
+				blueGrade[j][i].g *= 0.67f;
+				blueGrade[j][i].b *= 0.67f;
+				blueGrade[j][i].a *= 0.67f;
+				//printf("%f %f %f %f X %f %f %f %f X %f %f %f %f\n",
+				//	redGrade[j][i].r, redGrade[j][i].g, redGrade[j][i].b, redGrade[j][i].a,
+				//	greenGrade[j][i].r, greenGrade[j][i].g, greenGrade[j][i].b, greenGrade[j][i].a,
+				//	blueGrade[j][i].r, blueGrade[j][i].g, blueGrade[j][i].b, blueGrade[j][i].a);
+			}
+		}
+		if(have24h)
+			for(int j = 0; j < NUMHOURS; j++){
+				redGrade[j+8][21] = redGrade[j][22];
+				greenGrade[j+8][21] = greenGrade[j][22];
+				blueGrade[j+8][21] = blueGrade[j][22];
+			}
+		CFileMgr::CloseFile(f);
 	}
-	CFileMgr::CloseFile(f);
 	initialised = true;
 }

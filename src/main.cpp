@@ -21,8 +21,9 @@ bool iCanHasSunGlare = true;
 int fixingSAMP;
 
 int numConfigs;
-int currentConfig;
-Config *config, configs[10];
+int currentConfig = 0;
+Config configs[10];
+Config *config = &configs[0];
 int original_bRadiosity = 0;
 
 void *grassPixelShader;
@@ -474,6 +475,7 @@ void __declspec(naked) floatbitpattern(void)
 	_asm {
 		fstp [esp-4]
 		mov eax, [esp-4]
+		sar eax,1
 		ret
 	}
 }
@@ -597,20 +599,21 @@ InitialiseGame_hook(void)
 	InitialiseGame();
 }
 
-void __declspec(naked) selectVM(void)
-{
-	_asm {
-		test	[esp+0x20],1
-		jz	window
-
-		push 0x7463B8
-		retn
-
-	window:
-		push 0x7462C5
-		retn
-	}
-}
+// not working yet
+//void __declspec(naked) selectVM(void)
+//{
+//	_asm {
+//		test	[esp+0x20],1
+//		jz	window
+//
+//		push 0x7463B8
+//		retn
+//
+//	window:
+//		push 0x7462C5
+//		retn
+//	}
+//}
 
 
 
@@ -1076,8 +1079,6 @@ InjectDelayedPatches()
 {
 	if(!IsAlreadyRunning()){
 		// post init stuff
-		currentConfig = 0;
-		config = &configs[0];
 		findInis();
 		if(numConfigs == 0)
 			readIni(0);
@@ -1185,7 +1186,6 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 			freopen("CONOUT$", "w", stderr);
 		}
 
-		config = &configs[0];	// so GetConfig returns something
 		for(int i = 0; i < 10; i++)
 			configs[i].version = VERSION;
 
@@ -1197,7 +1197,7 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		// nvidia is not the way it's meant to be played
 		Nop(0x748AA8, 0x748AE7-0x748AA8);
 
-		// windowed
+		// windowed - nor working yet
 //		Nop(0x7462FF, 2);
 //		Nop(0x745B55, 2);
 ///		InjectHook(0x74639B, selectVM, PATCH_JUMP);
@@ -1260,16 +1260,17 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 
 		InjectHook(0x53D903, myPluginAttach);
 
-		//InjectHook(0x5A3C7D, ps2srand);
-		//InjectHook(0x5A3DFB, ps2srand);
-		//InjectHook(0x5A3C75, ps2rand);
-		//InjectHook(0x5A3CB9, ps2rand);
-		//InjectHook(0x5A3CDB, ps2rand);
-		//InjectHook(0x5A3CF2, ps2rand);
-		//Patch<float*>(0x5A3CC8, (float*)&ps2randnormalize);
-		//Patch<float*>(0x5A3CEA, (float*)&ps2randnormalize);
-		//Patch<float*>(0x5A3D05, (float*)&ps2randnormalize);
-		InjectHook(0x5A3C6E, floatbitpattern);
+		// projobj placement. Not really broken but whatever
+		InjectHook(0x5A3C7D, ps2srand);
+		InjectHook(0x5A3DFB, ps2srand);
+		InjectHook(0x5A3C75, ps2rand);
+		InjectHook(0x5A3CB9, ps2rand);
+		InjectHook(0x5A3CDB, ps2rand);
+		InjectHook(0x5A3CF2, ps2rand);
+		Patch<float*>(0x5A3CC8, (float*)&ps2randnormalize);
+		Patch<float*>(0x5A3CEA, (float*)&ps2randnormalize);
+		Patch<float*>(0x5A3D05, (float*)&ps2randnormalize);
+//		InjectHook(0x5A3C6E, floatbitpattern);
 
 		// increase multipass distance
 		static float multipassMultiplier = 1000.0f;	// default 45.0
