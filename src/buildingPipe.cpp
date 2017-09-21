@@ -6,6 +6,7 @@ RxPipeline *buildingPipeline, *buildingDNPipeline;
 
 float &CWeather__WetRoads = *(float*)0xC81308;
 
+
 enum {
 	// common
 	REG_transform	= 0,
@@ -126,6 +127,8 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 	RwV4d envXform;
 	RwMatrix envmat;
 	float transform[16];
+
+	_rwD3D9EnableClippingIfNeeded(object, type);
 
 	atomic = (RpAtomic*)object;
 
@@ -248,6 +251,8 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PC(RwResEntry *repEntry, void *obj
 
 	atomic = (RpAtomic*)object;
 
+	_rwD3D9EnableClippingIfNeeded(object, type);
+
 	colorScale = 1.0f;
 	RwD3D9SetPixelShaderConstant(0, &colorScale, 1);
 
@@ -335,6 +340,7 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PC(RwResEntry *repEntry, void *obj
 	RwD3D9SetTextureStageState(1, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
 	RwD3D9SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, 1);
 	RwD3D9SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_DISABLE);
+
 }
 
 void
@@ -348,6 +354,7 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_Switch(RwResEntry *repEntry, void 
 		CCustomBuildingDNPipeline__CustomPipeRenderCB_PC(repEntry, object, type, flags);
 	else
 		CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(repEntry, object, type, flags);
+	fixSAMP();
 }
 
 static RwBool

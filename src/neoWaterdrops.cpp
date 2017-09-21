@@ -93,6 +93,10 @@ typedef uintptr_t addr;
 float scaling;
 #define SC(x) ((int)((x)*scaling))
 
+// debuggin
+bool WaterDrops::sprayWater = false;
+bool WaterDrops::sprayBlood = false;
+
 float WaterDrops::ms_xOff, WaterDrops::ms_yOff;	// not quite sure what these are
 WaterDrop WaterDrops::ms_drops[MAXDROPS];
 int WaterDrops::ms_numDrops;
@@ -103,7 +107,6 @@ bool WaterDrops::ms_enabled;
 bool WaterDrops::ms_movingEnabled;
 
 int WaterDrops::ms_splashDuration;
-CPlaceable_III *WaterDrops::ms_splashObject;
 
 float WaterDrops::ms_distMoved, WaterDrops::ms_vecLen, WaterDrops::ms_rainStrength;
 RwV3d WaterDrops::ms_vec;
@@ -268,19 +271,6 @@ WaterDrops::RegisterSplash(RwV3d* point, float distance, int duration)
 
 	if(RwV3dLength(&dist) <= distance)
 		ms_splashDuration = duration;
-}
-
-void
-WaterDrops::RegisterSplash(CPlaceable_III *plc, float distance)
-{
-	RwV3d dist;
-	RwV3dSub(&dist, &plc->matrix.matrix.pos, &ms_lastPos);
-	//RwV3dSub(&dist, &((CPlaceable*)plc)->matrix.matrix.pos, &ms_lastPos);
-
-	if(RwV3dLength(&dist) <= distance){
-		ms_splashDuration = 14;
-		ms_splashObject = plc;
-	}
 }
 
 void
@@ -466,6 +456,10 @@ WaterDrops::SprayDrops(void)
 		if (tmp < 40) tmp = 40;
 		FillScreenMoving((tmp - 40.0f) / 150.0f * CWeather__Rain * 0.5f);
 	}
+	if(sprayWater)
+		FillScreenMoving(0.5f, false);
+	if(sprayBlood)
+		FillScreenMoving(0.5f, true);
 	if(ms_splashDuration >= 0){
 		if (ms_numDrops < MAXDROPS) {
 			//if (isIII()) 
@@ -614,7 +608,7 @@ WaterDrops::AddToRenderList(WaterDrop *drop)
 
 	scale = drop->size * 0.5f;
 
-	for(i = 0; i < 4; i++, ms_vertPtr++){
+	for(i = 0; i < 4; i++){
 		ms_vertPtr->x = drop->x + xy[i * 2] * scale + ms_xOff;
 		ms_vertPtr->y = drop->y + xy[i * 2 + 1] * scale + ms_yOff;
 		ms_vertPtr->z = 0.0f;
@@ -624,6 +618,7 @@ WaterDrops::AddToRenderList(WaterDrop *drop)
 		ms_vertPtr->v0 = uv[i * 2 + 1];
 		ms_vertPtr->u1 = i >= 2 ? u1_2 : u1_1;
 		ms_vertPtr->v1 = i % 3 == 0 ? v1_2 : v1_1;
+		ms_vertPtr++;
 	}
 	ms_numBatchedDrops++;
 }
@@ -639,7 +634,7 @@ WaterDrops::Render(void)
 	vbuf->Lock(0, 0, (void**)&ms_vertPtr, 0);
 	ms_numBatchedDrops = 0;
 	for(WaterDrop *drop = &ms_drops[0]; drop < &ms_drops[MAXDROPS]; drop++)
-		if (drop->active)
+		if(drop->active)
 			AddToRenderList(drop);
 	vbuf->Unlock();
 
@@ -675,7 +670,7 @@ WaterDrops::Render(void)
 	RwD3D9SetFVF(DROPFVF);
 	RwD3D9SetStreamSource(0, vbuf, 0, sizeof(VertexTex2));
 	RwD3D9SetIndices(ms_indexBuf);
-	RwD3D9DrawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 0, ms_numBatchedDrops * 4, 0, ms_numBatchedDrops * 6);
+	RwD3D9DrawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 0, ms_numBatchedDrops * 4, 0, ms_numBatchedDrops * 2);
 
 	RwD3D9SetTexture(NULL, 1);
 	RwD3D9SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_DISABLE);
@@ -724,5 +719,4 @@ WaterDrops::Reset(void)
 {
 	Clear();
 	ms_splashDuration = -1;
-	ms_splashObject = NULL;
 }

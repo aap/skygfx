@@ -28,7 +28,7 @@ typedef int32_t int32;
 extern HMODULE dllModule;
 
 #define nil NULL
-#define VERSION 0x350
+#define VERSION 0x360
 
 struct Config {
 	// these are at fixed offsets
@@ -68,6 +68,7 @@ struct Config {
 	float lumaScale, lumaOffset;
 	float cbScale, cbOffset;
 	float crScale, crOffset;
+	int zwriteThreshold;
 };
 extern int numConfigs;
 extern int currentConfig;
@@ -277,6 +278,8 @@ void hookVehiclePipe(void);
 void hookBuildingPipe(void);
 void D3D9Render(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData);
 void D3D9RenderDual(int dual, RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instancedData);
+
+void fixSAMP(void);
 
 double CTimeCycle_GetAmbientRed(void);
 double CTimeCycle_GetAmbientGreen(void);

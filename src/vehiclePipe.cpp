@@ -350,6 +350,8 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 
 	atomic = (RpAtomic*)object;
 
+	_rwD3D9EnableClippingIfNeeded(object, type);
+
 	float colorscale = 1.0f;
 	RwD3D9SetPixelShaderConstant(0, &colorscale, 1);
 
@@ -514,6 +516,8 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(RwResEntry *repEntry, void
 	float transform[16];
 
 	atomic = (RpAtomic*)object;
+
+	_rwD3D9EnableClippingIfNeeded(object, type);
 
 	float colorscale = 1.0f;
 	RwD3D9SetPixelShaderConstant(0, &colorscale, 1);
@@ -693,6 +697,8 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *ob
 		float intensity;
 	} reflData;
 
+	_rwD3D9EnableClippingIfNeeded(object, type);
+
 	atomic = (RpAtomic*)object;
 	noFx = !!(CVisibilityPlugins__GetAtomicId(atomic) & 0x6000);
 	notLit = !((pDirect->object.object.flags & 1) == 0 ||
@@ -860,21 +866,22 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Switch(RwResEntry *repEntry, void *
 	switch(config->vehiclePipe){
 	case 0:
 		CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(repEntry, object, type, flags);
-		return;
+		break;
 	case 1:
 		CCustomCarEnvMapPipeline__CustomPipeRenderCB_exe(repEntry, object, type, flags);
-		return;
+		break;
 	case 2:
 		CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(repEntry, object, type, flags);
-		return;
+		break;
 	case 3:
 		CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(repEntry, object, type, flags);
-		return;
+		break;
 	case 4:
 		if(iCanHasNeoCar)
 			CarPipe::RenderCallback(repEntry, object, type, flags);
-		return;
+		break;
 	}
+	fixSAMP();
 }
 
 void

@@ -110,12 +110,6 @@ struct CMatrix
 	int haveRwMatrix;
 };
 
-struct CPlaceable_III
-{
-	void *vmt;
-	CMatrix matrix;
-};
-
 struct VertexTex2
 {
 	RwReal      x;
@@ -177,7 +171,10 @@ public:
 	static RwV3d ms_posDelta;
 
 	static int ms_splashDuration;
-	static CPlaceable_III *ms_splashObject;
+
+	// debugging
+	static bool sprayWater;
+	static bool sprayBlood;
 
 	static void Process(void);
 	static void CalculateMovement(void);
@@ -195,7 +192,6 @@ public:
 	static void Clear(void);
 	static void Reset(void);
 
-	static void RegisterSplash(CPlaceable_III *plc, float distance = 20.0f);
 	static void WaterDrops::RegisterSplash(RwV3d* point, float distance = 20.0f, int duration = 14);
 	static bool NoDrops(void);
 	static bool NoRain(void);

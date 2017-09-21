@@ -18,6 +18,8 @@ bool iCanHasbuildingPipe = true;
 bool iCanHasvehiclePipe = true;
 bool iCanHasSunGlare = true;
 
+int fixingSAMP;
+
 int numConfigs;
 int currentConfig;
 Config *config, configs[10];
@@ -26,7 +28,6 @@ int original_bRadiosity = 0;
 void *grassPixelShader;
 void *simplePS;
 void *gpCurrentShaderForDefaultCallbacks;
-//void (*TimecycInit)(void) = (void (*)(void))0x5BBAC0;
 
 float *gfLaRiotsLightMult = (float*)0x8CD060;
 float *ambientColors = (float*)0xB7C4A0;
@@ -68,11 +69,41 @@ getpath(char *path)
 	return NULL;
 }
 
+WRAPPER void _rwD3D9RenderStateFlushCache(void) { EAXJMP(0x7FC200); }
 
+// SAMP fucks with the render states directly instead of using RW. Synching the fog states
+// before and after rendering and using SAMP graphics restore seems to make things work.
+void
+fixSAMP(void)
+{
+	static D3DCAPS9 *Caps=(D3DCAPS9*)0xC9BF00;
+	static int *FogConvTable=(int*)0x8848FC;
+	if(fixingSAMP){
+		int fog, fogtype;
+		RwRenderStateGet(rwRENDERSTATEFOGENABLE, &fog);
+		RwRenderStateGet(rwRENDERSTATEFOGTYPE, &fogtype);
+		_rwD3D9RenderStateFlushCache();
+		RwD3D9SetRenderState(D3DRS_FOGENABLE, fog);
+		d3d9device->SetRenderState(D3DRS_FOGENABLE, fog);
+		int table, vertex;
+		if((Caps->RasterCaps & D3DPRASTERCAPS_FOGTABLE) && (Caps->RasterCaps & D3DPRASTERCAPS_WFOG)){
+			table = FogConvTable[fogtype];
+			vertex = D3DFOG_NONE;
+		}else{
+			table = D3DFOG_NONE;
+			vertex = FogConvTable[fogtype];
+		}
+		RwD3D9SetRenderState(D3DRS_FOGTABLEMODE, table);
+		RwD3D9SetRenderState(D3DRS_FOGVERTEXMODE, vertex);
+		d3d9device->SetRenderState(D3DRS_FOGTABLEMODE, table);
+		d3d9device->SetRenderState(D3DRS_FOGVERTEXMODE, vertex);
+	}
+}
 
 void
 D3D9Render(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData)
 {
+	fixSAMP();
 	if(resEntryHeader->indexBuffer)
 		RwD3D9DrawIndexedPrimitive(resEntryHeader->primType, instanceData->baseIndex, 0, instanceData->numVertices, instanceData->startIndex, instanceData->numPrimitives);
 	else
@@ -91,7 +122,7 @@ D3D9RenderDual(int dual, RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceDat
 	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &alphafunc);
 	if(dual && hasAlpha && zwrite){
 		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, &alpharef);
-		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)128);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)config->zwriteThreshold);
 		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONGREATEREQUAL);
 		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
 		D3D9Render(resEntryHeader, instanceData);
@@ -224,7 +255,7 @@ grassRenderCallback(RpAtomic *atomic)
 		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
 		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, (void*)&alphatest);
 		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)&alpharef);
-		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)128);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)config->zwriteThreshold);
 		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONGREATEREQUAL);
 		RxPipelineExecute(pipe, atomic, 1);
 		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
@@ -263,7 +294,7 @@ myDefaultCallback(RpAtomic *atomic)
 	if(dodual){
 		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, (void*)&alphatest);
 		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)&alpharef);
-		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)128);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)config->zwriteThreshold);
 		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONGREATEREQUAL);
 		RxPipelineExecute(pipe, atomic, 1);
 		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
@@ -521,6 +552,32 @@ CWaterLevel__CalculateWavesForCoordinate_hook(int x, int y, float a3, float a4, 
 }
 */
 
+static int alphafunc;
+static void setMoonAlphaBlendStates(void){
+	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &alphafunc);
+	RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)rwALPHATESTFUNCTIONALWAYS);
+	RwD3D9SetRenderState(D3DRS_SEPARATEALPHABLENDENABLE, 1);
+	RwD3D9SetRenderState(D3DRS_BLENDOPALPHA, D3DBLENDOP_ADD);
+	RwD3D9SetRenderState(D3DRS_SRCBLENDALPHA, D3DBLEND_SRCALPHA);
+	RwD3D9SetRenderState(D3DRS_DESTBLENDALPHA, D3DBLEND_ZERO);
+}
+static void restoreMoonAlphaBlendStates(void){
+	RwD3D9SetRenderState(D3DRS_SEPARATEALPHABLENDENABLE, 0);
+	RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphafunc);
+}
+void __declspec(naked) renderMoonMask(void)
+{
+	_asm {
+		call setMoonAlphaBlendStates
+		mov  eax,0x70D000
+		call eax
+		call restoreMoonAlphaBlendStates
+		push 0x713C51
+		retn
+	}
+}
+
+
 void (*CSkidmarks__Render_orig)(void);
 void CSkidmarks__Render(void)
 {
@@ -540,6 +597,20 @@ InitialiseGame_hook(void)
 	InitialiseGame();
 }
 
+void __declspec(naked) selectVM(void)
+{
+	_asm {
+		test	[esp+0x20],1
+		jz	window
+
+		push 0x7463B8
+		retn
+
+	window:
+		push 0x7462C5
+		retn
+	}
+}
 
 
 
@@ -780,6 +851,10 @@ readIni(int n)
 	c->neoBloodDrops = readint(cfg.get("SkyGfx", "neoBloodDrops", ""), 0);
 	fixPcCarLight = readint(cfg.get("SkyGfx", "fixPcCarLight", ""), 0);
 
+	c->zwriteThreshold = readint(cfg.get("SkyGfx", "zwriteThreshold", ""), 128);
+	if(c->zwriteThreshold < 0) c->zwriteThreshold = 0;
+	if(c->zwriteThreshold > 255) c->zwriteThreshold = 255;
+
 	c->bYCbCrFilter = readint(cfg.get("SkyGfx", "YCbCrCorrection", ""), 0);
 	c->lumaScale = readfloat(cfg.get("SkyGfx", "lumaScale", ""), 219.0f/255.0f);
 	c->lumaOffset = readfloat(cfg.get("SkyGfx", "lumaOffset", ""), 16.0f/255.0f);
@@ -865,7 +940,15 @@ afterStreamIni(void)
 	X(offBottom)				\
 	X(radiosityFilterPasses)		\
 	X(radiosityRenderPasses)		\
-	X(radiosityIntensity)
+	X(radiosityIntensity)			\
+	X(zwriteThreshold)			\
+	X(bYCbCrFilter)				\
+	X(lumaScale)				\
+	X(lumaOffset)				\
+	X(cbScale)				\
+	X(cbOffset)				\
+	X(crScale)				\
+	X(crOffset)
 
 struct SkyGfxMenu
 {
@@ -943,6 +1026,10 @@ installMenu(void)
 		if(iCanHasNeoDrops){
 			menu.neoWaterDrops = DebugMenuAddVarBool32("SkyGFX", "Neo Water drops", &config->neoWaterDrops, nil);
 			menu.neoBloodDrops = DebugMenuAddVarBool32("SkyGFX", "Neo-style Blood drops", &config->neoBloodDrops, nil);
+#ifdef DEBUG
+			DebugMenuAddVarBool8("SkyGFX", "Spray Water drops", (int8*)&WaterDrops::sprayWater, nil);
+			DebugMenuAddVarBool8("SkyGFX", "Spray Blood drops", (int8*)&WaterDrops::sprayBlood, nil);
+#endif
 		}
 
 		DebugMenuAddVarBool8("SkyGFX|Misc", "Blur PS2 Colour Filter", (int8_t*)&CPostEffects::m_bBlurColourFilter, nil);
@@ -959,6 +1046,7 @@ installMenu(void)
 		menu.dualPassVehicle = DebugMenuAddVarBool32("SkyGFX|Advanced", "Dual-pass Vehicles", &config->dualPassVehicle, nil);
 		menu.dualPassPed = DebugMenuAddVarBool32("SkyGFX|Advanced", "Dual-pass Peds", &config->dualPassPed, nil);
 		menu.dualPassGrass = DebugMenuAddVarBool32("SkyGFX|Advanced", "Dual-pass Grass", &config->dualPassGrass, nil);
+		menu.zwriteThreshold = DebugMenuAddVar("SkyGFX|Advanced", "Dual-pass Alpha Threshold", &config->zwriteThreshold, nil, 1, 0, 255, nil);
 		menu.ps2ModulateBuilding = DebugMenuAddVarBool32("SkyGFX|Advanced", "PS2-modulate Buildings", &config->ps2ModulateBuilding, nil);
 		menu.ps2ModulateGrass = DebugMenuAddVarBool32("SkyGFX|Advanced", "PS2-modulate Grass", &config->ps2ModulateGrass, nil);
 		menu.infraredVision = DebugMenuAddVar("SkyGFX|Advanced", "Infrared vision", &config->infraredVision, nil, 1, 0, 1, ps2pcStr);
@@ -968,13 +1056,13 @@ installMenu(void)
 		menu.grainFilter = DebugMenuAddVar("SkyGFX|Advanced", "Grain filter", &config->grainFilter, resetValues, 1, 0, 1, ps2pcStr);
 		DebugMenuEntrySetWrap(menu.grainFilter, true);
 
-		DebugMenuAddVarBool8("SkyGFX|ScreenFX", "Enable YCbCr tweak", (int8_t*)&config->bYCbCrFilter, resetValues);
-		DebugMenuAddVar("SkyGFX|ScreenFX", "Y scale", &config->lumaScale, resetValues, 0.004f, 0.0f, 10.0f);
-		DebugMenuAddVar("SkyGFX|ScreenFX", "Y offset", &config->lumaOffset, resetValues, 0.004f, -1.0f, 1.0f);
-		DebugMenuAddVar("SkyGFX|ScreenFX", "Cb scale", &config->cbScale, resetValues, 0.004f, 0.0f, 10.0f);
-		DebugMenuAddVar("SkyGFX|ScreenFX", "Cb offset", &config->cbOffset, resetValues, 0.004f, -1.0f, 1.0f);
-		DebugMenuAddVar("SkyGFX|ScreenFX", "Cr scale", &config->crScale, resetValues, 0.004f, 0.0f, 10.0f);
-		DebugMenuAddVar("SkyGFX|ScreenFX", "Cr offset", &config->crOffset, resetValues, 0.004f, -1.0f, 1.0f);
+		menu.bYCbCrFilter = DebugMenuAddVarBool8("SkyGFX|ScreenFX", "Enable YCbCr tweak", (int8_t*)&config->bYCbCrFilter, resetValues);
+		menu.lumaScale    = DebugMenuAddVar("SkyGFX|ScreenFX", "Y scale", &config->lumaScale, resetValues, 0.004f, 0.0f, 10.0f);
+		menu.lumaOffset   = DebugMenuAddVar("SkyGFX|ScreenFX", "Y offset", &config->lumaOffset, resetValues, 0.004f, -1.0f, 1.0f);
+		menu.cbScale      = DebugMenuAddVar("SkyGFX|ScreenFX", "Cb scale", &config->cbScale, resetValues, 0.004f, 0.0f, 10.0f);
+		menu.cbOffset     = DebugMenuAddVar("SkyGFX|ScreenFX", "Cb offset", &config->cbOffset, resetValues, 0.004f, -1.0f, 1.0f);
+		menu.crScale      = DebugMenuAddVar("SkyGFX|ScreenFX", "Cr scale", &config->crScale, resetValues, 0.004f, 0.0f, 10.0f);
+		menu.crOffset     = DebugMenuAddVar("SkyGFX|ScreenFX", "Cr offset", &config->crOffset, resetValues, 0.004f, -1.0f, 1.0f);
 
 		hasMenu = true;
 		//void privatepatches(void);
@@ -996,6 +1084,8 @@ InjectDelayedPatches()
 		else
 			readIni(1);
 		// only load one ini for now, others are loaded later by readInis()
+
+		fixingSAMP = GetModuleHandle("samp") != 0 || GetModuleHandle("SAMPGraphicRestore") != 0 || GetModuleHandle("SAMPGraphicRestore.asi") != 0;
 
 		InterceptCall(&InitialiseGame, InitialiseGame_hook, 0x748CFB);
 
@@ -1095,6 +1185,7 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 			freopen("CONOUT$", "w", stderr);
 		}
 
+		config = &configs[0];	// so GetConfig returns something
 		for(int i = 0; i < 10; i++)
 			configs[i].version = VERSION;
 
@@ -1102,6 +1193,17 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		defaultColourRightUOffset = CPostEffects::m_colourRightUOffset;
 		defaultColourTopVOffset = CPostEffects::m_colourTopVOffset;
 		defaultColourBottomVOffset = CPostEffects::m_colourBottomVOffset;
+
+		// nvidia is not the way it's meant to be played
+		Nop(0x748AA8, 0x748AE7-0x748AA8);
+
+		// windowed
+//		Nop(0x7462FF, 2);
+//		Nop(0x745B55, 2);
+///		InjectHook(0x74639B, selectVM, PATCH_JUMP);
+
+		// moon mask
+		InjectHook(0x713C4C, renderMoonMask, PATCH_JUMP);
 
 		IsAlreadyRunning = (BOOL(*)())(*(int*)(0x74872D+1) + 0x74872D + 5);
 		InjectHook(0x74872D, InjectDelayedPatches);

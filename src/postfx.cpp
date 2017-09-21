@@ -816,10 +816,11 @@ CPostEffects::ColourFilter_PS2(RwRGBA rgba1, RwRGBA rgba2)
 		static RwIm2DVertex blurVerts[4];
 		float rasterWidth = RwRasterGetWidth(CPostEffects::pRasterFrontBuffer);
 		float rasterHeight = RwRasterGetHeight(CPostEffects::pRasterFrontBuffer);
-		float leftOff   = m_colourLeftUOffset/16.0f   / rasterWidth;
-		float rightOff  = m_colourRightUOffset/16.0f  / rasterWidth;
-		float topOff    = m_colourTopVOffset/16.0f    / rasterHeight;
-		float bottomOff = m_colourBottomVOffset/16.0f / rasterHeight;
+		float scale = RwRasterGetWidth(RwCameraGetRaster(Camera))/640.0f;
+		float leftOff   = m_colourLeftUOffset*scale   / 16.0f / rasterWidth;
+		float rightOff  = m_colourRightUOffset*scale  / 16.0f / rasterWidth;
+		float topOff    = m_colourTopVOffset*scale    / 16.0f / rasterHeight;
+		float bottomOff = m_colourBottomVOffset*scale / 16.0f / rasterHeight;
 		memcpy(blurVerts, verts, sizeof(blurVerts));
 		/* These are our vertices:
 		 * 0--3
@@ -1024,8 +1025,10 @@ CPostEffects::ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 		if(GetAsyncKeyState(config->keys[0]) & 0x8000){
 			if(!keystate){
 				keystate = true;
-				currentConfig = (currentConfig+1) % numConfigs;
-				setConfig();
+				if(numConfigs){
+					currentConfig = (currentConfig+1) % numConfigs;
+					setConfig();
+				}
 			}
 		}else
 			keystate = false;
