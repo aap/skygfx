@@ -8,7 +8,7 @@ DebugMenuAPI gDebugMenuAPI;
 char asipath[MAX_PATH];
 
 // Only-once settings
-bool ps2grassFiles;
+//bool ps2grassFiles;
 bool disableClouds;
 bool disableGamma;
 bool fixPcCarLight;
@@ -781,7 +781,7 @@ readIni(int n)
 	c->ps2ModulateGrass = readint(cfg.get("SkyGfx", "ps2ModulateGrass", ""), config->ps2ModulateGlobal);
 	c->dualPassGrass = readint(cfg.get("SkyGfx", "dualPassGrass", ""), config->dualPassGlobal);
 	c->grassAddAmbient = readint(cfg.get("SkyGfx", "grassAddAmbient", ""), 0);
-	ps2grassFiles = readint(cfg.get("SkyGfx", "ps2grassFiles", ""), 0);
+//	ps2grassFiles = readint(cfg.get("SkyGfx", "ps2grassFiles", ""), 0);
 	c->fixGrassPlacement = readint(cfg.get("SkyGfx", "grassFixPlacement", ""), 0);
 	c->backfaceCull = readint(cfg.get("SkyGfx", "grassBackfaceCull", ""), 1);
 
@@ -1102,20 +1102,21 @@ InjectDelayedPatches()
 		if(iCanHasvehiclePipe)
 			hookVehiclePipe();
 
-		if(ps2grassFiles){
-			Patch<const char*>(0x5DDA87, "grass2_1.dff");
-			Patch<const char*>(0x5DDA8F, "grass2_2.dff");
-			Patch<const char*>(0x5DDA97, "grass2_3.dff");
-			Patch<const char*>(0x5DDA9F, "grass2_4.dff");
-
-			Patch<const char*>(0x5DDAC3, "grass3_1.dff");
-			Patch<const char*>(0x5DDACB, "grass3_2.dff");
-			Patch<const char*>(0x5DDAD3, "grass3_3.dff");
-			Patch<const char*>(0x5DDADB, "grass3_4.dff");
-			Patch<uint>(0x5DDB14 + 1, 0xC03A30+4);
-			Patch<uint>(0x5DDB21 + 2, 0xC03A30+8);
-			Patch<uint>(0x5DDB2F + 2, 0xC03A30+12);
-		}
+// fuck this, can't be fixed so easily anyway
+//		if(ps2grassFiles){
+//			Patch<const char*>(0x5DDA87, "grass2_1.dff");
+//			Patch<const char*>(0x5DDA8F, "grass2_2.dff");
+//			Patch<const char*>(0x5DDA97, "grass2_3.dff");
+//			Patch<const char*>(0x5DDA9F, "grass2_4.dff");
+//
+//			Patch<const char*>(0x5DDAC3, "grass3_1.dff");
+//			Patch<const char*>(0x5DDACB, "grass3_2.dff");
+//			Patch<const char*>(0x5DDAD3, "grass3_3.dff");
+//			Patch<const char*>(0x5DDADB, "grass3_4.dff");
+//			Patch<uint>(0x5DDB14 + 1, 0xC03A30+4);
+//			Patch<uint>(0x5DDB21 + 2, 0xC03A30+8);
+//			Patch<uint>(0x5DDB2F + 2, 0xC03A30+12);
+//		}
 
 		// use static ped shadows
 		InjectHook(0x5E675E, &FX::GetFxQuality_ped);
