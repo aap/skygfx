@@ -35,7 +35,7 @@ main(VS_INPUT IN)
 		float l = max(0.0, dot(IN.Normal, -directDir[i]));
 		OUT.Color.xyz += l*directCol[i]*surfDiff;
 	}
-	OUT.Color *= matCol;
+	OUT.Color = saturate(OUT.Color)*matCol;
 
 	return OUT;
 }

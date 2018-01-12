@@ -1073,101 +1073,101 @@ installMenu(void)
 	}
 }
 
-static BOOL (*IsAlreadyRunning)();
-BOOL
+static int (*IsAlreadyRunning)();
+int
 InjectDelayedPatches()
 {
-	if(!IsAlreadyRunning()){
-		// post init stuff
-		findInis();
-		if(numConfigs == 0)
-			readIni(0);
-		else
-			readIni(1);
-		// only load one ini for now, others are loaded later by readInis()
+	if(IsAlreadyRunning())
+		return TRUE;
 
-		fixingSAMP = GetModuleHandle("samp") != 0 || GetModuleHandle("SAMPGraphicRestore") != 0 || GetModuleHandle("SAMPGraphicRestore.asi") != 0;
+	// post init stuff
+	findInis();
+	if(numConfigs == 0)
+		readIni(0);
+	else
+		readIni(1);
+	// only load one ini for now, others are loaded later by readInis()
 
-		InterceptCall(&InitialiseGame, InitialiseGame_hook, 0x748CFB);
+	fixingSAMP = GetModuleHandle("samp") != 0 || GetModuleHandle("SAMPGraphicRestore") != 0 || GetModuleHandle("SAMPGraphicRestore.asi") != 0;
 
-		// Stop timecycle from converting colour filter alphas
-		Nop(0x5BBF6F, 2);
-		Nop(0x5BBF83, 2);
+	InterceptCall(&InitialiseGame, InitialiseGame_hook, 0x748CFB);
 
-		// custom building pipeline
-		if(iCanHasbuildingPipe)
-			hookBuildingPipe();
+	// Stop timecycle from converting colour filter alphas
+	Nop(0x5BBF6F, 2);
+	Nop(0x5BBF83, 2);
 
-		// custom vehicle pipeline
-		if(iCanHasvehiclePipe)
-			hookVehiclePipe();
+	// custom building pipeline
+	if(iCanHasbuildingPipe)
+		hookBuildingPipe();
+
+	// custom vehicle pipeline
+	if(iCanHasvehiclePipe)
+		hookVehiclePipe();
 
 // fuck this, can't be fixed so easily anyway
-//		if(ps2grassFiles){
-//			Patch<const char*>(0x5DDA87, "grass2_1.dff");
-//			Patch<const char*>(0x5DDA8F, "grass2_2.dff");
-//			Patch<const char*>(0x5DDA97, "grass2_3.dff");
-//			Patch<const char*>(0x5DDA9F, "grass2_4.dff");
+//	if(ps2grassFiles){
+//		Patch<const char*>(0x5DDA87, "grass2_1.dff");
+//		Patch<const char*>(0x5DDA8F, "grass2_2.dff");
+//		Patch<const char*>(0x5DDA97, "grass2_3.dff");
+//		Patch<const char*>(0x5DDA9F, "grass2_4.dff");
 //
-//			Patch<const char*>(0x5DDAC3, "grass3_1.dff");
-//			Patch<const char*>(0x5DDACB, "grass3_2.dff");
-//			Patch<const char*>(0x5DDAD3, "grass3_3.dff");
-//			Patch<const char*>(0x5DDADB, "grass3_4.dff");
-//			Patch<uint>(0x5DDB14 + 1, 0xC03A30+4);
-//			Patch<uint>(0x5DDB21 + 2, 0xC03A30+8);
-//			Patch<uint>(0x5DDB2F + 2, 0xC03A30+12);
-//		}
+//		Patch<const char*>(0x5DDAC3, "grass3_1.dff");
+//		Patch<const char*>(0x5DDACB, "grass3_2.dff");
+//		Patch<const char*>(0x5DDAD3, "grass3_3.dff");
+//		Patch<const char*>(0x5DDADB, "grass3_4.dff");
+//		Patch<uint>(0x5DDB14 + 1, 0xC03A30+4);
+//		Patch<uint>(0x5DDB21 + 2, 0xC03A30+8);
+//		Patch<uint>(0x5DDB2F + 2, 0xC03A30+12);
+//	}
 
-		// use static ped shadows
-		InjectHook(0x5E675E, &FX::GetFxQuality_ped);
-		InjectHook(0x5E676D, &FX::GetFxQuality_ped);
-		InjectHook(0x706BC4, &FX::GetFxQuality_ped);
-		InjectHook(0x706BD3, &FX::GetFxQuality_ped);
-		// stencil???
-		InjectHook(0x7113B8, &FX::GetFxQuality_stencil);
-		InjectHook(0x711D95, &FX::GetFxQuality_stencil);
-		// vehicle, pole
-		InjectHook(0x70F9B8, &FX::GetFxQuality_stencil);
+	// use static ped shadows
+	InjectHook(0x5E675E, &FX::GetFxQuality_ped);
+	InjectHook(0x5E676D, &FX::GetFxQuality_ped);
+	InjectHook(0x706BC4, &FX::GetFxQuality_ped);
+	InjectHook(0x706BD3, &FX::GetFxQuality_ped);
+	// stencil???
+	InjectHook(0x7113B8, &FX::GetFxQuality_stencil);
+	InjectHook(0x711D95, &FX::GetFxQuality_stencil);
+	// vehicle, pole
+	InjectHook(0x70F9B8, &FX::GetFxQuality_stencil);
 
-		if(fixPcCarLight){
-			// carenv light diffuse
-			Patch<uint>(0x5D88D1 +6, 0);
-			Patch<uint>(0x5D88DB +6, 0);
-			Patch<uint>(0x5D88E5 +6, 0);
-			// carenv light ambient
-			Patch<uint>(0x5D88F9 +6, 0);
-			Patch<uint>(0x5D8903 +6, 0);
-			Patch<uint>(0x5D890D +6, 0);
-			// use local viewer for spec light
-			// ...or not... (PS2 doesn't)
-			// Patch<uchar>(0x5D9AD0 +1, 1);
-		}
-
-		if(disableClouds)
-			// jump over cloud loop
-			InjectHook(0x714145, 0x71422A, PATCH_JUMP);
-
-		if(disableGamma)
-			InjectHook(0x74721C, 0x7472F3, PATCH_JUMP);
-
-		if(iCanHasNeoDrops)
-			hookWaterDrops();
-
-		// sun glare on cars
-		if(iCanHasSunGlare)
-			InjectHook(0x6ABCFD, doglare, PATCH_JUMP);
-
-		// remove black background of lockon siphon
-		if(transparentLockon > 0){
-			InjectHook(0x742E33, 0x742EC1, PATCH_JUMP);
-			InjectHook(0x742FE0, 0x743085, PATCH_JUMP);
-		}
-
-		installMenu();
-
-		return FALSE;
+	if(fixPcCarLight){
+		// carenv light diffuse
+		Patch<uint>(0x5D88D1 +6, 0);
+		Patch<uint>(0x5D88DB +6, 0);
+		Patch<uint>(0x5D88E5 +6, 0);
+		// carenv light ambient
+		Patch<uint>(0x5D88F9 +6, 0);
+		Patch<uint>(0x5D8903 +6, 0);
+		Patch<uint>(0x5D890D +6, 0);
+		// use local viewer for spec light
+		// ...or not... (PS2 doesn't)
+		// Patch<uchar>(0x5D9AD0 +1, 1);
 	}
-	return TRUE;
+
+	if(disableClouds)
+		// jump over cloud loop
+		InjectHook(0x714145, 0x71422A, PATCH_JUMP);
+
+	if(disableGamma)
+		InjectHook(0x74721C, 0x7472F3, PATCH_JUMP);
+
+	if(iCanHasNeoDrops)
+		hookWaterDrops();
+
+	// sun glare on cars
+	if(iCanHasSunGlare)
+		InjectHook(0x6ABCFD, doglare, PATCH_JUMP);
+
+	// remove black background of lockon siphon
+	if(transparentLockon > 0){
+		InjectHook(0x742E33, 0x742EC1, PATCH_JUMP);
+		InjectHook(0x742FE0, 0x743085, PATCH_JUMP);
+	}
+
+	installMenu();
+
+	return FALSE;
 }
 
 BOOL WINAPI
@@ -1198,7 +1198,7 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		// nvidia is not the way it's meant to be played
 		Nop(0x748AA8, 0x748AE7-0x748AA8);
 
-		// windowed - nor working yet
+		// windowed - not working yet
 //		Nop(0x7462FF, 2);
 //		Nop(0x745B55, 2);
 ///		InjectHook(0x74639B, selectVM, PATCH_JUMP);
@@ -1206,7 +1206,7 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		// moon mask
 		InjectHook(0x713C4C, renderMoonMask, PATCH_JUMP);
 
-		IsAlreadyRunning = (BOOL(*)())(*(int*)(0x74872D+1) + 0x74872D + 5);
+		IsAlreadyRunning = (int(*)())(*(int*)(0x74872D+1) + 0x74872D + 5);
 		InjectHook(0x74872D, InjectDelayedPatches);
 
 		InjectHook(0x5BCF14, afterStreamIni, PATCH_JUMP);

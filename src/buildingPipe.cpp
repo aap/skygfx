@@ -109,6 +109,9 @@ setDnParams(RpAtomic *atomic)
 	RwD3D9SetVertexShaderConstant(REG_nightparam, nightparam, 1);
 }
 
+struct CBaseModelInfo;
+WRAPPER CBaseModelInfo *CVisibilityPlugins__GetModelInfo(RpAtomic*) { EAXJMP(0x732260); }
+
 void
 CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
 {
@@ -132,8 +135,14 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 
 	atomic = (RpAtomic*)object;
 
+///	int isvegetation;
+///	CBaseModelInfo *mi = CVisibilityPlugins__GetModelInfo(atomic);
+///	int miflags = *(uint16*)((uint8*)mi + 0x12);
+///	isvegetation = (miflags & 0x7800) == 0x800 || (miflags & 0x7800) == 0x1000;
+
+
 	pipeGetComposedTransformMatrix(atomic, transform);
-	RwD3D9SetVertexShaderConstant(0, transform, 4);
+	RwD3D9SetVertexShaderConstant(REG_transform, transform, 4);
 
 	resEntryHeader = (RxD3D9ResEntryHeader*)(repEntry + 1);
 	instancedData = (RxD3D9InstanceData*)(resEntryHeader + 1);;
@@ -191,6 +200,13 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 		RwD3D9SetVertexShader(ps2BuildingVS);
 		RwD3D9SetPixelShader(simplePS);
 
+//if(isvegetation){
+//	int hasalpha;
+//	RwD3D9GetRenderState(D3DRS_ALPHABLENDENABLE, &hasAlpha);
+//	RwD3D9SetRenderState(D3DRS_ALPHABLENDENABLE, 0);
+//	D3D9Render(resEntryHeader, instancedData);
+//	RwD3D9SetRenderState(D3DRS_ALPHABLENDENABLE, hasAlpha);
+//}else
 		D3D9RenderDual(config->dualPassBuilding, resEntryHeader, instancedData);
 
 		// Reflection
@@ -257,7 +273,7 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PC(RwResEntry *repEntry, void *obj
 	RwD3D9SetPixelShaderConstant(0, &colorScale, 1);
 
 	pipeGetComposedTransformMatrix(atomic, transform);
-	RwD3D9SetVertexShaderConstant(0, transform, 4);
+	RwD3D9SetVertexShaderConstant(REG_transform, transform, 4);
 
 	resEntryHeader = (RxD3D9ResEntryHeader*)(repEntry + 1);
 	instancedData = (RxD3D9InstanceData*)(resEntryHeader + 1);;
@@ -346,10 +362,6 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PC(RwResEntry *repEntry, void *obj
 void
 CCustomBuildingDNPipeline__CustomPipeRenderCB_Switch(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
 {
-//	if(!noExtraColors && GetAsyncKeyState(VK_F8) & 0x8000)
-//	if(GetAsyncKeyState(VK_F8) & 0x8000)
-//		return;
-
 	if(config->buildingPipe == 1)
 		CCustomBuildingDNPipeline__CustomPipeRenderCB_PC(repEntry, object, type, flags);
 	else
@@ -390,8 +402,6 @@ getExtraColors(RpGeometry *geometry)
 	if(night && isNightColorZero(night, geometry->numVertices))
 		return NULL;
 	return night;
-//	if(night == NULL || isNightColorZero(night, geometry->numVertices))
-//		night = day;
 }
 
 void
@@ -531,10 +541,6 @@ DNInstance_PS2(void *object, RxD3D9ResEntryHeader *resEntryHeader, RwBool reinst
 					;
 				for(j = 0; dcl[j].Usage != D3DDECLUSAGE_COLOR || dcl[j].UsageIndex != 1; ++j)
 					;
-//				RwRGBA *night = *RWPLUGINOFFSET(RwRGBA*, geometry, CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset);
-//				RwRGBA *day = *RWPLUGINOFFSET(RwRGBA*, geometry, CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset + 4);
-//				if(night == NULL || isNightColorZero(night, geometry->numVertices))
-//					night = day;
 				// If no extra colors, use regular colors
 				// TODO: only instance one set in this case
 				if(night == NULL)
@@ -573,7 +579,8 @@ DNInstance_PS2(void *object, RxD3D9ResEntryHeader *resEntryHeader, RwBool reinst
 
 		if(vertexData)
 			vertBuffer->Unlock();
-
+/*
+		// this is bad, better not do it
 		RwRGBA **night = RWPLUGINOFFSET(RwRGBA*, geometry, CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset);
 		RwRGBA **day = RWPLUGINOFFSET(RwRGBA*, geometry, CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset + 4);
 		if(*night != nullptr){
@@ -584,6 +591,7 @@ DNInstance_PS2(void *object, RxD3D9ResEntryHeader *resEntryHeader, RwBool reinst
 			GTAfree(*day);
 			*day = nullptr;
 		}
+*/
 	}
 	return 1;
 }
@@ -659,4 +667,9 @@ hookBuildingPipe(void)
 	InjectHook(0x5D7100, CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2);
 	InjectHook(0x5D7D90, CCustomBuildingPipeline__CreateCustomObjPipe_PS2);
 	Patch<BYTE>(0x5D7200, 0xC3);	// disable interpolation
+
+
+
+//	Patch<BYTE>(0x732B40, 0xC3);	// disable fading entities
+//	Patch<BYTE>(0x732610, 0xC3);	// disable fading atomic
 }
