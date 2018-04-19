@@ -28,7 +28,7 @@ typedef int32_t int32;
 extern HMODULE dllModule;
 
 #define nil NULL
-#define VERSION 0x360
+#define VERSION 0x370
 
 struct Config {
 	// these are at fixed offsets
@@ -46,7 +46,7 @@ struct Config {
 	RwBool backfaceCull;
 	RwBool dualPassDefault, dualPassGrass, dualPassVehicle, dualPassPed;
 	int vehiclePipe;
-	float neoShininess, neoSpecularity;
+	float neoShininessMult, neoSpecularityMult;
 	int colorFilter;
 	int infraredVision, nightVision, grainFilter;
 	RwBool doRadiosity;
@@ -69,6 +69,8 @@ struct Config {
 	float cbScale, cbOffset;
 	float crScale, crOffset;
 	int zwriteThreshold;
+
+	float leedsShininessMult;
 };
 extern int numConfigs;
 extern int currentConfig;
@@ -148,6 +150,12 @@ enum {
 #endif
 };
 
+struct GlobalScene
+{
+	RpWorld *world;
+	RwCamera *camera;
+};
+extern GlobalScene &Scene;
 
 struct Imf
 {
@@ -315,6 +323,14 @@ extern RwReal &CCustomCarEnvMapPipeline__m_EnvMapLightingMult;
 extern RwInt32 &CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset;
 extern RwReal &CCustomBuildingDNPipeline__m_fDNBalanceParam;
 
+void CRenderer__RenderRoads(void);
+void CRenderer__RenderEverythingBarRoads(void);
+void CRenderer__RenderFadingInEntities(void);
+void CRenderer__RenderFadingInUnderwaterEntities(void);
+extern short &skyBotRed;
+extern short &skyBotGreen;
+extern short &skyBotBlue;
+
 
 //////// Pipelines
 ///// Shaders
@@ -325,6 +341,7 @@ extern void *vehiclePipeVS, *ps2CarFxVS;
 extern void *ps2EnvSpecFxPS;	// also used by the building pipeline
 extern void *specCarFxVS, *specCarFxPS;
 extern void *xboxCarVS;
+extern void *leedsCarFxVS;
 // postfx
 extern void *iiiTrailsPS, *vcTrailsPS;
 extern void *gradingPS;
@@ -335,6 +352,7 @@ void CreateShaders(void);
 void RwToD3DMatrix(void *d3d, RwMatrix *rw);
 void MakeProjectionMatrix(void *d3d, RwCamera *cam, float nbias = 0.0f, float fbias = 0.0f);
 void pipeGetComposedTransformMatrix(RpAtomic *atomic, float *out);
+void pipeGetCameraTransformMatrix(float *out);
 void pipeUploadMatCol(int flags, RpMaterial *m, int loc);
 void pipeUploadZero(int loc);
 void pipeUploadLightColor(RpLight *light, int loc);

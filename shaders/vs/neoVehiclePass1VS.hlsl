@@ -32,7 +32,6 @@ float3		surfProps	: register(c32);
 
 #define shininess (reflProps.x)
 #define fresnel (reflProps.y)
-#define lightmult (reflProps.z)
 #define power (reflProps.w)
 #define surfAmb (surfProps.x)
 #define surfDiff (surfProps.z)
@@ -58,7 +57,7 @@ main(in VS_INPUT In)
 	uv2 = mul((float3x3)tex, uv2);
 	Out.texcoord1.xy = uv2.xy*0.5 + 0.5;
 	float b = 1.0 - saturate(dot(V, N));
-	Out.reflcolor = lerp(b*b*b*b*b, 1.0f, fresnel)*shininess;//*lightmult;
+	Out.reflcolor = lerp(b*b*b*b*b, 1.0f, fresnel)*shininess;
 
 	return Out;
 }

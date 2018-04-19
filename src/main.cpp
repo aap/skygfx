@@ -33,6 +33,8 @@ void *gpCurrentShaderForDefaultCallbacks;
 float *gfLaRiotsLightMult = (float*)0x8CD060;
 float *ambientColors = (float*)0xB7C4A0;
 
+GlobalScene &Scene = *(GlobalScene*)0xC17038;
+
 static int defaultColourLeftUOffset;
 static int defaultColourRightUOffset;
 static int defaultColourTopVOffset;
@@ -590,11 +592,29 @@ void CSkidmarks__Render(void)
 	RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphafunc);
 }
 
+static uint32_t RenderScene_A;
+WRAPPER void RenderScene(void) { VARJMP(RenderScene_A); }
+
+void RenderReflectionMap_leeds(void);
+void RenderReflectionScene(void);
+
+void
+RenderScene_hook(void)
+{
+	RenderScene();
+//	RenderReflectionScene();
+	if(config->vehiclePipe == 4)
+		CarPipe::RenderEnvTex();
+	else if(config->vehiclePipe == 5)
+		RenderReflectionMap_leeds();
+}
+
 void (*InitialiseGame)(void);
 void
 InitialiseGame_hook(void)
 {
 	ONCE;
+	InterceptCall(&RenderScene_A, RenderScene_hook, 0x53EABF);
 	neoInit();
 	InitialiseGame();
 }
@@ -647,7 +667,7 @@ int
 StrAssoc::get(StrAssoc *desc, const char *key)
 {
 	for(; desc->key[0] != '\0'; desc++)
-		if(strcmp(desc->key, key) == 0)
+		if(strcmpi(desc->key, key) == 0)
 			return desc->val;
 	return desc->val;
 }
@@ -757,6 +777,7 @@ readIni(int n)
 		{"Xbox",    2},
 		{"Spec",    3},
 		{"Neo",     4},
+		{"Leeds",   5},
 		{"",       -1},
 	};
 	c->vehiclePipe = StrAssoc::get(vehPipeMap, cfg.get("SkyGfx", "vehiclePipe", "").c_str());
@@ -766,8 +787,9 @@ readIni(int n)
 	}
 
 	c->dualPassVehicle = readint(cfg.get("SkyGfx", "dualPassVehicle", ""), config->dualPassGlobal);
-	c->neoShininess = readfloat(cfg.get("SkyGfx", "neoShininess", ""), 0.75);
-	c->neoSpecularity = readfloat(cfg.get("SkyGfx", "neoSpecularity", ""), 0.75);
+	c->leedsShininessMult = readfloat(cfg.get("SkyGfx", "leedsShininessMult", ""), 1.0);
+	c->neoShininessMult = readfloat(cfg.get("SkyGfx", "neoShininessMult", ""), 1.0);
+	c->neoSpecularityMult = readfloat(cfg.get("SkyGfx", "neoSpecularityMult", ""), 1.0);
 	envMapSize = readint(cfg.get("SkyGfx", "neoEnvMapSize", ""), 128);
 	int i = 1;
 	while(i < envMapSize) i *= 2;
@@ -921,8 +943,9 @@ afterStreamIni(void)
 	X(dualPassGrass)				\
 	X(buildingPipe)				\
 	X(vehiclePipe)				\
-	X(neoShininess)				\
-	X(neoSpecularity)			\
+	X(leedsShininessMult)				\
+	X(neoShininessMult)				\
+	X(neoSpecularityMult)			\
 	X(doglare)						\
 	X(fixGrassPlacement)			\
 	X(grassAddAmbient)			\
@@ -998,7 +1021,7 @@ installMenu(void)
 	if(DebugMenuLoad()){
 		static const char *ps2pcStr[] = { "PS2", "PC" };
 		static const char *buildPipeStr[] = { "PS2", "PC" };
-		static const char *vehPipeStr[] = { "PS2", "PC", "Xbox", "Spec", "Neo" };
+		static const char *vehPipeStr[] = { "PS2", "PC", "Xbox", "Spec", "Neo", "Leeds" };
 		static const char *colFilterStr[] = { "None", "PS2", "PC", "Mobile", "III", "VC", "VCS" };
 		static const char *lightningStr[] = { "Sky only", "Sky and objects" };
 		static const char *shadStr[] = { "Default", "PS2", "PC" };
@@ -1013,7 +1036,7 @@ installMenu(void)
 			DebugMenuEntrySetWrap(menu.buildingPipe, true);
 		}
 		if(iCanHasvehiclePipe){
-			menu.vehiclePipe = DebugMenuAddVar("SkyGFX", "Vehicle Pipeline", &config->vehiclePipe, nil, 1, 0, 4, vehPipeStr);
+			menu.vehiclePipe = DebugMenuAddVar("SkyGFX", "Vehicle Pipeline", &config->vehiclePipe, nil, 1, 0, 5, vehPipeStr);
 			DebugMenuEntrySetWrap(menu.vehiclePipe, true);
 		}
 		menu.grassAddAmbient = DebugMenuAddVarBool32("SkyGFX", "Add Ambient to Grass", &config->grassAddAmbient, nil);
@@ -1038,8 +1061,9 @@ installMenu(void)
 		DebugMenuAddVarBool8("SkyGFX|Misc", "Blur PS2 Colour Filter", (int8_t*)&CPostEffects::m_bBlurColourFilter, nil);
 		if(iCanHasSunGlare)
 			menu.doglare = DebugMenuAddVarBool32("SkyGFX|Misc", "Sun Glare", &config->doglare, nil);
-		menu.neoShininess = DebugMenuAddVar("SkyGFX|Misc", "Neo Car Shininess", &config->neoShininess, nil, 0.1f, 0.0f, 10.0f);
-		menu.neoSpecularity = DebugMenuAddVar("SkyGFX|Misc", "Neo Car Specularity", &config->neoSpecularity, nil, 0.1f, 0.0f, 10.0f);
+		menu.leedsShininessMult = DebugMenuAddVar("SkyGFX|Misc", "Leeds Car Shininess", &config->leedsShininessMult, nil, 0.1f, 0.0f, 10.0f);
+		menu.neoShininessMult = DebugMenuAddVar("SkyGFX|Misc", "Neo Car Shininess", &config->neoShininessMult, nil, 0.1f, 0.0f, 10.0f);
+		menu.neoSpecularityMult = DebugMenuAddVar("SkyGFX|Misc", "Neo Car Specularity", &config->neoSpecularityMult, nil, 0.1f, 0.0f, 10.0f);
 		menu.fixGrassPlacement = DebugMenuAddVarBool32("SkyGFX|Misc", "Fix Grass Placement", &config->fixGrassPlacement, nil);
 		menu.lightningIlluminatesWorld = DebugMenuAddVar("SkyGFX|Misc", "Lightning illuminates", &config->lightningIlluminatesWorld, nil, 1, 0, 1, lightningStr);
 		DebugMenuEntrySetWrap(menu.lightningIlluminatesWorld, true);

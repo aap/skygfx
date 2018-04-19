@@ -69,13 +69,14 @@ void neoInit(void);
 
 class CarPipe : public CustomPipe
 {
+public:
 	void CreateShaders(void);
 	static void LoadTweakingTable(void);
 
 	static void MakeScreenQuad(void);
 	static void MakeQuadTexCoords(bool textureSpace);
 	static void RenderReflectionScene(void);
-public:
+
 	static InterpolatedFloat fresnel;
 	static InterpolatedFloat power;
 	static InterpolatedLight diffColor;

@@ -94,6 +94,14 @@ pipeGetComposedTransformMatrix(RpAtomic *atomic, float *out)
 	memcpy(out, &combined, 64);
 }
 
+// Have to call the above before!
+void
+pipeGetCameraTransformMatrix(float *out)
+{
+	DirectX::XMMATRIX combined = DirectX::XMMatrixMultiply(pipeViewMat, pipeWorldMat);
+	memcpy(out, &combined, 64);
+}
+
 void
 pipeUploadMatCol(int flags, RpMaterial *m, int loc)
 {
@@ -205,6 +213,7 @@ CreateShaders(void)
 	makeVS(IDR_SPECCARFXVS, &specCarFxVS);
 	makePS(IDR_SPECCARFXPS, &specCarFxPS);
 	makeVS(IDR_XBOXCARVS, &xboxCarVS);
+	makeVS(IDR_LEEDSCARFXVS, &leedsCarFxVS);
 
 	// building
 	makeVS(IDR_PS2BUILDINGVS, &ps2BuildingVS);

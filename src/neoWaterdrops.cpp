@@ -106,7 +106,7 @@ int WaterDrops::ms_numDropsMoving;
 bool WaterDrops::ms_enabled;
 bool WaterDrops::ms_movingEnabled;
 
-int WaterDrops::ms_splashDuration;
+int WaterDrops::ms_splashDuration = -1;
 
 float WaterDrops::ms_distMoved, WaterDrops::ms_vecLen, WaterDrops::ms_rainStrength;
 RwV3d WaterDrops::ms_vec;

@@ -29,7 +29,6 @@ float3		surfProps	: register(c32);
 
 #define shininess (reflProps.x)
 #define fresnel (reflProps.y)
-#define lightmult (reflProps.z)
 #define power (reflProps.w)
 #define surfSpec (surfProps.y)
 
@@ -51,7 +50,7 @@ main(in VS_INPUT In)
 	Out.color = float4(directSpec*specTerm(N, -directDir, V, power), 1.0);
 	for(int i = 0; i < 6; i++)
 		Out.color.rgb += lightCol[i]*specTerm(N, -lightDir[i], V, power*2);
-	Out.color = saturate(Out.color*surfSpec*lightmult);
+	Out.color = saturate(Out.color*surfSpec);
 
 	return Out;
 }

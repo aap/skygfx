@@ -22,8 +22,10 @@ enum {
 
 //#define DEBUGTEX
 
+WRAPPER void CRenderer__RenderRoads(void) { EAXJMP(0x553A10); }
 WRAPPER void CRenderer__RenderEverythingBarRoads(void) { EAXJMP(0x553AA0); }
-WRAPPER void CRenderer__RenderFadingInEntities(void) { EAXJMP(0x553220); }
+WRAPPER void CRenderer__RenderFadingInEntities(void) { EAXJMP(0x5531E0); }
+WRAPPER void CRenderer__RenderFadingInUnderwaterEntities(void) { EAXJMP(0x553220); }
 
 short &skyBotRed = *(short*)0xB7C4CA;
 short &skyBotGreen = *(short*)0xB7C4CC;
@@ -45,24 +47,12 @@ RwImVertexIndex CarPipe::screenindices[6] = { 0, 1, 2, 0, 2, 3 };
 
 CarPipe carpipe;
 
-static uint32_t RenderScene_A;
-WRAPPER void RenderScene(void) { VARJMP(RenderScene_A); }
-
-void
-RenderScene_hook(void)
-{
-	RenderScene();
-	if(config->vehiclePipe == 4)
-		CarPipe::RenderEnvTex();
-}
-
 void
 neoCarPipeInit(void)
 {
 	ONCE;
 	carpipe.Init();
 	CarPipe::SetupEnvMap();
-	InterceptCall(&RenderScene_A, RenderScene_hook, 0x53EABF);
 }
 
 //
@@ -70,7 +60,6 @@ neoCarPipeInit(void)
 //
 
 int envMapSize;
-RpWorld *&scene = *(RpWorld**)0xC17038;
 
 void
 CarPipe::SetupEnvMap(void)
@@ -88,7 +77,7 @@ CarPipe::SetupEnvMap(void)
 	RwV2d vw;
 	vw.x = vw.y = 0.4f;
 	RwCameraSetViewWindow(reflectionCam, &vw);
-	RpWorldAddCamera(scene, reflectionCam);
+	RpWorldAddCamera(Scene.world, reflectionCam);
 
 	reflectionTex = RwTextureCreate(envFB);
 	RwTextureSetFilterMode(reflectionTex, rwFILTERLINEAR);
@@ -148,16 +137,15 @@ void
 CarPipe::RenderReflectionScene(void)
 {
 	RwRenderStateSet(rwRENDERSTATEFOGENABLE, 0);
+	CRenderer__RenderRoads();
 	CRenderer__RenderEverythingBarRoads();
 	CRenderer__RenderFadingInEntities();
 }
 
-RwCamera *&gtacam = *(RwCamera**)0xC1703C;
-
 void
 CarPipe::RenderEnvTex(void)
 {
-	RwCameraEndUpdate(gtacam);
+	RwCameraEndUpdate(Scene.camera);
 
 	RwV2d oldvw, vw = { 2.0f, 2.0f };
 	oldvw = reflectionCam->viewWindow;
@@ -176,18 +164,22 @@ CarPipe::RenderEnvTex(void)
 		reflectionMatrix->at.y = 0.0f;
 		reflectionMatrix->at.z = 1.0f;
 	}
-	RwMatrix *cammatrix = RwFrameGetMatrix(RwCameraGetFrame(gtacam));
+	RwMatrix *cammatrix = RwFrameGetMatrix(RwCameraGetFrame(Scene.camera));
 	reflectionMatrix->pos = cammatrix->pos;
 	RwMatrixUpdate(reflectionMatrix);
 	RwFrameTransform(RwCameraGetFrame(reflectionCam), reflectionMatrix, rwCOMBINEREPLACE);
 	RwRGBA color = { skyBotRed, skyBotGreen, skyBotBlue, 255 };
+	// blend a bit of white into the sky color, otherwise it tends to be very blue
+	color.red = color.red*0.6f + 255*0.4f;
+	color.green = color.green*0.6f + 255*0.4f;
+	color.blue = color.blue*0.6f + 255*0.4f;
 	RwCameraClear(reflectionCam, &color, rwCAMERACLEARIMAGE | rwCAMERACLEARZ);
 
 	RwCameraBeginUpdate(reflectionCam);
-	RwCamera *savedcam = gtacam;
-	gtacam = reflectionCam;	// they do some begin/end updates with this in the called functions :/
+	RwCamera *savedcam = Scene.camera;
+	Scene.camera = reflectionCam;	// they do some begin/end updates with this in the called functions :/
 	RenderReflectionScene();
-	gtacam = savedcam;
+	Scene.camera = savedcam;
 
 	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)1);
 	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDZERO);
@@ -201,7 +193,7 @@ CarPipe::RenderEnvTex(void)
 	RwCameraEndUpdate(reflectionCam);
 	RwCameraSetViewWindow(reflectionCam, &oldvw);
 
-	RwCameraBeginUpdate(gtacam);
+	RwCameraBeginUpdate(Scene.camera);
 #ifdef DEBUGTEX
 	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, reflectionTex->raster);
 	RwIm2DRenderIndexedPrimitive(rwPRIMTYPETRILIST, screenQuad, 4, screenindices, 6);
@@ -363,13 +355,10 @@ CarPipe::DiffusePass(RxD3D9ResEntryHeader *header, RpAtomic *atomic)
 		envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
 
 		RwUInt32 materialFlags = *(RwUInt32*)&material->surfaceProps.specular;
-		bool hasRefl  = !((materialFlags & 1) == 0);
-		bool hasEnv   = !((materialFlags & 2) == 0);
+		bool hasEnv  = !!(materialFlags & 3);
 		int matfx = RpMatFXMaterialGetEffects(material);
-		if(matfx != rpMATFXEFFECTENVMAP){
+		if(matfx != rpMATFXEFFECTENVMAP)
 			hasEnv = false;
-			hasRefl = false;
-		}
 
 		Color c = diffColor.Get();
 		Color diff(c.r*c.a, c.g*c.a, c.b*c.a, 1.0f-c.a);
@@ -381,13 +370,14 @@ CarPipe::DiffusePass(RxD3D9ResEntryHeader *header, RpAtomic *atomic)
 		RwD3D9SetVertexShaderConstant(LOC_matCol, (void*)&mat, 1);
 
 		RwSurfaceProperties surfprops = material->surfaceProps;
-		surfprops.specular = config->neoSpecularity;
+		// if ambient light is too dark reflections don't look too good, so bump it
+		if(surfprops.ambient > 0.1f && surfprops.ambient < 0.8f)
+			surfprops.ambient = max(surfprops.ambient, 0.8f);
 		RwD3D9SetVertexShaderConstant(LOC_surfProps, &surfprops, 1);
 
 		float reflProps[4];
-		reflProps[0] = (hasEnv||hasRefl) && !noRefl ? config->neoShininess : 0.0f;
+		reflProps[0] = hasEnv && !noRefl ? envData->shininess/255.0f * 8.0f * config->neoShininessMult : 0.0f;
 		reflProps[1] = fresnel.Get();
-		reflProps[2] = CCustomCarEnvMapPipeline__m_EnvMapLightingMult;
 		reflProps[3] = power.Get();
 		RwD3D9SetVertexShaderConstant(LOC_reflProps, (void*)reflProps, 1);
 
@@ -426,6 +416,7 @@ CarPipe::SpecularPass(RxD3D9ResEntryHeader *header, RpAtomic *atomic)
 	RwD3D9GetRenderState(D3DRS_LIGHTING, &lighting);
 	noRefl = CVisibilityPlugins__GetAtomicId(atomic) & 0x6000;
 
+	float lightmult = 1.85f * CCustomCarEnvMapPipeline__m_EnvMapLightingMult;
 	for(uint i = 0; i < header->numMeshes; i++){
 		RwUInt32 materialFlags = *(RwUInt32*)&inst->material->surfaceProps.specular;
 		bool hasSpec  = !((materialFlags & 4) == 0 || !lighting);
@@ -434,8 +425,13 @@ CarPipe::SpecularPass(RxD3D9ResEntryHeader *header, RpAtomic *atomic)
 			hasSpec = false;
 
 		specData = *RWPLUGINOFFSET(CustomSpecMapPipeMaterialData*, inst->material, CCustomCarEnvMapPipeline__ms_specularMapPluginOffset);
-		if(hasSpec && !noRefl)
+		if(hasSpec && !noRefl){
+			RwSurfaceProperties surfprops;
+			surfprops.specular = specData->specularity*5.0f*config->neoSpecularityMult*lightmult;
+			if(surfprops.specular > 1.0f) surfprops.specular = 1.0f;
+			RwD3D9SetVertexShaderConstant(LOC_surfProps, &surfprops, 1);
 			D3D9Render(header, inst);
+		}
 		inst++;
 	}
 	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)zwrite);

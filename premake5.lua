@@ -4,7 +4,7 @@ workspace "skygfx"
    
 	defines { "rsc_CompanyName=\"aap\"" }
 	defines { "rsc_LegalCopyright=\"\""} 
-	defines { "rsc_FileVersion=\"3.6.0.0\"", "rsc_ProductVersion=\"3.6.0.0\"" }
+	defines { "rsc_FileVersion=\"3.7.0.0\"", "rsc_ProductVersion=\"3.7.0.0\"" }
 	defines { "rsc_InternalName=\"%{prj.name}\"", "rsc_ProductName=\"%{prj.name}\"", "rsc_OriginalFilename=\"%{prj.name}.dll\"" }
 	defines { "rsc_FileDescription=\"https://github.com/aap\"" }
 	defines { "rsc_UpdateUrl=\"https://github.com/aap/skygfx\"" }
@@ -33,13 +33,15 @@ project "skygfx"
 	targetextension ".dll"
 	characterset ("MBCS")
 
+	buildoptions { "/Zc:threadSafeInit-" }
+
 	filter "configurations:Debug"
 		defines { "DEBUG" }
 		symbols "On"
 		flags { "StaticRuntime" }
 		debugdir "C:/Users/aap/games/gtasa"
 		debugcommand "C:/Users/aap/games/gtasa/gta_sa.exe"
-		postbuildcommands "copy /y \"$(TargetPath)\" \"C:\\Users\\aap\\games\\gtasa\\dlls\\skygfx.dll\""
+		postbuildcommands "copy /y \"$(TargetPath)\" \"C:\\Users\\aap\\games\\gtasa\\plugins\\skygfx.dll\""
 
 	filter "configurations:Release"
 		defines { "NDEBUG" }
@@ -47,4 +49,4 @@ project "skygfx"
 		flags { "StaticRuntime" }
 		debugdir "C:/Users/aap/games/gtasa"
 		debugcommand "C:/Users/aap/games/gtasa/gta_sa.exe"
-		postbuildcommands "copy /y \"$(TargetPath)\" \"C:\\Users\\aap\\games\\gtasa\\dlls\\skygfx.dll\""
+		postbuildcommands "copy /y \"$(TargetPath)\" \"C:\\Users\\aap\\games\\gtasa\\plugins\\skygfx.dll\""

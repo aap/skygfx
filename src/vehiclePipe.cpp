@@ -27,6 +27,7 @@ void *vehiclePipeVS, *ps2CarFxVS;
 void *ps2EnvSpecFxPS;	// also used by the building pipeline
 void *specCarFxVS, *specCarFxPS;
 void *xboxCarVS;
+void *leedsCarFxVS;
 
 float black4f[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 float white4f[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
@@ -42,6 +43,11 @@ CustomEnvMapPipeAtomicData::operator new(size_t size)
 static RwMatrix carfx_view, carfx_env1Inv, carfx_env2Inv;
 static RwV3d carfx_lightdir;	// view space
 static RwFrame *carfx_env1Frame, *carfx_env2Frame;
+
+// Leeds reflections
+static RwCamera *reflectionCam;
+static RwTexture *reflectionTex;
+static D3DMATRIX envtexmat;
 
 CustomEnvMapPipeAtomicData*
 CCustomCarEnvMapPipeline__AllocEnvMapPipeAtomicData(RpAtomic *atomic)
@@ -81,6 +87,43 @@ CCustomCarEnvMapPipeline__Init(void)
 		RwFrameSetIdentity(carfx_env2Frame);
 		RwFrameUpdateObjects(carfx_env2Frame);
 	}
+
+	// leeds reflections
+	RwRaster *envFB = RwRasterCreate(envMapSize, envMapSize, 0, rwRASTERTYPECAMERATEXTURE);
+	RwRaster *envZB = RwRasterCreate(envMapSize, envMapSize, 0, rwRASTERTYPEZBUFFER);
+	reflectionCam = RwCameraCreate();
+	RwCameraSetRaster(reflectionCam, envFB);
+	RwCameraSetZRaster(reflectionCam, envZB);
+	RwCameraSetFrame(reflectionCam, RwFrameCreate());
+	RwCameraSetNearClipPlane(reflectionCam, 0.1f);
+	RwCameraSetFarClipPlane(reflectionCam, 250.0f);
+	RwV2d vw;
+	vw.x = vw.y = 0.4f;
+	RwCameraSetViewWindow(reflectionCam, &vw);
+	RpWorldAddCamera(Scene.world, reflectionCam);
+
+	reflectionTex = RwTextureCreate(envFB);
+	RwTextureSetFilterMode(reflectionTex, rwFILTERLINEAR);
+
+	envtexmat.m[0][0] = 0.5f;
+	envtexmat.m[0][1] = 0.0f;
+	envtexmat.m[0][2] = 0.0f;
+	envtexmat.m[0][3] = 0.0f;
+
+	envtexmat.m[1][0] = 0.0f;
+	envtexmat.m[1][1] = -0.5f;
+	envtexmat.m[1][2] = 0.0f;
+	envtexmat.m[1][3] = 0.0f;
+
+	envtexmat.m[2][0] = 0.0f;
+	envtexmat.m[2][1] = 0.0f;
+	envtexmat.m[2][2] = 0.0f;
+	envtexmat.m[2][3] = 0.0f;
+
+	envtexmat.m[3][0] = 0.5f;
+	envtexmat.m[3][1] = 0.5f;
+	envtexmat.m[3][2] = 0.0f;
+	envtexmat.m[3][3] = 1.0f;
 }
 
 void (*CCustomCarEnvMapPipeline__PreRenderUpdate_orig)(void);
@@ -860,6 +903,181 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *ob
 	RwD3D9SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_DISABLE);
 }
 
+
+
+void
+CCustomCarEnvMapPipeline__CustomPipeRenderCB_leeds(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
+{
+	RxD3D9ResEntryHeader *resEntryHeader;
+	RxD3D9InstanceData *instancedData;
+	RpAtomic *atomic;
+	RwInt32	numMeshes;
+	RwBool noFx;
+	CustomEnvMapPipeMaterialData *envData;
+	RpMaterial *material;
+	RwUInt32 materialFlags;
+	RwBool hasEnv, hasAlpha;
+	struct {
+		float fxSwitch;
+		float shininess;
+		float specularity;
+		float lightmult;
+	} fxParams;
+	float envmat[16];
+	RwV3d eye;
+	RwMatrix lightmat;
+	float transform[16];
+
+	atomic = (RpAtomic*)object;
+
+	_rwD3D9EnableClippingIfNeeded(object, type);
+
+	float colorscale = 1.0f;
+	RwD3D9SetPixelShaderConstant(0, &colorscale, 1);
+
+	pipeGetComposedTransformMatrix(atomic, transform);
+	RwD3D9SetVertexShaderConstant(0, transform, 4);
+	RwMatrixInvert(&lightmat, RwFrameGetLTM(RpAtomicGetFrame(atomic)));
+	if(flags & rpGEOMETRYLIGHT)
+		uploadLights(&lightmat);
+	else
+		uploadNoLights();
+
+	resEntryHeader = (RxD3D9ResEntryHeader *)(repEntry + 1);
+	instancedData = (RxD3D9InstanceData *)(resEntryHeader + 1);
+	if(resEntryHeader->indexBuffer != NULL)
+		RwD3D9SetIndices(resEntryHeader->indexBuffer);
+	_rwD3D9SetStreams(resEntryHeader->vertexStream,resEntryHeader->useOffsets);
+	RwD3D9SetVertexDeclaration(resEntryHeader->vertexDeclaration);
+	numMeshes = resEntryHeader->numMeshes;
+
+	int alphafunc, alpharef;
+	int src, dst;
+	int fog;
+	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, &alpharef);
+	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &alphafunc);
+	RwRenderStateGet(rwRENDERSTATESRCBLEND, &src);
+	RwRenderStateGet(rwRENDERSTATEDESTBLEND, &dst);
+	RwRenderStateGet(rwRENDERSTATEFOGENABLE, &fog);
+
+	noFx = CVisibilityPlugins__GetAtomicId(atomic) & 0x6000;
+	fxParams.lightmult = CCustomCarEnvMapPipeline__m_EnvMapLightingMult;
+	RwMatrix *camfrm = RwFrameGetLTM(RwCameraGetFrame(Camera));
+	RwV3dTransformPoint(&eye, RwMatrixGetPos(camfrm), &lightmat);
+	RwD3D9SetVertexShaderConstant(REG_eye, &eye, 1);
+
+	pipeGetCameraTransformMatrix(envmat);
+	RwD3D9SetVertexShaderConstant(REG_envmat, &envmat, 3);
+	RwD3D9SetVertexShaderConstant(36, &envtexmat, 4);
+
+	for(; numMeshes--; instancedData++){
+		material = instancedData->material;
+		pipeSetTexture(material->texture, 0);
+
+		hasAlpha = instancedData->vertexAlpha || instancedData->material->color.alpha != 255;
+		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)hasAlpha);
+
+		pipeUploadMatCol(flags, material, REG_matCol);
+		float surfProps[4];
+		surfProps[0] = material->surfaceProps.ambient;
+		if(surfProps[0] > 0.1f && surfProps[0] < 1.0f)
+			surfProps[0] = 1.0f;
+		surfProps[2] = material->surfaceProps.diffuse;
+		surfProps[3] = !!(flags & rpGEOMETRYPRELIT);
+		RwD3D9SetVertexShaderConstant(REG_surfProps, surfProps, 1);
+
+		RwD3D9SetVertexShader(vehiclePipeVS);
+		RwD3D9SetPixelShader(simplePS);
+
+		D3D9RenderDual(config->dualPassVehicle, resEntryHeader, instancedData);
+
+		//
+		// FX pass
+		//
+		materialFlags = *(RwUInt32*)&material->surfaceProps.specular;
+		hasEnv  = !!(materialFlags & 3);
+		if(RpMatFXMaterialGetEffects(material) != rpMATFXEFFECTENVMAP)
+			hasEnv = false;
+		if(noFx || !hasEnv)
+			continue;
+
+		RwD3D9SetVertexShader(leedsCarFxVS);
+
+		envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
+
+		fxParams.lightmult = 1.0f;
+		fxParams.shininess = envData->shininess/255.0f * 3.0f * config->leedsShininessMult;
+		if(fxParams.shininess > 1.0f)
+			fxParams.shininess = 1.0f;
+
+		RwD3D9SetVertexShaderConstant(REG_envmat, &envmat, 3);
+		RwD3D9SetVertexShaderConstant(REG_fxParams, &fxParams, 1);
+
+		RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)FALSE);
+		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
+		RwD3D9SetTexture(reflectionTex, 0);
+		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)1);
+		RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
+		RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
+
+		D3D9Render(resEntryHeader, instancedData);
+
+		RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDSRCALPHA);
+		RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDINVSRCALPHA);
+
+		RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)fog);
+		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
+
+	}
+	RwD3D9SetVertexShader(NULL);
+	RwD3D9SetPixelShader(NULL);
+	RwD3D9SetTexture(NULL, 1);
+	RwD3D9SetTexture(NULL, 2);
+	RwD3D9SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_DISABLE);
+	RwD3D9SetTextureStageState(1, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
+	RwD3D9SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, 1);
+	RwD3D9SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_DISABLE);
+}
+
+void
+RenderReflectionScene(void)
+{
+	RwRenderStateSet(rwRENDERSTATEFOGENABLE, 0);
+	CRenderer__RenderRoads();
+	CRenderer__RenderEverythingBarRoads();
+	// this renders vehicles and peds in vehicles, probably don't want it here
+	// let's hope it doesn't render some other objects we'd like to see
+//	CRenderer__RenderFadingInEntities();
+}
+
+void
+RenderReflectionMap_leeds(void)
+{
+	RwCamera *cam = Scene.camera;
+	RwCameraEndUpdate(cam);
+
+	RwCameraSetViewWindow(reflectionCam, &cam->viewWindow);
+
+	RwFrameTransform(RwCameraGetFrame(reflectionCam), &RwCameraGetFrame(cam)->ltm, rwCOMBINEREPLACE);
+//	RwRGBA color = { skyTopRed, skyTopGreen, skyTopBlue, 255 };
+
+	RwRGBA color = { skyBotRed, skyBotGreen, skyBotBlue, 255 };
+	// blend a bit of white into the sky color, otherwise it tends to be very blue
+	color.red = color.red*0.6f + 255*0.4f;
+	color.green = color.green*0.6f + 255*0.4f;
+	color.blue = color.blue*0.6f + 255*0.4f;
+	RwCameraClear(reflectionCam, &color, rwCAMERACLEARIMAGE | rwCAMERACLEARZ);
+
+	RwCameraBeginUpdate(reflectionCam);
+	RwCamera *savedcam = Scene.camera;
+	Scene.camera = reflectionCam;	// they do some begin/end updates with this in the called functions :/
+	RenderReflectionScene();
+	Scene.camera = savedcam;
+	RwCameraEndUpdate(reflectionCam);
+
+	RwCameraBeginUpdate(cam);
+}
+
 void
 CCustomCarEnvMapPipeline__CustomPipeRenderCB_Switch(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
 {
@@ -879,6 +1097,9 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Switch(RwResEntry *repEntry, void *
 	case 4:
 		if(iCanHasNeoCar)
 			CarPipe::RenderCallback(repEntry, object, type, flags);
+		break;
+	case 5:
+		CCustomCarEnvMapPipeline__CustomPipeRenderCB_leeds(repEntry, object, type, flags);
 		break;
 	}
 	fixSAMP();
