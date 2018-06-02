@@ -30,6 +30,50 @@ extern HMODULE dllModule;
 #define nil NULL
 #define VERSION 0x370
 
+struct CVector
+{
+	float x, y, z;
+};
+
+struct CMatrix
+{
+	RwMatrix matrix;
+	RwMatrix *pMatrix;
+	int haveRwMatrix;
+};
+
+struct CSimpleTransform
+{
+	CVector pos;
+	float angle;
+};
+
+struct CPlaceable
+{
+	void *vtable;
+	CSimpleTransform placement;
+	CMatrix *m_pCoords;
+	CVector GetPosition(void){
+		if(m_pCoords)
+			return *(CVector*)&m_pCoords->matrix.pos;
+		else
+			return placement.pos;
+	}
+};
+struct CCamera : CPlaceable
+{
+};
+
+CPlaceable *FindPlayerPed(int);
+
+extern float &CTimer__ms_fTimeStep;
+extern CCamera &TheCamera;
+extern float &CWeather__Rain;
+extern float &CWeather__UnderWaterness;
+extern bool &CCutsceneMgr__ms_running;
+extern int* CGame__currArea;
+extern int* CEntryExitManager__ms_exitEnterState;
+
 struct Config {
 	// these are at fixed offsets
 	int version;			// for other modules
@@ -279,9 +323,24 @@ struct CPostEffects
 
 char *getpath(char *path);
 
+
+// Tex DB
+struct TexInfo
+{
+	int alphamode;
+	RwTexture **detail;
+	int detailtile;
+};
+TexInfo *RwTextureGetTexDBInfo(RwTexture *tex);
+int TexDBPluginAttach(void);
+void initTexDB(void);
+
+extern bool gRenderingSpheremap;
+extern CVector reflectionCamPos;
+
 RxPipeline *CCustomBuildingPipeline__CreateCustomObjPipe_PS2(void);
 RxPipeline *CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2(void);
-int myPluginAttach(void);
+int PDSPipePluginAttach(void);
 void hookVehiclePipe(void);
 void hookBuildingPipe(void);
 void D3D9Render(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData);
@@ -327,9 +386,8 @@ void CRenderer__RenderRoads(void);
 void CRenderer__RenderEverythingBarRoads(void);
 void CRenderer__RenderFadingInEntities(void);
 void CRenderer__RenderFadingInUnderwaterEntities(void);
-extern short &skyBotRed;
-extern short &skyBotGreen;
-extern short &skyBotBlue;
+extern short &skyTopRed, &skyTopGreen, &skyTopBlue;
+extern short &skyBotRed, &skyBotGreen, &skyBotBlue;
 
 
 //////// Pipelines
@@ -342,17 +400,20 @@ extern void *ps2EnvSpecFxPS;	// also used by the building pipeline
 extern void *specCarFxVS, *specCarFxPS;
 extern void *xboxCarVS;
 extern void *leedsCarFxVS;
+extern void *mobileVehiclePipeVS, *mobileVehiclePipePS;
 // postfx
 extern void *iiiTrailsPS, *vcTrailsPS;
-extern void *gradingPS;
+extern void *gradingPS, *contrastPS;
 // building
 extern void *ps2BuildingVS, *ps2BuildingFxVS;
-extern void *pcBuildingVS, *pcBuildingPS;
+extern void *pcBuildingVS, *pcBuildingPS, *mobileBuildingPS, *mobileBuildingVS;
+extern void *sphereBuildingVS;
 void CreateShaders(void);
 void RwToD3DMatrix(void *d3d, RwMatrix *rw);
 void MakeProjectionMatrix(void *d3d, RwCamera *cam, float nbias = 0.0f, float fbias = 0.0f);
 void pipeGetComposedTransformMatrix(RpAtomic *atomic, float *out);
 void pipeGetCameraTransformMatrix(float *out);
+void pipeGetLeedsEnvMapMatrix(RpAtomic *atomic, float *out);
 void pipeUploadMatCol(int flags, RpMaterial *m, int loc);
 void pipeUploadZero(int loc);
 void pipeUploadLightColor(RpLight *light, int loc);

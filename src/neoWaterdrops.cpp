@@ -126,21 +126,12 @@ int WaterDrops::ms_initialised;
 
 extern IDirect3DDevice9 *&d3d9device;
 
-uchar *TheCamera = (uchar*)0xB6F028;
-RwCamera *&rwcam = *(RwCamera**)(0xC1703C);
-extern float &CTimer__ms_fTimeStep;
-float &CWeather__Rain = *(float*)(0xC81324);
-float &CWeather__UnderWaterness = *(float*)(0xC8132C);
-bool &CCutsceneMgr__ms_running = *(bool*)(0xB5F851);
-int* CGame__currArea = (int*)0xB72914;
-int* CEntryExitManager__ms_exitEnterState = (int*)0x96A7CC;
-
 short getCamMode()
 {
-	uchar activeCam = *(TheCamera + 0x59);
+	uchar activeCam = *((uint8*)&TheCamera + 0x59);
 	uchar *cam;
 
-	cam = TheCamera + 0x174;
+	cam = (uint8*)&TheCamera + 0x174;
 	cam += activeCam * 0x238;
 
 	return *(short*)(cam + 0xC);
@@ -315,7 +306,7 @@ void
 WaterDrops::Process()
 {
 	if(!ms_initialised)
-		InitialiseRender(rwcam);
+		InitialiseRender(Scene.camera);
 	WaterDrops::CalculateMovement();
 	WaterDrops::SprayDrops();
 	WaterDrops::ProcessMoving();
@@ -326,7 +317,7 @@ void
 WaterDrops::CalculateMovement(void)
 {
 	RwMatrix *modelMatrix;
-	modelMatrix = &RwCameraGetFrame(rwcam)->modelling;
+	modelMatrix = &RwCameraGetFrame(Scene.camera)->modelling;
 	RwV3dSub(&ms_posDelta, &modelMatrix->pos, &ms_lastPos);
 	ms_distMoved = RwV3dLength(&ms_posDelta);
 	// RwV3d pos;
@@ -639,7 +630,7 @@ WaterDrops::Render(void)
 	vbuf->Unlock();
 
 	RwRasterPushContext(ms_raster);
-	RwRasterRenderFast(RwCameraGetRaster(rwcam), 0, 0);
+	RwRasterRenderFast(RwCameraGetRaster(Scene.camera), 0, 0);
 	RwRasterPopContext();
 
 	DefinedState();

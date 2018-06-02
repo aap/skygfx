@@ -1,9 +1,5 @@
 #include "skygfx.h"
 
-float &CTimer__ms_fTimeStep = *(float*)0xB7CB5C;
-
-
-
 
 RwIm2DVertex *colorfilterVerts = (RwIm2DVertex*)0xC400D8;
 RwImVertexIndex *colorfilterIndices = (RwImVertexIndex*)0x8D5174;
@@ -128,7 +124,7 @@ struct Grade
 {
 	float r, g, b, a;
 };
-void *gradingPS;
+void *gradingPS, *contrastPS;
 #define NUMHOURS 8
 #define NUMWEATHERS 23
 #define EXTRASTART 21
@@ -777,7 +773,25 @@ CPostEffects::ColourFilter_Mobile(RwRGBA rgba1, RwRGBA rgba2)
 	RwD3D9SetPixelShaderConstant(1, &green, 1);
 	RwD3D9SetPixelShaderConstant(2, &blue, 1);
 
-	overrideIm2dPixelShader = gradingPS;
+	// contrast
+	float mult[4];
+	float add[4];
+	mult[0] = red.r + red.g + red.b;
+	mult[1] = green.r + green.g + green.b;
+	mult[2] = blue.r + blue.g + blue.b;
+	mult[3] = 1.0f;
+	add[0] = red.a;
+	add[1] = green.a;
+	add[2] = blue.a;
+	add[3] = 0.0f;
+
+	RwD3D9SetPixelShaderConstant(3, mult, 1);
+	RwD3D9SetPixelShaderConstant(4, add, 1);
+
+	if(!(GetAsyncKeyState(VK_F5) & 0x8000))
+		overrideIm2dPixelShader = gradingPS;
+	else
+		overrideIm2dPixelShader = contrastPS;
 	RwIm2DRenderIndexedPrimitive(rwPRIMTYPETRILIST, colorfilterVerts, 4, colorfilterIndices, 6);
 	overrideIm2dPixelShader = nil;
 
@@ -1369,18 +1383,20 @@ Colorcycle::Initialise(void)
 				sum = blueGrade[j][i].r + blueGrade[j][i].g + blueGrade[j][i].b;
 				if(sum > 1.7f)
 					blueGrade[j][i].a -= (sum - 1.7f)*0.13f;
-				redGrade[j][i].r *= 0.67f;
-				redGrade[j][i].g *= 0.67f;
-				redGrade[j][i].b *= 0.67f;
-				redGrade[j][i].a *= 0.67f;
-				greenGrade[j][i].r *= 0.67f;
-				greenGrade[j][i].g *= 0.67f;
-				greenGrade[j][i].b *= 0.67f;
-				greenGrade[j][i].a *= 0.67f;
-				blueGrade[j][i].r *= 0.67f;
-				blueGrade[j][i].g *= 0.67f;
-				blueGrade[j][i].b *= 0.67f;
-				blueGrade[j][i].a *= 0.67f;
+
+
+				redGrade[j][i].r /= 1.5f;
+				redGrade[j][i].g /= 1.5f;
+				redGrade[j][i].b /= 1.5f;
+				redGrade[j][i].a /= 1.5f;
+				greenGrade[j][i].r /= 1.5f;
+				greenGrade[j][i].g /= 1.5f;
+				greenGrade[j][i].b /= 1.5f;
+				greenGrade[j][i].a /= 1.5f;
+				blueGrade[j][i].r /= 1.5f;
+				blueGrade[j][i].g /= 1.5f;
+				blueGrade[j][i].b /= 1.5f;
+				blueGrade[j][i].a /= 1.5f;
 				//printf("%f %f %f %f X %f %f %f %f X %f %f %f %f\n",
 				//	redGrade[j][i].r, redGrade[j][i].g, redGrade[j][i].b, redGrade[j][i].a,
 				//	greenGrade[j][i].r, greenGrade[j][i].g, greenGrade[j][i].b, greenGrade[j][i].a,

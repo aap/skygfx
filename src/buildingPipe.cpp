@@ -1,7 +1,8 @@
 #include "skygfx.h"
 
 void *ps2BuildingVS, *ps2BuildingFxVS;
-void *pcBuildingVS, *pcBuildingPS;
+void *pcBuildingVS, *pcBuildingPS, *mobileBuildingPS, *mobileBuildingVS;
+void *sphereBuildingVS;
 RxPipeline *buildingPipeline, *buildingDNPipeline;
 
 float &CWeather__WetRoads = *(float*)0xC81308;
@@ -48,6 +49,11 @@ CustomBuildingPipeline__Update(void)
 
 	if(config->lightningIlluminatesWorld && CWeather__LightningFlash && !CPostEffects__IsVisionFXActive())
 		buildingAmbient = { 1.0, 1.0, 1.0, 0.0 };
+
+	// test
+	//buildingAmbient.red = 0.04706;
+	//buildingAmbient.green = 0.04706;
+	//buildingAmbient.blue = 0.04706;
 }
 
 void
@@ -135,12 +141,6 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 
 	atomic = (RpAtomic*)object;
 
-///	int isvegetation;
-///	CBaseModelInfo *mi = CVisibilityPlugins__GetModelInfo(atomic);
-///	int miflags = *(uint16*)((uint8*)mi + 0x12);
-///	isvegetation = (miflags & 0x7800) == 0x800 || (miflags & 0x7800) == 0x1000;
-
-
 	pipeGetComposedTransformMatrix(atomic, transform);
 	RwD3D9SetVertexShaderConstant(REG_transform, transform, 4);
 
@@ -200,13 +200,6 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 		RwD3D9SetVertexShader(ps2BuildingVS);
 		RwD3D9SetPixelShader(simplePS);
 
-//if(isvegetation){
-//	int hasalpha;
-//	RwD3D9GetRenderState(D3DRS_ALPHABLENDENABLE, &hasAlpha);
-//	RwD3D9SetRenderState(D3DRS_ALPHABLENDENABLE, 0);
-//	D3D9Render(resEntryHeader, instancedData);
-//	RwD3D9SetRenderState(D3DRS_ALPHABLENDENABLE, hasAlpha);
-//}else
 		D3D9RenderDual(config->dualPassBuilding, resEntryHeader, instancedData);
 
 		// Reflection
@@ -360,12 +353,150 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PC(RwResEntry *repEntry, void *obj
 }
 
 void
+CCustomBuildingDNPipeline__CustomPipeRenderCB_Mobile(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
+{
+	RpAtomic *atomic;
+	RxD3D9ResEntryHeader *resEntryHeader;
+	RxD3D9InstanceData *instancedData;
+	RpMaterial *material;
+	RwInt32	numMeshes;
+	CustomEnvMapPipeMaterialData *envData;
+	RwBool hasAlpha;
+	float colorScale;
+	RwMatrix envmat;
+	float transform[16];
+
+	atomic = (RpAtomic*)object;
+
+	_rwD3D9EnableClippingIfNeeded(object, type);
+
+	colorScale = 1.0f;
+	RwD3D9SetPixelShaderConstant(0, &colorScale, 1);
+
+	pipeGetComposedTransformMatrix(atomic, transform);
+	RwD3D9SetVertexShaderConstant(REG_transform, transform, 4);
+
+	resEntryHeader = (RxD3D9ResEntryHeader*)(repEntry + 1);
+	instancedData = (RxD3D9InstanceData*)(resEntryHeader + 1);;
+	if(resEntryHeader->indexBuffer)
+		RwD3D9SetIndices(resEntryHeader->indexBuffer);
+	_rwD3D9SetStreams(resEntryHeader->vertexStream, resEntryHeader->useOffsets);
+	RwD3D9SetVertexDeclaration(resEntryHeader->vertexDeclaration);
+
+	setDnParams(atomic);
+
+	CustomBuildingEnvMapPipeline__SetupEnv(atomic, NULL, &envmat);
+	RwD3D9SetVertexShaderConstant(REG_envmat, &envmat, 3);
+
+	int alphafunc, alpharef;
+	int src, dst;
+	int fog;
+	int zwrite;
+	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, &alpharef);
+	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &alphafunc);
+	RwRenderStateGet(rwRENDERSTATESRCBLEND, &src);
+	RwRenderStateGet(rwRENDERSTATEDESTBLEND, &dst);
+	RwRenderStateGet(rwRENDERSTATEFOGENABLE, &fog);
+	RwRenderStateGet(rwRENDERSTATEZWRITEENABLE, &zwrite);
+
+
+	// Sphere Map TEST
+	if(gRenderingSpheremap){
+		RwD3D9SetVertexShaderConstant(44, &reflectionCamPos, 1);
+		float worldmat[16];
+		RwToD3DMatrix(worldmat, RwFrameGetLTM(RpAtomicGetFrame(atomic)));
+		RwD3D9SetVertexShaderConstant(REG_transform, worldmat, 4);
+		RwD3D9SetVertexShader(sphereBuildingVS);
+	}else
+		RwD3D9SetVertexShader(mobileBuildingVS);
+
+
+
+	numMeshes = resEntryHeader->numMeshes;
+	while(numMeshes--){
+		material = instancedData->material;
+
+		TexInfo *texinfo = RwTextureGetTexDBInfo(material->texture);
+		pipeSetTexture(material->texture, 0);
+
+		int effect = RpMatFXMaterialGetEffects(material);
+		if(effect == rpMATFXEFFECTUVTRANSFORM){
+			RwMatrix *m1, *m2;
+			RpMatFXMaterialGetUVTransformMatrices(material, &m1, &m2);
+			RwD3D9SetVertexShaderConstant(REG_texmat, m1, 4);
+		}else{
+			RwMatrix m;
+			RwMatrixSetIdentity(&m);
+			RwD3D9SetVertexShaderConstant(REG_texmat, &m, 4);
+		}
+
+		hasAlpha = instancedData->vertexAlpha || instancedData->material->color.alpha != 255;
+		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)hasAlpha);
+
+		pipeUploadMatCol(flags, material, REG_matCol);
+
+		if(flags & rpGEOMETRYLIGHT)
+			RwD3D9SetVertexShaderConstant(REG_ambient, &buildingAmbient, 1);
+		else
+			pipeUploadZero(REG_ambient);
+		RwD3D9SetVertexShaderConstant(REG_surfProps, &material->surfaceProps, 1);
+
+/*
+		if(*(int*)&material->surfaceProps.specular & 1){
+			envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
+			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
+			RwD3D9SetTexture(envData->texture, 1);
+			RwD3D9SetPixelShader(pcBuildingPS);
+		}else
+			RwD3D9SetPixelShader(simplePS);
+*/
+		if(texinfo->detail && *texinfo->detail && !(GetAsyncKeyState(VK_F4) & 0x8000)){
+			float tile = texinfo->detailtile == 0 ? 10.0f : texinfo->detailtile/10.0f;
+			RwD3D9SetPixelShaderConstant(1, &tile, 1);
+			pipeSetTexture(*texinfo->detail, 2);
+			RwD3D9SetPixelShader(mobileBuildingPS);
+		}else
+			RwD3D9SetPixelShader(simplePS);
+
+//if(texinfo->alphamode == 2){
+//	int hasalpha;
+//	RwD3D9GetRenderState(D3DRS_ALPHABLENDENABLE, &hasAlpha);
+//	RwD3D9SetRenderState(D3DRS_ALPHABLENDENABLE, 0);
+//	D3D9Render(resEntryHeader, instancedData);
+//	RwD3D9SetRenderState(D3DRS_ALPHABLENDENABLE, hasAlpha);
+//}else
+		D3D9RenderDual(config->dualPassBuilding, resEntryHeader, instancedData);
+
+		instancedData++;
+	}
+	RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)alpharef);
+	RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphafunc);
+	RwD3D9SetTexture(NULL, 1);
+	RwD3D9SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_DISABLE);
+	RwD3D9SetTextureStageState(1, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
+	RwD3D9SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, 1);
+	RwD3D9SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_DISABLE);
+
+}
+
+void
 CCustomBuildingDNPipeline__CustomPipeRenderCB_Switch(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
 {
-	if(config->buildingPipe == 1)
-		CCustomBuildingDNPipeline__CustomPipeRenderCB_PC(repEntry, object, type, flags);
+	if(gRenderingSpheremap)
+		CCustomBuildingDNPipeline__CustomPipeRenderCB_Mobile(repEntry, object, type, flags);
 	else
+	switch(config->buildingPipe){
+	default:
+	case 0:
 		CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(repEntry, object, type, flags);
+		break;
+	case 1:
+		CCustomBuildingDNPipeline__CustomPipeRenderCB_PC(repEntry, object, type, flags);
+		break;
+	case 2:
+		CCustomBuildingDNPipeline__CustomPipeRenderCB_Mobile(repEntry, object, type, flags);
+		break;
+	}
 	fixSAMP();
 }
 
@@ -659,6 +790,7 @@ CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2(void)
 	buildingDNPipeline = pipeline;
 	return pipeline;
 }
+
 
 void
 hookBuildingPipe(void)

@@ -27,6 +27,9 @@ WRAPPER void CRenderer__RenderEverythingBarRoads(void) { EAXJMP(0x553AA0); }
 WRAPPER void CRenderer__RenderFadingInEntities(void) { EAXJMP(0x5531E0); }
 WRAPPER void CRenderer__RenderFadingInUnderwaterEntities(void) { EAXJMP(0x553220); }
 
+short &skyTopRed = *(short*)0xB7C4C4;
+short &skyTopGreen = *(short*)0xB7C4C6;
+short &skyTopBlue = *(short*)0xB7C4C8;
 short &skyBotRed = *(short*)0xB7C4CA;
 short &skyBotGreen = *(short*)0xB7C4CC;
 short &skyBotBlue = *(short*)0xB7C4CE;

@@ -103,6 +103,46 @@ pipeGetCameraTransformMatrix(float *out)
 }
 
 void
+pipeGetLeedsEnvMapMatrix(RpAtomic *atomic, float *out)
+{
+	DirectX::XMMATRIX tmp;
+
+	RwMatrix *world = RwFrameGetLTM(RpAtomicGetFrame(atomic));
+	RwCamera *cam = (RwCamera*)RWSRCGLOBAL(curCamera);
+
+	float view[16];
+	// Kill pitch in camera matrix
+	RwMatrix mat = *RwFrameGetLTM(RwCameraGetFrame(cam));
+	mat.pos.x = 0.0f;
+	mat.pos.y = 0.0f;
+	mat.pos.z = 0.0f;
+	mat.at.z = 0.0f;
+	RwV3dNormalize(&mat.at, &mat.at);
+	mat.up.x = 0.0f;
+	mat.up.y = 0.0f;
+	mat.up.z = 1.0f;
+	mat.right.x = -mat.at.y;
+	mat.right.y = mat.at.x;
+	mat.right.z = 0;
+	mat.flags = rwMATRIXTYPEORTHONORMAL;
+
+	// this can be simplified, invert is just transpose as well
+	RwMatrixInvert((RwMatrix*)view, &mat);
+	view[0] = -view[0];
+	view[3] = 0.0f;
+	view[4] = -view[4];
+	view[7] = 0.0f;
+	view[8] = -view[8];
+	view[11] = 0.0f;
+	view[12] = -view[12];
+	view[15] = 1.0f;
+	transpose(&tmp, view);
+
+	tmp = DirectX::XMMatrixMultiply(tmp, pipeWorldMat);
+	memcpy(out, &tmp, 64);
+}
+
+void
 pipeUploadMatCol(int flags, RpMaterial *m, int loc)
 {
 	static float white[4] = { 1.0, 1.0, 1.0, 1.0 };
@@ -203,6 +243,7 @@ CreateShaders(void)
 	makePS(IDR_IIITRAILSPS, &iiiTrailsPS);
 	makePS(IDR_VCTRAILSPS, &vcTrailsPS);
 	makePS(IDR_GRADINGPS, &gradingPS);
+	makePS(IDR_CONTRASTPS, &contrastPS);
 
 	makePS(IDR_SIMPLEPS, &simplePS);
 
@@ -214,10 +255,15 @@ CreateShaders(void)
 	makePS(IDR_SPECCARFXPS, &specCarFxPS);
 	makeVS(IDR_XBOXCARVS, &xboxCarVS);
 	makeVS(IDR_LEEDSCARFXVS, &leedsCarFxVS);
+	makeVS(IDR_MOBILEVEHICLEVS, &mobileVehiclePipeVS);
+	makePS(IDR_MOBILEVEHICLEPS, &mobileVehiclePipePS);
 
 	// building
 	makeVS(IDR_PS2BUILDINGVS, &ps2BuildingVS);
 	makeVS(IDR_PS2BUILDINGFXVS, &ps2BuildingFxVS);
 	makeVS(IDR_PCBUILDINGVS, &pcBuildingVS);
+	makeVS(IDR_MOBILEBUILDINGVS, &mobileBuildingVS);
 	makePS(IDR_PCBUILDINGPS, &pcBuildingPS);
+	makePS(IDR_MOBILEBUILDINGPS, &mobileBuildingPS);
+	makeVS(IDR_SPHEREBUILDINGVS, &sphereBuildingVS);
 }

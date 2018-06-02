@@ -3,9 +3,6 @@
 RwInt32 pdsMatOffset;
 RwInt32 pdsAtmOffset;
 
-WRAPPER int PluginAttach(void) { EAXJMP(0x53D870); }
-WRAPPER int PipelinePluginAttach(void) { EAXJMP(0x72FBD0); }
-
 void*
 pdsConstruct(void *object, RwInt32 offsetInObject, RwInt32)
 {
@@ -41,14 +38,11 @@ pdsAtmCB(void *object, RwInt32, RwInt32, RwUInt32 extraData)
 }
 
 int
-myPluginAttach(void)
+PDSPipePluginAttach(void)
 {
-//	int ret = PluginAttach();
-	int ret = PipelinePluginAttach();
-
 	//pdsMatOffset = RpMaterialRegisterPlugin(4, 0x131, pdsConstruct, NULL, pdsCopy);
 	pdsAtmOffset = RpAtomicRegisterPlugin(0, 0x131, NULL, NULL, NULL);
 	//RpMaterialSetStreamRightsCallBack(0x131, pdsMatCB);
 	RpAtomicSetStreamRightsCallBack(0x131, pdsAtmCB);
-	return ret;
+	return 1;
 }

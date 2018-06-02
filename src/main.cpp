@@ -29,11 +29,23 @@ int original_bRadiosity = 0;
 void *grassPixelShader;
 void *simplePS;
 void *gpCurrentShaderForDefaultCallbacks;
+bool gRenderingSpheremap;
+CVector reflectionCamPos;
 
 float *gfLaRiotsLightMult = (float*)0x8CD060;
 float *ambientColors = (float*)0xB7C4A0;
 
 GlobalScene &Scene = *(GlobalScene*)0xC17038;
+
+float &CTimer__ms_fTimeStep = *(float*)0xB7CB5C;
+CCamera &TheCamera = *(CCamera*)0xB6F028;
+float &CWeather__Rain = *(float*)(0xC81324);
+float &CWeather__UnderWaterness = *(float*)(0xC8132C);
+bool &CCutsceneMgr__ms_running = *(bool*)(0xB5F851);
+int* CGame__currArea = (int*)0xB72914;
+int* CEntryExitManager__ms_exitEnterState = (int*)0x96A7CC;
+
+WRAPPER CPlaceable *FindPlayerPed(int) { EAXJMP(0x56E210); }
 
 static int defaultColourLeftUOffset;
 static int defaultColourRightUOffset;
@@ -309,6 +321,16 @@ myDefaultCallback(RpAtomic *atomic)
 	}else
 		pipe = RxPipelineExecute(pipe, atomic, 1);
 	return pipe ? atomic : NULL;
+}
+
+RxNodeDefinition *nodeD3D9SkinAtomicAllInOneCSL = (RxNodeDefinition*)0x8DED08;
+RxNodeBodyFn __rwSkinD3D9AtomicAllInOneNode_orig;
+RwBool __rwSkinD3D9AtomicAllInOneNode_hook(RxPipelineNode *self, const RxPipelineNodeParam *params)
+{
+	// Don't render peds when we're rendering reflections
+	if(gRenderingSpheremap)
+		return 1;
+	return __rwSkinD3D9AtomicAllInOneNode_orig(self, params);
 }
 
 int tmpintensity;
@@ -596,17 +618,27 @@ static uint32_t RenderScene_A;
 WRAPPER void RenderScene(void) { VARJMP(RenderScene_A); }
 
 void RenderReflectionMap_leeds(void);
+void RenderReflectionMap_mobile(void);
 void RenderReflectionScene(void);
 
 void
 RenderScene_hook(void)
 {
 	RenderScene();
-//	RenderReflectionScene();
+
 	if(config->vehiclePipe == 4)
 		CarPipe::RenderEnvTex();
-	else if(config->vehiclePipe == 5)
+	else if(config->vehiclePipe == 5 || config->vehiclePipe == 6)
 		RenderReflectionMap_leeds();
+	else if(config->vehiclePipe == 7)
+		RenderReflectionMap_mobile();
+}
+
+int (*PipelinePluginAttach)(void);
+int
+myPluginAttach(void)
+{
+	return PipelinePluginAttach() && PDSPipePluginAttach() && TexDBPluginAttach();
 }
 
 void (*InitialiseGame)(void);
@@ -616,6 +648,7 @@ InitialiseGame_hook(void)
 	ONCE;
 	InterceptCall(&RenderScene_A, RenderScene_hook, 0x53EABF);
 	neoInit();
+	initTexDB();
 	InitialiseGame();
 }
 
@@ -760,6 +793,7 @@ readIni(int n)
 	static StrAssoc buildPipeMap[] = {
 		{"PS2",     0},
 		{"PC",      1},
+		{"Mobile",  2},
 		{"",       -1},
 	};
 	c->buildingPipe = StrAssoc::get(buildPipeMap, cfg.get("SkyGfx", "buildingPipe", "").c_str());
@@ -778,6 +812,9 @@ readIni(int n)
 		{"Spec",    3},
 		{"Neo",     4},
 		{"Leeds",   5},
+		{"LCS",     5},
+		{"VCS",     6},
+		{"Mobile",  7},
 		{"",       -1},
 	};
 	c->vehiclePipe = StrAssoc::get(vehPipeMap, cfg.get("SkyGfx", "vehiclePipe", "").c_str());
@@ -1020,8 +1057,8 @@ installMenu(void)
 	DebugMenuEntry *e;
 	if(DebugMenuLoad()){
 		static const char *ps2pcStr[] = { "PS2", "PC" };
-		static const char *buildPipeStr[] = { "PS2", "PC" };
-		static const char *vehPipeStr[] = { "PS2", "PC", "Xbox", "Spec", "Neo", "Leeds" };
+		static const char *buildPipeStr[] = { "PS2", "PC", "Mobile" };
+		static const char *vehPipeStr[] = { "PS2", "PC", "Xbox", "Spec", "Neo", "LCS", "VCS", "Mobile" };
 		static const char *colFilterStr[] = { "None", "PS2", "PC", "Mobile", "III", "VC", "VCS" };
 		static const char *lightningStr[] = { "Sky only", "Sky and objects" };
 		static const char *shadStr[] = { "Default", "PS2", "PC" };
@@ -1032,11 +1069,11 @@ installMenu(void)
 		menu.dualPassGlobal = DebugMenuAddVarBool32("SkyGFX", "Dual-pass Global", &config->dualPassGlobal, toggledDual);
 		menu.ps2ModulateGlobal = DebugMenuAddVarBool32("SkyGFX", "PS2-modulate Global", &config->ps2ModulateGlobal, toggledModulation);
 		if(iCanHasbuildingPipe){
-			menu.buildingPipe = DebugMenuAddVar("SkyGFX", "Building Pipeline", &config->buildingPipe, nil, 1, 0, 1, buildPipeStr);
+			menu.buildingPipe = DebugMenuAddVar("SkyGFX", "Building Pipeline", &config->buildingPipe, nil, 1, 0, 2, buildPipeStr);
 			DebugMenuEntrySetWrap(menu.buildingPipe, true);
 		}
 		if(iCanHasvehiclePipe){
-			menu.vehiclePipe = DebugMenuAddVar("SkyGFX", "Vehicle Pipeline", &config->vehiclePipe, nil, 1, 0, 5, vehPipeStr);
+			menu.vehiclePipe = DebugMenuAddVar("SkyGFX", "Vehicle Pipeline", &config->vehiclePipe, nil, 1, 0, 7, vehPipeStr);
 			DebugMenuEntrySetWrap(menu.vehiclePipe, true);
 		}
 		menu.grassAddAmbient = DebugMenuAddVarBool32("SkyGFX", "Add Ambient to Grass", &config->grassAddAmbient, nil);
@@ -1283,7 +1320,9 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		InjectHook(0x42453B, ps2rand);
 		InjectHook(0x42454D, ps2rand);
 
-		InjectHook(0x53D903, myPluginAttach);
+		///
+		InterceptCall(&PipelinePluginAttach, myPluginAttach, 0x53D903);
+	//	InjectHook(0x53D903, myPluginAttach);
 
 		// projobj placement. Not really broken but whatever
 		InjectHook(0x5A3C7D, ps2srand);
@@ -1317,6 +1356,12 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		// Removing this silly calculation seems to work better.
 		Nop(0x6E716B, 6);
 		Nop(0x6E7176, 6);
+
+		// Hook Skin Pipe so we can easily cull peds
+		// TODO: do this with other pipelines too
+		__rwSkinD3D9AtomicAllInOneNode_orig = nodeD3D9SkinAtomicAllInOneCSL->nodeMethods.nodeBody;
+		nodeD3D9SkinAtomicAllInOneCSL->nodeMethods.nodeBody = __rwSkinD3D9AtomicAllInOneNode_hook;
+
 
 		//void dumpMenu(void);
 		//dumpMenu();
@@ -1353,6 +1398,10 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		//Nop(0x53E1AF, 5);	// CClouds::MovingFogRender
 		//Nop(0x53E1B4, 5);	// CClouds::VolumetricCloudsRender
 		//Nop(0x53E121, 5);	// CClouds::RenderBottomFromHeight
+
+		// remove some shadows for mobile test
+		//Nop(0x53E0C3, 5);
+		//Nop(0x53E0C8, 5);
 	}
 
 	return TRUE;

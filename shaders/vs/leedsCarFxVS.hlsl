@@ -26,7 +26,6 @@ main(VS_INPUT IN)
 
 	float3 envNormal = mul(envmat, IN.Normal);
 	OUT.Texcoord = mul(texmat, float4(envNormal.xy, 0.0, 1.0)).xy;
-	OUT.Color = float4(128.0, 128.0, 128.0, 255.0)/255.0*shininess*lightmult;
-	OUT.Color.a = 1.0;
+	OUT.Color = float4(1.0, 1.0, 1.0, shininess*lightmult);
 	return OUT;
 }

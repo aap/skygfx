@@ -104,13 +104,6 @@ public:
 * neo water drops
 */
 
-struct CMatrix
-{
-	RwMatrix matrix;
-	RwMatrix *pMatrix;
-	int haveRwMatrix;
-};
-
 struct VertexTex2
 {
 	RwReal      x;
