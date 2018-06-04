@@ -327,9 +327,14 @@ char *getpath(char *path);
 // Tex DB
 struct TexInfo
 {
-	int alphamode;
-	RwTexture **detail;
+	char *name;	// not strictly needed
+	char *affiliate;
+	TexInfo *affiliateTex;
+	int detailnum;
+	RwTexture *detail;
 	int detailtile;
+	int alphamode;
+	int hassibling;
 };
 TexInfo *RwTextureGetTexDBInfo(RwTexture *tex);
 int TexDBPluginAttach(void);

@@ -460,6 +460,8 @@ CarPipe::RenderCallback(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt
 	if(!iCanHasNeoCar)
 		return;
 
+	_rwD3D9EnableClippingIfNeeded(object, type);
+
 	RxD3D9ResEntryHeader *header = (RxD3D9ResEntryHeader*)&repEntry[1];
 	ShaderSetup((RpAtomic*)object);
 

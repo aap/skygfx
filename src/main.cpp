@@ -1362,6 +1362,9 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		__rwSkinD3D9AtomicAllInOneNode_orig = nodeD3D9SkinAtomicAllInOneCSL->nodeMethods.nodeBody;
 		nodeD3D9SkinAtomicAllInOneCSL->nodeMethods.nodeBody = __rwSkinD3D9AtomicAllInOneNode_hook;
 
+void hooktexdb();
+		hooktexdb();
+
 
 		//void dumpMenu(void);
 		//dumpMenu();

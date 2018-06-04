@@ -450,10 +450,10 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_Mobile(RwResEntry *repEntry, void 
 		}else
 			RwD3D9SetPixelShader(simplePS);
 */
-		if(texinfo->detail && *texinfo->detail && !(GetAsyncKeyState(VK_F4) & 0x8000)){
-			float tile = texinfo->detailtile == 0 ? 10.0f : texinfo->detailtile/10.0f;
+		if(texinfo->detail && !(GetAsyncKeyState(VK_F4) & 0x8000)){
+			float tile = texinfo->detailtile/10.0f;
 			RwD3D9SetPixelShaderConstant(1, &tile, 1);
-			pipeSetTexture(*texinfo->detail, 2);
+			pipeSetTexture(texinfo->detail, 2);
 			RwD3D9SetPixelShader(mobileBuildingPS);
 		}else
 			RwD3D9SetPixelShader(simplePS);

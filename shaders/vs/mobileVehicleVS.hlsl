@@ -48,7 +48,7 @@ main(VS_INPUT IN)
 	// for the other env map
 //	OUT.Texcoord1 = float2(length(ReflVector.xy), ReflVector.z*0.5 + 0.25);
 
-	float specAmt = pow(max(dot(ReflVector, mul(-directDir[0], (float3x3)worldmat)), 0.0), 20.0f) * specularity * 2.0;
+	float specAmt = pow(max(dot(ReflVector, mul(-directDir[0], (float3x3)worldmat)), 0.0), 10.0f) * specularity * 2.0;
 	OUT.Spec = specAmt*directCol[0];
 
 	OUT.Color = float4(IN.Color.rgb*isPrelit, 1.0);
