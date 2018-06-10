@@ -360,7 +360,6 @@ double CTimeCycle_GetAmbientBlue(void);
 #define RwEngineInstance (*rwengine)
 extern RsGlobalType *RsGlobal;
 extern IDirect3DDevice9 *&d3d9device;
-extern RwCamera *&Camera;
 extern RpLight *&pAmbient;
 extern RpLight *&pDirect;
 extern RpLight **pExtraDirectionals;

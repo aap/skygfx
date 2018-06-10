@@ -116,7 +116,6 @@ RwV3d WaterDrops::ms_posDelta;
 
 RwTexture *WaterDrops::ms_maskTex;
 RwTexture *WaterDrops::ms_tex;
-RwRaster *WaterDrops::ms_raster;
 int WaterDrops::ms_fbWidth, WaterDrops::ms_fbHeight;
 void *WaterDrops::ms_vertexBuf;
 void *WaterDrops::ms_indexBuf;
@@ -268,10 +267,6 @@ void
 WaterDrops::InitialiseRender(RwCamera *cam)
 {
 	srand(time(NULL));
-	ms_fbWidth = cam->frameBuffer->width;
-	ms_fbHeight = cam->frameBuffer->height;
-
-	scaling = ms_fbHeight / 480.0f;
 
 	IDirect3DVertexBuffer9 *vbuf;
 	IDirect3DIndexBuffer9 *ibuf;
@@ -291,13 +286,9 @@ WaterDrops::InitialiseRender(RwCamera *cam)
 	}
 	ibuf->Unlock();
 
-	int w, h;
-	for(w = 1; w < cam->frameBuffer->width; w <<= 1);
-	for(h = 1; h < cam->frameBuffer->height; h <<= 1);
-	ms_raster = RwRasterCreate(w, h, 0, 5);
-	ms_tex = RwTextureCreate(ms_raster);
+	// We'll use the postfx frontbuffer as raster
+	ms_tex = RwTextureCreate(nil);
 	ms_tex->filterAddressing = 0x3302;
-	RwTextureAddRef(ms_tex);
 
 	ms_initialised = 1;
 }
@@ -305,6 +296,11 @@ WaterDrops::InitialiseRender(RwCamera *cam)
 void
 WaterDrops::Process()
 {
+	// In case resolution changes
+	ms_fbWidth = Scene.camera->frameBuffer->width;
+	ms_fbHeight = Scene.camera->frameBuffer->height;
+	scaling = ms_fbHeight / 480.0f;
+
 	if(!ms_initialised)
 		InitialiseRender(Scene.camera);
 	WaterDrops::CalculateMovement();
@@ -592,10 +588,10 @@ WaterDrops::AddToRenderList(WaterDrop *drop)
 	v1_1 = drop->y + ms_yOff - tmp;
 	u1_2 = drop->x + ms_xOff + tmp;
 	v1_2 = drop->y + ms_yOff + tmp;
-	u1_1 = (u1_1 <= 0.0f ? 0.0f : u1_1) / ms_raster->width;
-	v1_1 = (v1_1 <= 0.0f ? 0.0f : v1_1) / ms_raster->height;
-	u1_2 = (u1_2 >= ms_fbWidth ? ms_fbWidth : u1_2) / ms_raster->width;
-	v1_2 = (v1_2 >= ms_fbHeight ? ms_fbHeight : v1_2) / ms_raster->height;
+	u1_1 = (u1_1 <= 0.0f ? 0.0f : u1_1) / CPostEffects::pRasterFrontBuffer->width;
+	v1_1 = (v1_1 <= 0.0f ? 0.0f : v1_1) / CPostEffects::pRasterFrontBuffer->height;
+	u1_2 = (u1_2 >= ms_fbWidth ? ms_fbWidth : u1_2) / CPostEffects::pRasterFrontBuffer->width;
+	v1_2 = (v1_2 >= ms_fbHeight ? ms_fbHeight : v1_2) / CPostEffects::pRasterFrontBuffer->height;
 
 	scale = drop->size * 0.5f;
 
@@ -629,9 +625,8 @@ WaterDrops::Render(void)
 			AddToRenderList(drop);
 	vbuf->Unlock();
 
-	RwRasterPushContext(ms_raster);
-	RwRasterRenderFast(RwCameraGetRaster(Scene.camera), 0, 0);
-	RwRasterPopContext();
+	ms_tex->raster = CPostEffects::pRasterFrontBuffer;
+	CPostEffects::UpdateFrontBuffer();
 
 	DefinedState();
 	RwRenderStateSet(rwRENDERSTATEFOGENABLE, 0);

@@ -591,7 +591,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(RwResEntry *repEntry, void
 
 	noFx = CVisibilityPlugins__GetAtomicId(atomic) & 0x6000;
 	fxParams.lightmult = CCustomCarEnvMapPipeline__m_EnvMapLightingMult;
-	RwMatrix *camfrm = RwFrameGetLTM(RwCameraGetFrame(Camera));
+	RwMatrix *camfrm = RwFrameGetLTM(RwCameraGetFrame(Scene.camera));
 	RwV3dTransformPoint(&eye, RwMatrixGetPos(camfrm), &lightmat);
 	RwD3D9SetVertexShaderConstant(REG_eye, &eye, 1);
 
@@ -715,7 +715,38 @@ enum {
 	LOC_eye = 40,
 };
 
-// TODO: reverse and implement this better
+// This re-implementation of the original code is perhaps a bit too slavish
+void
+SetupMaterial_Xbox(RpMaterial *material, RwBool lighting, RwUInt32 flags, RwBool blownUp, float specularity)
+{
+	static RwRGBA white = { 255, 255, 255, 255 };
+	RwRGBA matColor;
+	RwSurfaceProperties surf = material->surfaceProps;
+
+	surf.specular = specularity;
+	if(lighting && flags & rpGEOMETRYLIGHT){
+		if(flags & rpGEOMETRYMODULATEMATERIALCOLOR)
+			matColor = material->color;
+		else
+			matColor = white;
+	}else{
+		matColor = white;
+		surf.ambient = 1.0f;
+		surf.diffuse = 1.0f;
+		surf.specular = 0.0f;
+	}
+
+	if(blownUp){
+		surf.diffuse *= 0.1f;
+		surf.ambient *= 0.1f;
+		surf.specular = 0.0f;
+	}
+
+	RwRGBAReal color;
+	RwRGBARealFromRwRGBA(&color, &matColor);
+	RwD3D9SetVertexShaderConstant(LOC_matCol, (void*)&color, 1);
+	RwD3D9SetVertexShaderConstant(LOC_surfProps, (void*)&surf, 1);
+}
 
 void
 CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
@@ -723,7 +754,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *ob
 	RxD3D9ResEntryHeader *resEntryHeader;
 	RxD3D9InstanceData *instancedData;
 	RpAtomic *atomic;
-	RwBool lighting, notLit;
+	RwBool lighting, blownUp;
 	RwInt32	numMeshes;
 	RwBool noFx;
 	CustomEnvMapPipeMaterialData *envData;
@@ -733,17 +764,13 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *ob
 	RwBool hasEnv1, hasEnv2, hasSpec, hasAlpha;
 	D3DMATRIX worldMat, worldITMat, viewMat, projMat;
 	float envSwitch;
-	struct {
-		float shininess;
-		float specularity;
-		float intensity;
-	} reflData;
+	float specularity;
 
 	_rwD3D9EnableClippingIfNeeded(object, type);
 
 	atomic = (RpAtomic*)object;
 	noFx = !!(CVisibilityPlugins__GetAtomicId(atomic) & 0x6000);
-	notLit = !((pDirect->object.object.flags & 1) == 0 ||
+	blownUp = !((RpLightGetFlags(pDirect) & rpLIGHTLIGHTATOMICS) == 0 ||
 	           (CVisibilityPlugins__GetAtomicId(atomic) & 0x4000) == 0);
 
 	RwD3D9SetPixelShader(NULL);
@@ -759,7 +786,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *ob
 	_rwD3D9VSGetInverseWorldMatrix((void *)&worldITMat);
 	RwD3D9SetVertexShaderConstant(LOC_WorldIT,(void*)&worldITMat,4);
 
-	RwMatrix *camfrm = RwFrameGetLTM(RwCameraGetFrame(Camera));
+	RwMatrix *camfrm = RwFrameGetLTM(RwCameraGetFrame(Scene.camera));
 	RwD3D9SetVertexShaderConstant(LOC_eye, (void*)RwMatrixGetPos(camfrm), 1);
 
 	RwD3D9SetVertexShaderConstant(LOC_sunDir,(void*)RwMatrixGetAt(RwFrameGetLTM(RpLightGetFrame(pDirect))),1);
@@ -781,27 +808,25 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *ob
 		material = instancedData->material;
 		materialFlags = *(RwUInt32*)&material->surfaceProps.specular;
 
-		hasEnv1  = !!(materialFlags & 1) && !noFx;
-		hasEnv2  = !!(materialFlags & 2) && !noFx;
-		hasSpec  = !!(materialFlags & 4) && !noFx;
+		hasEnv1  = (materialFlags & 1) && !noFx;
+		hasEnv2  = (materialFlags & 2) && !noFx && (flags & rpGEOMETRYTEXTURED2);
+		hasSpec  = (materialFlags & 4) && !noFx;
 
-//		hasEnv1  = !((materialFlags & 1) == 0 || noFx);
-//		hasEnv2   = !((materialFlags & 2) == 0 || noFx || (atomic->geometry->flags & rpGEOMETRYTEXTURED2) == 0);
-//		hasSpec  = !((materialFlags & 4) == 0 || !lighting);
 		hasAlpha = instancedData->vertexAlpha || instancedData->material->color.alpha != 255;
+		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)hasAlpha);
 
 		RwD3D9SetTexture(NULL, 1);
 
-		reflData.specularity = 0.0f;	// R* does this before the loop :/
-		if(hasSpec && !notLit){
+		specularity = 0.0f;
+		if(hasSpec && !blownUp){
 			envSwitch = 4;
-			reflData.specularity = CCustomCarEnvMapPipeline__m_EnvMapLightingMult * 1.8f;
-			if(reflData.specularity > 1.0f) reflData.specularity = 1.0f;
+			specularity = CCustomCarEnvMapPipeline__m_EnvMapLightingMult * 1.8f;
+			if(specularity > 1.0f) specularity = 1.0f;
 		}
 
 		envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
 		RwTexture *tex1 = envData->texture;
-		if(notLit){
+		if(blownUp){
 			if(hasEnv2)
 				envSwitch = 3;
 		}else if(hasEnv1){
@@ -864,16 +889,9 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *ob
 			RwD3D9SetTextureStageState(2, D3DTSS_COLOROP, D3DTOP_DISABLE);
 		}
 
-		RwD3D9SetVertexShaderConstant(LOC_reflData, (void*)&reflData, 1);
 		RwD3D9SetVertexShaderConstant(LOC_envSwitch, (void*)&envSwitch, 1);
 
-		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)hasAlpha);
-		RwRGBA matColor = material->color;
-		RwRGBAReal color;
-		RwRGBARealFromRwRGBA(&color, &matColor);
-		RwD3D9SetVertexShaderConstant(LOC_matCol, (void*)&color, 1);
-		RwD3D9SetVertexShaderConstant(LOC_surfProps, (void*)&material->surfaceProps, 1);
-		RwD3D9GetRenderState(D3DRS_ALPHABLENDENABLE, &hasAlpha);
+		SetupMaterial_Xbox(material, lighting, flags, blownUp, specularity);
 
 		if(flags & (rxGEOMETRY_TEXTURED2 | rxGEOMETRY_TEXTURED)){
 			RwD3D9SetTexture(material->texture, 0);
@@ -960,7 +978,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_leeds(RwResEntry *repEntry, void *o
 
 	noFx = CVisibilityPlugins__GetAtomicId(atomic) & 0x6000;
 	fxParams.lightmult = CCustomCarEnvMapPipeline__m_EnvMapLightingMult;
-	RwMatrix *camfrm = RwFrameGetLTM(RwCameraGetFrame(Camera));
+	RwMatrix *camfrm = RwFrameGetLTM(RwCameraGetFrame(Scene.camera));
 	RwV3dTransformPoint(&eye, RwMatrixGetPos(camfrm), &lightmat);
 	RwD3D9SetVertexShaderConstant(REG_eye, &eye, 1);
 
@@ -1058,7 +1076,6 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_mobile(RwResEntry *repEntry, void *
 		float specularity;
 		float lightmult;
 	} fxParams;
-	float envmat[16];
 	RwV3d eye;
 	RwMatrix lightmat;
 	float transform[16];

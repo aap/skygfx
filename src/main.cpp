@@ -18,6 +18,8 @@ bool iCanHasbuildingPipe = true;
 bool iCanHasvehiclePipe = true;
 bool iCanHasSunGlare = true;
 
+bool privateHooks;
+
 int fixingSAMP;
 
 int numConfigs;
@@ -31,21 +33,6 @@ void *simplePS;
 void *gpCurrentShaderForDefaultCallbacks;
 bool gRenderingSpheremap;
 CVector reflectionCamPos;
-
-float *gfLaRiotsLightMult = (float*)0x8CD060;
-float *ambientColors = (float*)0xB7C4A0;
-
-GlobalScene &Scene = *(GlobalScene*)0xC17038;
-
-float &CTimer__ms_fTimeStep = *(float*)0xB7CB5C;
-CCamera &TheCamera = *(CCamera*)0xB6F028;
-float &CWeather__Rain = *(float*)(0xC81324);
-float &CWeather__UnderWaterness = *(float*)(0xC8132C);
-bool &CCutsceneMgr__ms_running = *(bool*)(0xB5F851);
-int* CGame__currArea = (int*)0xB72914;
-int* CEntryExitManager__ms_exitEnterState = (int*)0x96A7CC;
-
-WRAPPER CPlaceable *FindPlayerPed(int) { EAXJMP(0x56E210); }
 
 static int defaultColourLeftUOffset;
 static int defaultColourRightUOffset;
@@ -924,6 +911,9 @@ readIni(int n)
 	c->cbOffset = readfloat(cfg.get("SkyGfx", "CbOffset", ""), 0.0f);
 	c->crScale = readfloat(cfg.get("SkyGfx", "CrScale", ""), 1.23f);
 	c->crOffset = readfloat(cfg.get("SkyGfx", "CrOffset", ""), 0.0f);
+
+
+	privateHooks = readint(cfg.get("SkyGfx", "privateHooks", ""), 0);
 }
 
 void
@@ -1226,6 +1216,12 @@ InjectDelayedPatches()
 		InjectHook(0x742FE0, 0x743085, PATCH_JUMP);
 	}
 
+	if(privateHooks){
+		// PS2 splash
+		static const char *loadsc0 = "loadsc0";
+		Patch(0x5901BD + 1, loadsc0);
+	}
+
 	installMenu();
 
 	return FALSE;
@@ -1266,6 +1262,11 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 
 		// moon mask
 		InjectHook(0x713C4C, renderMoonMask, PATCH_JUMP);
+
+		// disable forced ztest on coronas. PS2 doesn't do it
+		Nop(0x6FB17C, 3);
+		// for reference: to get ztest on sun corona:
+		// Patch<uint8>(0x6FC705 + 1, 0);
 
 		IsAlreadyRunning = (int(*)())(*(int*)(0x74872D+1) + 0x74872D + 5);
 		InjectHook(0x74872D, InjectDelayedPatches);

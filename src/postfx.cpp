@@ -158,11 +158,11 @@ struct Colorcycle
 void
 CPostEffects::UpdateFrontBuffer(void)
 {
-	RwCameraEndUpdate(Camera);
+	RwCameraEndUpdate(Scene.camera);
 	RwRasterPushContext(CPostEffects::pRasterFrontBuffer);
-	RwRasterRenderFast(RwCameraGetRaster(Camera), 0, 0);
+	RwRasterRenderFast(RwCameraGetRaster(Scene.camera), 0, 0);
 	RwRasterPopContext();
-	RwCameraBeginUpdate(Camera);
+	RwCameraBeginUpdate(Scene.camera);
 }
 
 #ifdef VCS_POSTFX
@@ -565,7 +565,7 @@ CPostEffects::Radiosity(int intensityLimit, int filterPasses, int renderPasses, 
 
 	RwRaster *renderBuffer, *textureBuffer;
 
-	RwRaster *drawBuffer = RwCameraGetRaster(Camera);
+	RwRaster *drawBuffer = RwCameraGetRaster(Scene.camera);
 
 	RwInt32 w = RwRasterGetWidth(drawBuffer);
 	RwInt32 h = RwRasterGetHeight(drawBuffer);
@@ -576,7 +576,7 @@ CPostEffects::Radiosity(int intensityLimit, int filterPasses, int renderPasses, 
 	static RwIm2DVertex verts[4];
 
 	float nearscreen = RwIm2DGetNearScreenZ();
-	float nearcam = RwCameraGetNearClipPlane(Camera);
+	float nearcam = RwCameraGetNearClipPlane(Scene.camera);
 	float recipz = 1.0f/nearcam;
 	for(int i = 0; i < 4; i++){
 		RwIm2DVertexSetScreenZ(&verts[i], nearscreen);
@@ -594,9 +594,9 @@ CPostEffects::Radiosity(int intensityLimit, int filterPasses, int renderPasses, 
 
 	renderBuffer = workBuffer;
 	textureBuffer  = pRasterFrontBuffer;
-	RwCameraEndUpdate(Camera);
-	RwCameraSetRaster(Camera, renderBuffer);
-	RwCameraBeginUpdate(Camera);
+	RwCameraEndUpdate(Scene.camera);
+	RwCameraSetRaster(Scene.camera, renderBuffer);
+	RwCameraBeginUpdate(Scene.camera);
 	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, (void*)textureBuffer);
 
 	int downsampledwidth = w;
@@ -650,9 +650,9 @@ CPostEffects::Radiosity(int intensityLimit, int filterPasses, int renderPasses, 
 	RwD3D9SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_DISABLE);
 	RwD3D9SetTextureStageState(2, D3DTSS_COLOROP, D3DTOP_DISABLE);
 
-	RwCameraEndUpdate(Camera);
-	RwCameraSetRaster(Camera, drawBuffer);
-	RwCameraBeginUpdate(Camera);
+	RwCameraEndUpdate(Scene.camera);
+	RwCameraSetRaster(Scene.camera, drawBuffer);
+	RwCameraBeginUpdate(Scene.camera);
 	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, (void*)renderBuffer);
 
 	// Third step: add to framebuffer
@@ -831,7 +831,7 @@ CPostEffects::ColourFilter_PS2(RwRGBA rgba1, RwRGBA rgba2)
 		static RwIm2DVertex blurVerts[4];
 		float rasterWidth = RwRasterGetWidth(CPostEffects::pRasterFrontBuffer);
 		float rasterHeight = RwRasterGetHeight(CPostEffects::pRasterFrontBuffer);
-		float scale = RwRasterGetWidth(RwCameraGetRaster(Camera))/640.0f;
+		float scale = RwRasterGetWidth(RwCameraGetRaster(Scene.camera))/640.0f;
 		float leftOff   = m_colourLeftUOffset*scale   / 16.0f / rasterWidth;
 		float rightOff  = m_colourRightUOffset*scale  / 16.0f / rasterWidth;
 		float topOff    = m_colourTopVOffset*scale    / 16.0f / rasterHeight;

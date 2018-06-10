@@ -2,7 +2,8 @@
 
 RsGlobalType *RsGlobal = (RsGlobalType*)0xC17040;
 IDirect3DDevice9 *&d3d9device = *(IDirect3DDevice9**)0xC97C28;
-RwCamera *&Camera = *(RwCamera**)0xC1703C;
+
+GlobalScene &Scene = *(GlobalScene*)0xC17038;
 RpLight *&pAmbient = *(RpLight**)0xC886E8;
 RpLight *&pDirect = *(RpLight**)0xC886EC;
 RpLight **pExtraDirectionals = (RpLight**)0xC886F0;
@@ -11,6 +12,19 @@ D3DLIGHT9 &gCarEnvMapLight = *(D3DLIGHT9*)0xC02CB0;
 
 RwTexture *&gpWhiteTexture = *(RwTexture**)0xB4E3EC;
 
+
+float *gfLaRiotsLightMult = (float*)0x8CD060;
+float *ambientColors = (float*)0xB7C4A0;
+
+float &CTimer__ms_fTimeStep = *(float*)0xB7CB5C;
+CCamera &TheCamera = *(CCamera*)0xB6F028;
+float &CWeather__Rain = *(float*)(0xC81324);
+float &CWeather__UnderWaterness = *(float*)(0xC8132C);
+bool &CCutsceneMgr__ms_running = *(bool*)(0xB5F851);
+int* CGame__currArea = (int*)0xB72914;
+int* CEntryExitManager__ms_exitEnterState = (int*)0x96A7CC;
+
+WRAPPER CPlaceable *FindPlayerPed(int) { EAXJMP(0x56E210); }
 
 int16 &CClock__ms_nGameClockSeconds = *(short*)0xB70150;
 uint8 &CClock__ms_nGameClockMinutes = *(byte*)0xB70152;
