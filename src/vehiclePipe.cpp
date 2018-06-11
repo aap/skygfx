@@ -46,8 +46,8 @@ static RwV3d carfx_lightdir;	// view space
 static RwFrame *carfx_env1Frame, *carfx_env2Frame;
 
 // Leeds reflections
-static RwCamera *reflectionCam;
-static RwTexture *reflectionTex;
+RwCamera *reflectionCam;
+RwTexture *reflectionTex;
 static D3DMATRIX envtexmat;
 
 CustomEnvMapPipeAtomicData*
@@ -1220,161 +1220,30 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_mobile(RwResEntry *repEntry, void *
 }
 
 void
-RenderReflectionScene(void)
-{
-	if(CCutsceneMgr__ms_running)
-		reflectionCamPos = TheCamera.GetPosition();
-	else
-		reflectionCamPos = FindPlayerPed(-1)->GetPosition();
-
-	RwRenderStateSet(rwRENDERSTATEFOGENABLE, 0);
-	CRenderer__RenderRoads();
-	CRenderer__RenderEverythingBarRoads();
-	// this renders vehicles and peds in vehicles, probably don't want it here
-	// let's hope it doesn't render some other objects we'd like to see
-//	CRenderer__RenderFadingInEntities();
-}
-
-//////////// TEMP
-static RwIm2DVertex screenQuad[4];
-static RwImVertexIndex screenindices[6] = { 0, 1, 2, 0, 2, 3 };
-
-static void
-MakeQuadTexCoords(bool textureSpace)
-{
-	float minU, minV, maxU, maxV;
-	if(textureSpace){
-		minU = minV = 0.0f;
-		maxU = maxV = 1.0f;
-	}else{
-		assert(0 && "not implemented");
-	}
-	screenQuad[0].u = minU;
-	screenQuad[0].v = minV;
-	screenQuad[1].u = minU;
-	screenQuad[1].v = maxV;
-	screenQuad[2].u = maxU;
-	screenQuad[2].v = maxV;
-	screenQuad[3].u = maxU;
-	screenQuad[3].v = minV;
-}
-
-static void
-MakeScreenQuad(void)
-{
-	int width = reflectionTex->raster->width;
-	int height = reflectionTex->raster->height;
-	screenQuad[0].x = 0.0f;
-	screenQuad[0].y = 0.0f;
-	screenQuad[0].z = RwIm2DGetNearScreenZ();
-	screenQuad[0].rhw = 1.0f / reflectionCam->nearPlane;
-	screenQuad[0].emissiveColor = 0xFFFFFFFF;
-	screenQuad[1].x = 0.0f;
-	screenQuad[1].y = height;
-	screenQuad[1].z = screenQuad[0].z;
-	screenQuad[1].rhw = screenQuad[0].rhw;
-	screenQuad[1].emissiveColor = 0xFFFFFFFF;
-	screenQuad[2].x = width;
-	screenQuad[2].y = height;
-	screenQuad[2].z = screenQuad[0].z;
-	screenQuad[2].rhw = screenQuad[0].rhw;
-	screenQuad[2].emissiveColor = 0xFFFFFFFF;
-	screenQuad[3].x = width;
-	screenQuad[3].y = 0;
-	screenQuad[3].z = screenQuad[0].z;
-	screenQuad[3].rhw = screenQuad[0].rhw;
-	screenQuad[3].emissiveColor = 0xFFFFFFFF;
-	MakeQuadTexCoords(true);
-}
-
-////////////
-
-void
-RenderReflectionMap_leeds(void)
-{
-	RwCamera *cam = Scene.camera;
-	RwCameraEndUpdate(cam);
-
-	RwCameraSetViewWindow(reflectionCam, &cam->viewWindow);
-
-	RwFrameTransform(RwCameraGetFrame(reflectionCam), &RwCameraGetFrame(cam)->ltm, rwCOMBINEREPLACE);
-
-	RwRGBA color = { skyTopRed, skyTopGreen, skyTopBlue, 255 };
-//	RwRGBA color = { skyBotRed, skyBotGreen, skyBotBlue, 255 };
-
-	// blend a bit of white into the sky color, otherwise it tends to be very blue
-//	color.red = color.red*0.6f + 255*0.4f;
-//	color.green = color.green*0.6f + 255*0.4f;
-//	color.blue = color.blue*0.6f + 255*0.4f;
-	RwCameraClear(reflectionCam, &color, rwCAMERACLEARIMAGE | rwCAMERACLEARZ);
-
-	RwCameraBeginUpdate(reflectionCam);
-	RwCamera *savedcam = Scene.camera;
-	Scene.camera = reflectionCam;	// they do some begin/end updates with this in the called functions :/
-	RenderReflectionScene();
-	Scene.camera = savedcam;
-	RwCameraEndUpdate(reflectionCam);
-
-	RwCameraBeginUpdate(cam);
-}
-
-void
-RenderReflectionMap_mobile(void)
-{
-	RwCamera *cam = Scene.camera;
-	RwCameraEndUpdate(cam);
-
-	RwCameraSetViewWindow(reflectionCam, &cam->viewWindow);
-
-	RwFrameTransform(RwCameraGetFrame(reflectionCam), &RwCameraGetFrame(cam)->ltm, rwCOMBINEREPLACE);
-
-	RwRGBA color = { skyTopRed, skyTopGreen, skyTopBlue, 255 };
-	if(color.red < 64) color.red = 64;
-	if(color.green < 64) color.green = 64;
-	if(color.blue < 64) color.blue = 64;
-	RwCameraClear(reflectionCam, &color, rwCAMERACLEARIMAGE | rwCAMERACLEARZ);
-
-	RwCameraBeginUpdate(reflectionCam);
-	RwCamera *savedcam = Scene.camera;
-	Scene.camera = reflectionCam;	// they do some begin/end updates with this in the called functions :/
-	gRenderingSpheremap = true;
-	RenderReflectionScene();
-	gRenderingSpheremap = false;
-	Scene.camera = savedcam;
-	RwCameraEndUpdate(reflectionCam);
-
-	RwCameraBeginUpdate(cam);
-
-//	MakeScreenQuad();
-//	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, reflectionTex->raster);
-//	RwIm2DRenderIndexedPrimitive(rwPRIMTYPETRILIST, screenQuad, 4, screenindices, 6);
-}
-
-void
 CCustomCarEnvMapPipeline__CustomPipeRenderCB_Switch(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
 {
 	switch(config->vehiclePipe){
-	case 0:
+	case CAR_PS2:
 		CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(repEntry, object, type, flags);
 		break;
-	case 1:
+	case CAR_PC:
 		CCustomCarEnvMapPipeline__CustomPipeRenderCB_exe(repEntry, object, type, flags);
 		break;
-	case 2:
+	case CAR_XBOX:
 		CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(repEntry, object, type, flags);
 		break;
-	case 3:
+	case CAR_SPEC:
 		CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(repEntry, object, type, flags);
 		break;
-	case 4:
+	case CAR_NEO:
 		if(iCanHasNeoCar)
 			CarPipe::RenderCallback(repEntry, object, type, flags);
 		break;
-	case 5:
-	case 6:
+	case CAR_LCS:
+	case CAR_VCS:
 		CCustomCarEnvMapPipeline__CustomPipeRenderCB_leeds(repEntry, object, type, flags);
 		break;
-	case 7:
+	case CAR_MOBILE:
 		CCustomCarEnvMapPipeline__CustomPipeRenderCB_mobile(repEntry, object, type, flags);
 		break;
 	}

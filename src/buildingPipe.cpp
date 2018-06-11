@@ -487,13 +487,13 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_Switch(RwResEntry *repEntry, void 
 	else
 	switch(config->buildingPipe){
 	default:
-	case 0:
+	case BUILDING_PS2:
 		CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(repEntry, object, type, flags);
 		break;
-	case 1:
+	case BUILDING_PC:
 		CCustomBuildingDNPipeline__CustomPipeRenderCB_PC(repEntry, object, type, flags);
 		break;
-	case 2:
+	case BUILDING_MOBILE:
 		CCustomBuildingDNPipeline__CustomPipeRenderCB_Mobile(repEntry, object, type, flags);
 		break;
 	}

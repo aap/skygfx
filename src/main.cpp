@@ -310,6 +310,8 @@ myDefaultCallback(RpAtomic *atomic)
 	return pipe ? atomic : NULL;
 }
 
+/*
+// no longer needed as we're using our own render functions now
 RxNodeDefinition *nodeD3D9SkinAtomicAllInOneCSL = (RxNodeDefinition*)0x8DED08;
 RxNodeBodyFn __rwSkinD3D9AtomicAllInOneNode_orig;
 RwBool __rwSkinD3D9AtomicAllInOneNode_hook(RxPipelineNode *self, const RxPipelineNodeParam *params)
@@ -319,6 +321,7 @@ RwBool __rwSkinD3D9AtomicAllInOneNode_hook(RxPipelineNode *self, const RxPipelin
 		return 1;
 	return __rwSkinD3D9AtomicAllInOneNode_orig(self, params);
 }
+*/
 
 int tmpintensity;
 RwTexture **tmptexture = (RwTexture**)0xc02dc0;
@@ -613,11 +616,11 @@ RenderScene_hook(void)
 {
 	RenderScene();
 
-	if(config->vehiclePipe == 4)
+	if(config->vehiclePipe == CAR_NEO)
 		CarPipe::RenderEnvTex();
-	else if(config->vehiclePipe == 5 || config->vehiclePipe == 6)
+	else if(config->vehiclePipe == CAR_LCS || config->vehiclePipe == CAR_VCS)
 		RenderReflectionMap_leeds();
-	else if(config->vehiclePipe == 7)
+	else if(config->vehiclePipe == CAR_MOBILE)
 		RenderReflectionMap_mobile();
 }
 
@@ -778,9 +781,9 @@ readIni(int n)
 	config->dualPassGlobal = readint(cfg.get("SkyGfx", "dualPass", ""), 0);
 
 	static StrAssoc buildPipeMap[] = {
-		{"PS2",     0},
-		{"PC",      1},
-		{"Mobile",  2},
+		{"PS2",     BUILDING_PS2},
+		{"PC",      BUILDING_PC},
+		{"Mobile",  BUILDING_MOBILE},
 		{"",       -1},
 	};
 	c->buildingPipe = StrAssoc::get(buildPipeMap, cfg.get("SkyGfx", "buildingPipe", "").c_str());
@@ -793,15 +796,15 @@ readIni(int n)
 	c->dualPassBuilding = readint(cfg.get("SkyGfx", "dualPassBuilding", ""), config->dualPassGlobal);
 
 	static StrAssoc vehPipeMap[] = {
-		{"PS2",     0},
-		{"PC",      1},
-		{"Xbox",    2},
-		{"Spec",    3},
-		{"Neo",     4},
-		{"Leeds",   5},
-		{"LCS",     5},
-		{"VCS",     6},
-		{"Mobile",  7},
+		{"PS2",     CAR_PS2},
+		{"PC",      CAR_PC},
+		{"Xbox",    CAR_XBOX},
+		{"Spec",    CAR_SPEC},
+		{"Neo",     CAR_NEO},
+		{"Leeds",   CAR_LCS},
+		{"LCS",     CAR_LCS},
+		{"VCS",     CAR_VCS},
+		{"Mobile",  CAR_MOBILE},
 		{"",       -1},
 	};
 	c->vehiclePipe = StrAssoc::get(vehPipeMap, cfg.get("SkyGfx", "vehiclePipe", "").c_str());
@@ -1059,11 +1062,11 @@ installMenu(void)
 		menu.dualPassGlobal = DebugMenuAddVarBool32("SkyGFX", "Dual-pass Global", &config->dualPassGlobal, toggledDual);
 		menu.ps2ModulateGlobal = DebugMenuAddVarBool32("SkyGFX", "PS2-modulate Global", &config->ps2ModulateGlobal, toggledModulation);
 		if(iCanHasbuildingPipe){
-			menu.buildingPipe = DebugMenuAddVar("SkyGFX", "Building Pipeline", &config->buildingPipe, nil, 1, 0, 2, buildPipeStr);
+			menu.buildingPipe = DebugMenuAddVar("SkyGFX", "Building Pipeline", &config->buildingPipe, nil, 1, BUILDING_PS2, NUMBUILDINGPIPES-1, buildPipeStr);
 			DebugMenuEntrySetWrap(menu.buildingPipe, true);
 		}
 		if(iCanHasvehiclePipe){
-			menu.vehiclePipe = DebugMenuAddVar("SkyGFX", "Vehicle Pipeline", &config->vehiclePipe, nil, 1, 0, 7, vehPipeStr);
+			menu.vehiclePipe = DebugMenuAddVar("SkyGFX", "Vehicle Pipeline", &config->vehiclePipe, nil, 1, CAR_PS2, NUMCARPIPES-1, vehPipeStr);
 			DebugMenuEntrySetWrap(menu.vehiclePipe, true);
 		}
 		menu.grassAddAmbient = DebugMenuAddVarBool32("SkyGFX", "Add Ambient to Grass", &config->grassAddAmbient, nil);
@@ -1220,6 +1223,17 @@ InjectDelayedPatches()
 		// PS2 splash
 		static const char *loadsc0 = "loadsc0";
 		Patch(0x5901BD + 1, loadsc0);
+
+		// lens flare for police cars
+		Patch<uint8>(0x6AB9E6 + 1, 2);
+		Patch<uint8>(0x6ABA33 + 1, 2);
+		// and change distance to 50 (150*LODdist normally)
+		static const float one = 1.0f;
+		Patch(0x6AB9BE + 2, &one);
+		Patch(0x6ABA0B + 2, &one);
+		static const float flaredist = 50.0f;
+		Patch(0x6AB9C6 + 2, &flaredist);
+		Patch(0x6ABA13 + 2, &flaredist);
 	}
 
 	installMenu();
@@ -1360,8 +1374,9 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 
 		// Hook Skin Pipe so we can easily cull peds
 		// TODO: do this with other pipelines too
-		__rwSkinD3D9AtomicAllInOneNode_orig = nodeD3D9SkinAtomicAllInOneCSL->nodeMethods.nodeBody;
-		nodeD3D9SkinAtomicAllInOneCSL->nodeMethods.nodeBody = __rwSkinD3D9AtomicAllInOneNode_hook;
+		// No longer needed
+		//__rwSkinD3D9AtomicAllInOneNode_orig = nodeD3D9SkinAtomicAllInOneCSL->nodeMethods.nodeBody;
+		//nodeD3D9SkinAtomicAllInOneCSL->nodeMethods.nodeBody = __rwSkinD3D9AtomicAllInOneNode_hook;
 
 void hooktexdb();
 		hooktexdb();

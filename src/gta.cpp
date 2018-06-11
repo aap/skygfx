@@ -45,6 +45,9 @@ int &dword_C9BC60 = *(int*)0xC9BC60;
 RxPipeline *&skinPipe = *(RxPipeline**)0xC978C4;
 RxPipeline *&CCustomCarEnvMapPipeline__ObjPipeline = *(RxPipeline**)0xC02D24;
 
+WRAPPER float CGeneral::GetATanOfXY(float x, float y) { EAXJMP(0x53CC70); }
+
+WRAPPER void DefinedState(void) { EAXJMP(0x734650); }
 
 WRAPPER RwMatrix *RwFrameGetLTM(RwFrame * frame) { EAXJMP(0x7F0990); }
 WRAPPER RpMaterial *RpMaterialSetTexture(RpMaterial *mat, RwTexture *tex) { EAXJMP(0x74DBC0); }

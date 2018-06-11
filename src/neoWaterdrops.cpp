@@ -142,8 +142,6 @@ static uint32_t CCullZones__PlayerNoRain_A = (uint32_t)(0x72DDC0);
 WRAPPER bool CCullZones__PlayerNoRain(void) { VARJMP(CCullZones__PlayerNoRain_A); }
 static uint32_t FindPlayerVehicle_A = (uint32_t)(0x56E0D0);
 WRAPPER bool FindPlayerVehicle(uint32_t, uint8_t) { VARJMP(FindPlayerVehicle_A); }
-static uint32_t DefinedState_A = (addr)(0x734650);
-WRAPPER void DefinedState(void) { VARJMP(DefinedState_A); }
 
 struct CPad
 {

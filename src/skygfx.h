@@ -3,6 +3,7 @@
 #pragma warning(disable: 4800)	// int to bool
 #pragma warning(disable: 4838)  // narrowing conversion
 
+#define _USE_MATH_DEFINES
 
 #include <windows.h>
 #include <rwcore.h>
@@ -29,6 +30,12 @@ extern HMODULE dllModule;
 
 #define nil NULL
 #define VERSION 0x370
+
+class CGeneral
+{
+public:
+	static float GetATanOfXY(float x, float y);
+};
 
 struct CVector
 {
@@ -73,6 +80,29 @@ extern float &CWeather__UnderWaterness;
 extern bool &CCutsceneMgr__ms_running;
 extern int* CGame__currArea;
 extern int* CEntryExitManager__ms_exitEnterState;
+
+enum CarPipeline
+{
+	CAR_PS2,
+	CAR_PC,
+	CAR_XBOX,
+	CAR_SPEC,
+	CAR_NEO,
+	CAR_LCS,
+	CAR_VCS,
+	CAR_MOBILE,
+
+	NUMCARPIPES
+};
+
+enum BuildingPipeline
+{
+	BUILDING_PS2,
+	BUILDING_PC,
+	BUILDING_MOBILE,
+
+	NUMBUILDINGPIPES
+};
 
 struct Config {
 	// these are at fixed offsets
@@ -342,6 +372,8 @@ void initTexDB(void);
 
 extern bool gRenderingSpheremap;
 extern CVector reflectionCamPos;
+
+void DefinedState(void);
 
 RxPipeline *CCustomBuildingPipeline__CreateCustomObjPipe_PS2(void);
 RxPipeline *CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2(void);
