@@ -133,7 +133,6 @@ WRAPPER RwUInt16 CVisibilityPlugins__GetAtomicId(RpAtomic *atomic) { EAXJMP(0x73
 
 WRAPPER RpAtomic *CCustomCarEnvMapPipeline__CustomPipeAtomicSetup(RpAtomic *atomic) { EAXJMP(0x5DA610); }
 WRAPPER char *GetFrameNodeName(RwFrame *frame) { EAXJMP(0x72FB30); }
-WRAPPER void SetPipelineID(RpAtomic*, unsigned int it) { EAXJMP(0x72FC50); }
 WRAPPER RpAtomic *AtomicDefaultRenderCallBack(RpAtomic*) { EAXJMP(0x7491C0); };
 WRAPPER void CCustomCarEnvMapPipeline__CustomPipeRenderCB_exe(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags) { EAXJMP(0x5D9900) };
 WRAPPER void GTAfree(void *data) { EAXJMP(0x82413F); }

@@ -1,5 +1,5 @@
 #include "skygfx.h"
-
+#include "ModuleList.hpp"
 
 RwIm2DVertex *colorfilterVerts = (RwIm2DVertex*)0xC400D8;
 RwImVertexIndex *colorfilterIndices = (RwImVertexIndex*)0x8D5174;
@@ -1344,7 +1344,7 @@ interpolateColorcycle(Grade *red, Grade *green, Grade *blue)
 void
 Colorcycle::Initialise(void)
 {
-	int have24h = GetModuleHandle("timecycle24") != 0 || GetModuleHandle("timecycle24.asi") != 0;
+	int have24h = ModuleList().Get(L"timecycle24") != 0;
 	for(int i = 0; i < 24; i++)
 		for(int j = 0; j < NUMHOURS; j++){
 			redGrade[j][i].r = 1.0f;

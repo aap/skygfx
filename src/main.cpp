@@ -2,6 +2,7 @@
 #include "neo.h"
 #include "ini_parser.hpp"
 #include "debugmenu_public.h"
+#include "ModuleList.hpp"
 
 HMODULE dllModule;
 DebugMenuAPI gDebugMenuAPI;
@@ -144,7 +145,7 @@ D3D9RenderDual(int dual, RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceDat
 
 // Add a dual pass to the PC pipeline, the lazy way
 void
-D3D9RenderNotLit_DUAL(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData)
+D3D9RenderBlack_DUAL(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData)
 {
 	RwD3D9SetPixelShader(NULL);
 	RwD3D9SetVertexShader(instanceData->vertexShader);
@@ -152,7 +153,7 @@ D3D9RenderNotLit_DUAL(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *
 }
 
 void
-D3D9RenderPreLit_DUAL(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData, RwUInt8 flags, RwTexture *texture)
+D3D9RenderDefault_DUAL(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData, RwUInt8 flags, RwTexture *texture)
 {
 	if(flags & (rxGEOMETRY_TEXTURED2 | rxGEOMETRY_TEXTURED)){
 		RwD3D9SetTexture(texture, 0);
@@ -310,7 +311,35 @@ myDefaultCallback(RpAtomic *atomic)
 	return pipe ? atomic : NULL;
 }
 
-/*
+float
+clamp(float f, float max)
+{
+	return f > max ? max : f;
+}
+
+// For Mobile-style lights
+static RwRGBAReal savedAmb;
+static RwRGBAReal savedDir;
+void
+BrightenLights(void)
+{
+	savedAmb = pAmbient->color;
+	pAmbient->color.red = clamp(pAmbient->color.red*1.5f, 1.0f);
+	pAmbient->color.green = clamp(pAmbient->color.green*1.5f, 1.0f);
+	pAmbient->color.blue = clamp(pAmbient->color.blue*1.5f, 1.0f);
+	savedDir = pDirect->color;
+	pDirect->color.red = clamp(pDirect->color.red*1.5f, 1.0f);
+	pDirect->color.green = clamp(pDirect->color.green*1.5f, 1.0f);
+	pDirect->color.blue = clamp(pDirect->color.blue*1.5f, 1.0f);
+}
+
+void
+RestoreLights(void)
+{
+	pAmbient->color = savedAmb;
+	pDirect->color = savedDir;
+}
+
 // no longer needed as we're using our own render functions now
 RxNodeDefinition *nodeD3D9SkinAtomicAllInOneCSL = (RxNodeDefinition*)0x8DED08;
 RxNodeBodyFn __rwSkinD3D9AtomicAllInOneNode_orig;
@@ -319,9 +348,12 @@ RwBool __rwSkinD3D9AtomicAllInOneNode_hook(RxPipelineNode *self, const RxPipelin
 	// Don't render peds when we're rendering reflections
 	if(gRenderingSpheremap)
 		return 1;
-	return __rwSkinD3D9AtomicAllInOneNode_orig(self, params);
+//	BrightenLights();
+	RwBool ret = __rwSkinD3D9AtomicAllInOneNode_orig(self, params);
+//	RestoreLights();
+	return ret;
 }
-*/
+
 
 int tmpintensity;
 RwTexture **tmptexture = (RwTexture**)0xc02dc0;
@@ -332,7 +364,7 @@ setTextureAndColor(RpMaterial *material, RwRGBA *color)
 {
 	RwTexture *texture;
 	RwRGBA newcolor;
-	unsigned int col[3];
+	uint col[3];
 
 	texture = *tmptexture;
 	col[0] = color->red;
@@ -782,7 +814,8 @@ readIni(int n)
 
 	static StrAssoc buildPipeMap[] = {
 		{"PS2",     BUILDING_PS2},
-		{"PC",      BUILDING_PC},
+		{"PC",      BUILDING_XBOX},
+		{"Xbox",    BUILDING_XBOX},
 		{"Mobile",  BUILDING_MOBILE},
 		{"",       -1},
 	};
@@ -1050,7 +1083,7 @@ installMenu(void)
 	DebugMenuEntry *e;
 	if(DebugMenuLoad()){
 		static const char *ps2pcStr[] = { "PS2", "PC" };
-		static const char *buildPipeStr[] = { "PS2", "PC", "Mobile" };
+		static const char *buildPipeStr[] = { "PS2", "Xbox", "Mobile" };
 		static const char *vehPipeStr[] = { "PS2", "PC", "Xbox", "Spec", "Neo", "LCS", "VCS", "Mobile" };
 		static const char *colFilterStr[] = { "None", "PS2", "PC", "Mobile", "III", "VC", "VCS" };
 		static const char *lightningStr[] = { "Sky only", "Sky and objects" };
@@ -1142,7 +1175,7 @@ InjectDelayedPatches()
 		readIni(1);
 	// only load one ini for now, others are loaded later by readInis()
 
-	fixingSAMP = GetModuleHandle("samp") != 0 || GetModuleHandle("SAMPGraphicRestore") != 0 || GetModuleHandle("SAMPGraphicRestore.asi") != 0;
+	fixingSAMP = ModuleList().Get(L"samp") || ModuleList().Get(L"SAMPGraphicRestore");
 
 	InterceptCall(&InitialiseGame, InitialiseGame_hook, 0x748CFB);
 
@@ -1293,11 +1326,11 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		InjectHook(0x756DFE, rxD3D9DefaultRenderCallback_Hook, PATCH_JUMP);
 		InjectHook(0x5DADB7, fixSeed, PATCH_JUMP);
 		InjectHook(0x5DAE61, saveIntensity, PATCH_JUMP);
-		Patch<DWORD>(0x5DAEC8, (DWORD)setTextureAndColor);
+		Patch(0x5DAEC8, setTextureAndColor);
 
 		// add dual pass for PC pipeline
-		InjectHook(0x5D9EEB, D3D9RenderPreLit_DUAL);
-		InjectHook(0x5D9EFB, D3D9RenderNotLit_DUAL);
+		InjectHook(0x5D9EEB, D3D9RenderDefault_DUAL);
+		InjectHook(0x5D9EFB, D3D9RenderBlack_DUAL);
 		// give vehicle pipe to upgrade parts
 		//InjectHook(0x4C88F0, 0x5DA610, PATCH_JUMP);
 
@@ -1375,8 +1408,8 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		// Hook Skin Pipe so we can easily cull peds
 		// TODO: do this with other pipelines too
 		// No longer needed
-		//__rwSkinD3D9AtomicAllInOneNode_orig = nodeD3D9SkinAtomicAllInOneCSL->nodeMethods.nodeBody;
-		//nodeD3D9SkinAtomicAllInOneCSL->nodeMethods.nodeBody = __rwSkinD3D9AtomicAllInOneNode_hook;
+//		__rwSkinD3D9AtomicAllInOneNode_orig = nodeD3D9SkinAtomicAllInOneCSL->nodeMethods.nodeBody;
+//		nodeD3D9SkinAtomicAllInOneCSL->nodeMethods.nodeBody = __rwSkinD3D9AtomicAllInOneNode_hook;
 
 void hooktexdb();
 		hooktexdb();

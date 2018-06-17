@@ -1,5 +1,23 @@
 #include "skygfx.h"
 
+// GTA pipeline
+
+RwInt32 &gtaPipeOffset = *(RwInt32*)0x8D6080;
+
+uint32
+GetPipelineID(RpAtomic *atomic)
+{
+	return *RWPLUGINOFFSET(uint32, atomic, gtaPipeOffset);
+}
+
+void
+SetPipelineID(RpAtomic *atomic, uint32 id)
+{
+	*RWPLUGINOFFSET(uint32, atomic, gtaPipeOffset) = id;
+}
+
+// PDS pipeline hack
+
 RwInt32 pdsMatOffset;
 RwInt32 pdsAtmOffset;
 
@@ -28,12 +46,20 @@ RwBool
 pdsAtmCB(void *object, RwInt32, RwInt32, RwUInt32 extraData)
 {
 	RpAtomic *atomic = (RpAtomic*)object;
-	if(extraData == 0x53f20080)
-		if(buildingPipeline)
+	if(extraData == PDS_PS2_CustomBuilding_AtmPipeID ||
+	   extraData == PDS_PS2_CustomBuildingEnvMap_AtmPipeID ||
+	   extraData == PDS_PS2_CustomBuildingUVA_AtmPipeID)
+		if(buildingPipeline){
 			atomic->pipeline = buildingPipeline;
-	if(extraData == 0x53f20082)
-		if(buildingDNPipeline)
+			SetPipelineID(atomic, RSPIPE_PC_CustomBuilding_PipeID);
+		}
+	if(extraData == PDS_PS2_CustomBuildingDN_AtmPipeID ||
+	   extraData == PDS_PS2_CustomBuildingDNEnvMap_AtmPipeID ||
+	   extraData == PDS_PS2_CustomBuildingDNUVA_AtmPipeID)
+		if(buildingDNPipeline){
 			atomic->pipeline = buildingDNPipeline;
+			SetPipelineID(atomic, RSPIPE_PC_CustomBuildingDN_PipeID);
+		}
 	return TRUE;
 }
 

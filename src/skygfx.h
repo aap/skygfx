@@ -31,55 +31,8 @@ extern HMODULE dllModule;
 #define nil NULL
 #define VERSION 0x370
 
-class CGeneral
-{
-public:
-	static float GetATanOfXY(float x, float y);
-};
+#include "gta.h"
 
-struct CVector
-{
-	float x, y, z;
-};
-
-struct CMatrix
-{
-	RwMatrix matrix;
-	RwMatrix *pMatrix;
-	int haveRwMatrix;
-};
-
-struct CSimpleTransform
-{
-	CVector pos;
-	float angle;
-};
-
-struct CPlaceable
-{
-	void *vtable;
-	CSimpleTransform placement;
-	CMatrix *m_pCoords;
-	CVector GetPosition(void){
-		if(m_pCoords)
-			return *(CVector*)&m_pCoords->matrix.pos;
-		else
-			return placement.pos;
-	}
-};
-struct CCamera : CPlaceable
-{
-};
-
-CPlaceable *FindPlayerPed(int);
-
-extern float &CTimer__ms_fTimeStep;
-extern CCamera &TheCamera;
-extern float &CWeather__Rain;
-extern float &CWeather__UnderWaterness;
-extern bool &CCutsceneMgr__ms_running;
-extern int* CGame__currArea;
-extern int* CEntryExitManager__ms_exitEnterState;
 
 enum CarPipeline
 {
@@ -98,7 +51,7 @@ enum CarPipeline
 enum BuildingPipeline
 {
 	BUILDING_PS2,
-	BUILDING_PC,
+	BUILDING_XBOX,
 	BUILDING_MOBILE,
 
 	NUMBUILDINGPIPES
@@ -157,60 +110,6 @@ void setConfig(void);
 
 extern int envMapSize;
 
-struct CustomEnvMapPipeMaterialData
-{
-	int8 scaleX;
-	int8 scaleY;
-	int8 transScaleX;
-	int8 transScaleY;
-	int8 shininess;
-	uint8 pad3;
-	uint16 renderFrameCounter;
-	RwTexture *texture;
-};
-
-struct CustomEnvMapPipeAtomicData
-{
-	float trans;
-	float posx;
-	float posy;
-
-	void *operator new(size_t size);
-};
-CustomEnvMapPipeAtomicData *CCustomCarEnvMapPipeline__AllocEnvMapPipeAtomicData(RpAtomic *atomic);
-
-struct CustomSpecMapPipeMaterialData
-{
-	float specularity;
-	RwTexture *texture;
-};
-
-struct PsGlobalType
-{
-	HWND	window;
-	DWORD	instance;
-	DWORD	fullscreen;
-	DWORD	lastMousePos_X;
-	DWORD	lastMousePos_Y;
-	DWORD	unk;
-	DWORD	diInterface;
-	DWORD	diMouse;
-	void*	diDevice1;
-	void*	diDevice2;
-};
-
-struct RsGlobalType
-{
-	DWORD			AppName;
-	DWORD			MaximumWidth;
-	DWORD			MaximumHeight;
-	DWORD			frameLimit;
-	DWORD			quit;
-	PsGlobalType*	ps;
-	void*			keyboard;
-	void*			mouse;
-	void*			pad;
-};
 
 enum {
 	COLORFILTER_NONE   = 0,
@@ -222,32 +121,6 @@ enum {
 #ifdef DEBUG
 	COLORFILTER_VCS    = 6,
 #endif
-};
-
-struct GlobalScene
-{
-	RpWorld *world;
-	RwCamera *camera;
-};
-extern GlobalScene &Scene;
-
-struct Imf
-{
-	float zScreenNear;
-	float recipZ;
-	RwRaster *frontBuffer;
-	int width;
-	int height;
-	float umin;
-	float vmin;
-	float umax;
-	float vmax;
-	RwD3D9Vertex triangle_verts[3];
-	float tri_umin;
-	float tri_umax;
-	float tri_vmin;
-	float tri_vmax;
-	RwD3D9Vertex quad_verts[4];
 };
 
 struct CPostEffects
@@ -373,8 +246,6 @@ void initTexDB(void);
 extern bool gRenderingSpheremap;
 extern CVector reflectionCamPos;
 
-void DefinedState(void);
-
 RxPipeline *CCustomBuildingPipeline__CreateCustomObjPipe_PS2(void);
 RxPipeline *CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2(void);
 int PDSPipePluginAttach(void);
@@ -385,46 +256,9 @@ void D3D9RenderDual(int dual, RxD3D9ResEntryHeader *resEntryHeader, RxD3D9Instan
 
 void fixSAMP(void);
 
-double CTimeCycle_GetAmbientRed(void);
-double CTimeCycle_GetAmbientGreen(void);
-double CTimeCycle_GetAmbientBlue(void);
-
-#define RwEngineInstance (*rwengine)
-extern RsGlobalType *RsGlobal;
-extern IDirect3DDevice9 *&d3d9device;
-extern RpLight *&pAmbient;
-extern RpLight *&pDirect;
-extern RpLight **pExtraDirectionals;
-extern int &NumExtraDirLightsInWorld;
-extern D3DLIGHT9 &gCarEnvMapLight;
-
 extern RxPipeline *buildingPipeline, *buildingDNPipeline;
 
-extern RwTexture *&gpWhiteTexture;
 extern RwInt32 pdsOffset;
-
-extern int16 &CClock__ms_nGameClockSeconds;
-extern uint8 &CClock__ms_nGameClockMinutes;
-extern uint8 &CClock__ms_nGameClockHours;
-extern int16 &CWeather__OldWeatherType;
-extern int16 &CWeather__NewWeatherType;
-extern float &CWeather__InterpolationValue;
-
-extern void **rwengine;
-extern RwInt32 &CCustomCarEnvMapPipeline__ms_envMapPluginOffset;
-extern RwInt32 &CCustomCarEnvMapPipeline__ms_envMapAtmPluginOffset;
-extern RwInt32 &CCustomCarEnvMapPipeline__ms_specularMapPluginOffset;
-extern RwReal &CCustomCarEnvMapPipeline__m_EnvMapLightingMult;
-extern RwInt32 &CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset;
-extern RwReal &CCustomBuildingDNPipeline__m_fDNBalanceParam;
-
-void CRenderer__RenderRoads(void);
-void CRenderer__RenderEverythingBarRoads(void);
-void CRenderer__RenderFadingInEntities(void);
-void CRenderer__RenderFadingInUnderwaterEntities(void);
-extern short &skyTopRed, &skyTopGreen, &skyTopBlue;
-extern short &skyBotRed, &skyBotGreen, &skyBotBlue;
-
 
 //////// Pipelines
 ///// Shaders
@@ -442,7 +276,8 @@ extern void *iiiTrailsPS, *vcTrailsPS;
 extern void *gradingPS, *contrastPS;
 // building
 extern void *ps2BuildingVS, *ps2BuildingFxVS;
-extern void *pcBuildingVS, *pcBuildingPS, *mobileBuildingPS, *mobileBuildingVS;
+extern void *xboxBuildingVS, *xboxBuildingPS;
+extern void *mobileBuildingVS, *mobileBuildingPS;
 extern void *sphereBuildingVS;
 void CreateShaders(void);
 void RwToD3DMatrix(void *d3d, RwMatrix *rw);
@@ -480,7 +315,6 @@ RwBool D3D9RestoreSurfaceProperties(void);
 RwUInt16 CVisibilityPlugins__GetAtomicId(RpAtomic *atomic);
 RpAtomic *CCustomCarEnvMapPipeline__CustomPipeAtomicSetup(RpAtomic *atomic);
 char *GetFrameNodeName(RwFrame *frame);
-void SetPipelineID(RpAtomic*, unsigned int it);
 RpAtomic *AtomicDefaultRenderCallBack(RpAtomic*);
 void CCustomCarEnvMapPipeline__CustomPipeRenderCB_exe(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags);
 void GTAfree(void *data);

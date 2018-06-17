@@ -1,7 +1,8 @@
 #include "skygfx.h"
 
 void *ps2BuildingVS, *ps2BuildingFxVS;
-void *pcBuildingVS, *pcBuildingPS, *mobileBuildingPS, *mobileBuildingVS;
+void *xboxBuildingVS, *xboxBuildingPS;
+void *mobileBuildingVS, *mobileBuildingPS;
 void *sphereBuildingVS;
 RxPipeline *buildingPipeline, *buildingDNPipeline;
 
@@ -102,7 +103,7 @@ setDnParams(RpAtomic *atomic)
 	nightparam[0] = nightparam[1] = nightparam[2] = balance;
 	nightparam[3] = 1.0f - CWeather__WetRoads;
 
-	int noExtraColors = atomic->pipeline->pluginData == 0x53F2009C;
+	int noExtraColors = atomic->pipeline->pluginData == RSPIPE_PC_CustomBuilding_PipeID;
 
 	// If no extra colors, force the one we have (night, unintuitively).
 	// Night colors are guaranteed to be present by the instance callback.
@@ -207,12 +208,12 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 			envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
 			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
 			RwD3D9SetTexture(envData->texture, 1);
-			fxParams.shininess = envData->shininess/255.0f;
+			fxParams.shininess = envData->GetShininess();
 			fxParams.lightmult = 1.0;
 			envXform.x = 0.0;
 			envXform.y = 0.0;
-			envXform.z = envData->scaleX / 8.0f;
-			envXform.w = envData->scaleY / 8.0f;
+			envXform.z = envData->GetScaleX();
+			envXform.w = envData->GetScaleY();
 			RwD3D9SetVertexShaderConstant(REG_envXform, &envXform, 1);
 			RwD3D9SetVertexShaderConstant(REG_fxParams, &fxParams, 1);
 
@@ -244,8 +245,9 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 	RwD3D9SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_DISABLE);
 }
 
+// The PC callback cannot be salvaged. Just do it Xbox-style instead
 void
-CCustomBuildingDNPipeline__CustomPipeRenderCB_PC(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
+CCustomBuildingDNPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
 {
 	RpAtomic *atomic;
 	RxD3D9ResEntryHeader *resEntryHeader;
@@ -255,6 +257,11 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PC(RwResEntry *repEntry, void *obj
 	CustomEnvMapPipeMaterialData *envData;
 	RwBool hasAlpha;
 	float colorScale;
+	struct {
+		float shininess;
+		float lightmult;
+	} fxParams;
+	RwV4d envXform;
 	RwMatrix envmat;
 	float transform[16];
 
@@ -311,32 +318,35 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PC(RwResEntry *repEntry, void *obj
 		hasAlpha = instancedData->vertexAlpha || instancedData->material->color.alpha != 255;
 		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)hasAlpha);
 
-		pipeUploadMatCol(flags, material, REG_matCol);
+		RwD3D9SetVertexShaderConstant(REG_ambient, &buildingAmbient, 1);
 
-		if(flags & rpGEOMETRYLIGHT)
-			RwD3D9SetVertexShaderConstant(REG_ambient, &buildingAmbient, 1);
-		else
-			pipeUploadZero(REG_ambient);
-		RwD3D9SetVertexShaderConstant(REG_surfProps, &material->surfaceProps, 1);
+		if(flags & rpGEOMETRYLIGHT){
+			pipeUploadMatCol(flags, material, REG_matCol);
+			RwD3D9SetVertexShaderConstant(REG_surfProps, &material->surfaceProps, 1);
+		}else{
+			static float white[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+			RwSurfaceProperties surf = { 1.0f, 1.0f, 1.0f };
+			RwD3D9SetVertexShaderConstant(REG_matCol, white, 1);
+			RwD3D9SetVertexShaderConstant(REG_surfProps, &surf, 1);
+		}
 
 		if(*(int*)&material->surfaceProps.specular & 1){
 			envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
 			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
 			RwD3D9SetTexture(envData->texture, 1);
-			/* set by default PC callback but not used:
-				fxParams.shininess = envData->shininess/255.0f;
-				fxParams.lightmult = 1.0f;
-				envXform.x = 0.0f;
-				envXform.y = 0.0f;
-				envXform.z = envData->scaleX / 8.0f;
-				envXform.w = envData->scaleY / 8.0f;
-				RwD3D9SetVertexShaderConstant(REG_envXform, &envXform, 1);
-			*/
-			RwD3D9SetPixelShader(pcBuildingPS);
+			fxParams.shininess = envData->GetShininess();
+			fxParams.lightmult = 1.0f;
+			envXform.x = 0.0f;
+			envXform.y = 0.0f;
+			envXform.z = envData->GetScaleX();
+			envXform.w = envData->GetScaleY();
+			RwD3D9SetVertexShaderConstant(REG_envXform, &envXform, 1);
+			RwD3D9SetVertexShaderConstant(REG_fxParams, &fxParams, 1);
+			RwD3D9SetPixelShader(xboxBuildingPS);
 		}else
 			RwD3D9SetPixelShader(simplePS);
 
-		RwD3D9SetVertexShader(pcBuildingVS);
+		RwD3D9SetVertexShader(xboxBuildingVS);
 
 		D3D9RenderDual(config->dualPassBuilding, resEntryHeader, instancedData);
 
@@ -349,7 +359,6 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PC(RwResEntry *repEntry, void *obj
 	RwD3D9SetTextureStageState(1, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
 	RwD3D9SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, 1);
 	RwD3D9SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_DISABLE);
-
 }
 
 void
@@ -446,7 +455,7 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_Mobile(RwResEntry *repEntry, void 
 			envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
 			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
 			RwD3D9SetTexture(envData->texture, 1);
-			RwD3D9SetPixelShader(pcBuildingPS);
+			RwD3D9SetPixelShader(xboxBuildingPS);
 		}else
 			RwD3D9SetPixelShader(simplePS);
 */
@@ -482,6 +491,9 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_Mobile(RwResEntry *repEntry, void 
 void
 CCustomBuildingDNPipeline__CustomPipeRenderCB_Switch(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
 {
+//	if(GetAsyncKeyState(VK_F4) & 0x8000)
+//		return;
+
 	if(gRenderingSpheremap)
 		CCustomBuildingDNPipeline__CustomPipeRenderCB_Mobile(repEntry, object, type, flags);
 	else
@@ -490,8 +502,8 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_Switch(RwResEntry *repEntry, void 
 	case BUILDING_PS2:
 		CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(repEntry, object, type, flags);
 		break;
-	case BUILDING_PC:
-		CCustomBuildingDNPipeline__CustomPipeRenderCB_PC(repEntry, object, type, flags);
+	case BUILDING_XBOX:
+		CCustomBuildingDNPipeline__CustomPipeRenderCB_Xbox(repEntry, object, type, flags);
 		break;
 	case BUILDING_MOBILE:
 		CCustomBuildingDNPipeline__CustomPipeRenderCB_Mobile(repEntry, object, type, flags);
@@ -518,18 +530,30 @@ isNightColorZero(RwRGBA *rgbac, int nv)
 }
 
 RwRGBA*
-getVertexColors(RpGeometry *geometry)
+GetVertColourPtr(RpGeometry *geometry)
 {
-	RwRGBA *day = *RWPLUGINOFFSET(RwRGBA*, geometry, CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset + 4);
+	return *RWPLUGINOFFSET(RwRGBA*, geometry, CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset+4);
+}
+
+RwRGBA*
+GetExtraVertColourPtr(RpGeometry *geometry)
+{
+	return *RWPLUGINOFFSET(RwRGBA*, geometry, CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset);
+}
+
+RwRGBA*
+GetInstVertexColors(RpGeometry *geometry)
+{
+	RwRGBA *day = GetVertColourPtr(geometry);
 	if(day == NULL)
 		return geometry->preLitLum;
 	return day;
 }
 
 RwRGBA*
-getExtraColors(RpGeometry *geometry)
+GetInstExtraColors(RpGeometry *geometry)
 {
-	RwRGBA *night = *RWPLUGINOFFSET(RwRGBA*, geometry, CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset);
+	RwRGBA *night = GetExtraVertColourPtr(geometry);
 	if(night && isNightColorZero(night, geometry->numVertices))
 		return NULL;
 	return night;
@@ -568,8 +592,8 @@ DNInstance_PS2(void *object, RxD3D9ResEntryHeader *resEntryHeader, RwBool reinst
 	morphTarget = geometry->morphTarget;
 	isPrelit = geometry->flags & rpGEOMETRYPRELIT;
 	hasNormals = geometry->flags & rpGEOMETRYNORMALS;
-	day = getVertexColors(geometry);
-	night = getExtraColors(geometry);
+	day = GetInstVertexColors(geometry);
+	night = GetInstExtraColors(geometry);
 	if(reinstance){
 		IDirect3DVertexDeclaration9 *vertDecl = (IDirect3DVertexDeclaration9*)resEntryHeader->vertexDeclaration;
 		vertDecl->GetDeclaration(dcl, (UINT*)&i);
@@ -753,8 +777,8 @@ CCustomBuildingPipeline__CreateCustomObjPipe_PS2(void)
 
 	CreateShaders();
 
-	pipeline->pluginId = 0x53F2009C;
-	pipeline->pluginData = 0x53F2009C;
+	pipeline->pluginId = RSPIPE_PC_CustomBuilding_PipeID;
+	pipeline->pluginData = RSPIPE_PC_CustomBuilding_PipeID;
 	buildingPipeline = pipeline;
 	return pipeline;
 }
@@ -785,12 +809,31 @@ CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2(void)
 
 	CreateShaders();
 
-	pipeline->pluginId = 0x53F20098;
-	pipeline->pluginData = 0x53F20098;
+	pipeline->pluginId = RSPIPE_PC_CustomBuildingDN_PipeID;
+	pipeline->pluginData = RSPIPE_PC_CustomBuildingDN_PipeID;
 	buildingDNPipeline = pipeline;
 	return pipeline;
 }
 
+RwBool
+CCustomBuildingRenderer__IsCBPCPipelineAttached(RpAtomic *atomic)
+{
+	uint32 pipeID = GetPipelineID(atomic);
+	RpGeometry *geo = RpAtomicGetGeometry(atomic);
+	RxPipeline *pipe;
+	RpAtomicGetPipeline(atomic, &pipe);
+
+	// This is the correct way to check for a building
+	if(pipeID == RSPIPE_PC_CustomBuilding_PipeID || pipeID == RSPIPE_PC_CustomBuildingDN_PipeID)
+		return TRUE;
+
+	// This is only a building in this case if we don't have another pipe attached already!
+	// Skin or MatFX may already be attached and we'd like to use them
+	if(pipe == nil && GetExtraVertColourPtr(geo) && RpGeometryGetPreLightColors(geo))
+		return TRUE;
+
+	return FALSE;
+}
 
 void
 hookBuildingPipe(void)
@@ -798,8 +841,9 @@ hookBuildingPipe(void)
 	InterceptCall(&CustomBuildingPipeline__Update_orig, CustomBuildingPipeline__Update, 0x53C15E);
 	InjectHook(0x5D7100, CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2);
 	InjectHook(0x5D7D90, CCustomBuildingPipeline__CreateCustomObjPipe_PS2);
-	Patch<BYTE>(0x5D7200, 0xC3);	// disable interpolation
+	Patch<uint8>(0x5D7200, 0xC3);	// disable interpolation
 
+	InjectHook(0x5D7F40, CCustomBuildingRenderer__IsCBPCPipelineAttached, PATCH_JUMP);
 
 
 //	Patch<BYTE>(0x732B40, 0xC3);	// disable fading entities

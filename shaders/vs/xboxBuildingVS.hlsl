@@ -7,10 +7,14 @@ float4		shaderParams	: register(c29);
 float4		dayparam	: register(c30);
 float4		nightparam	: register(c31);
 float4x4	texmat		: register(c32);
+float4		fxParams	: register(c36);
+float4		envXform	: register(c37);
 float3x3	envmat		: register(c38);
 
-#define colorScale (shaderParams.x)
 #define surfAmb (surfProps.x)
+#define surfDiff (surfProps.z)
+#define shininess (fxParams.x)
+#define lightmult (fxParams.y)
 
 struct VS_INPUT
 {
@@ -26,6 +30,7 @@ struct VS_OUTPUT {
 	float2 Texcoord0	: TEXCOORD0;
 	float2 Texcoord1	: TEXCOORD1;
 	float4 Color		: COLOR0;
+	float4 Envcolor		: COLOR1;
 };
 
 VS_OUTPUT main(in VS_INPUT IN)
@@ -34,11 +39,12 @@ VS_OUTPUT main(in VS_INPUT IN)
 
 	OUT.Position = mul(IN.Position, combined);
 	OUT.Texcoord0 = mul(texmat, float4(IN.TexCoord, 0.0, 1.0)).xy;
-	OUT.Texcoord1 = mul(envmat, IN.Normal).xy;
+	OUT.Texcoord1 = mul(envmat, IN.Normal).xy * envXform.zw;
 
-	OUT.Color = IN.DayColor*dayparam + IN.NightColor*nightparam;
-	OUT.Color.rgb += ambient*surfAmb;
-	OUT.Color *= matCol;
+	float4 prelight = IN.DayColor*dayparam + IN.NightColor*nightparam;
+	OUT.Color = (prelight*surfDiff + float4(ambient, 0.0)*surfAmb) * matCol;
+
+	OUT.Envcolor = float4(1.0, 1.0, 1.0, 0.0)*shininess*lightmult;
 
 	return OUT;
 }
