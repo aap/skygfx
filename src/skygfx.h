@@ -109,7 +109,7 @@ void reloadAllInis(void);
 void setConfig(void);
 
 extern int envMapSize;
-
+extern bool explicitBuildingPipe;
 
 enum {
 	COLORFILTER_NONE   = 0,

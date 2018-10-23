@@ -827,10 +827,11 @@ CCustomBuildingRenderer__IsCBPCPipelineAttached(RpAtomic *atomic)
 	if(pipeID == RSPIPE_PC_CustomBuilding_PipeID || pipeID == RSPIPE_PC_CustomBuildingDN_PipeID)
 		return TRUE;
 
-	// This is only a building in this case if we don't have another pipe attached already!
-	// Skin or MatFX may already be attached and we'd like to use them
-	if(pipe == nil && GetExtraVertColourPtr(geo) && RpGeometryGetPreLightColors(geo))
-		return TRUE;
+	if(!explicitBuildingPipe)
+		// This is only a building in this case if we don't have another pipe attached already!
+		// Skin or MatFX may already be attached and we'd like to use them
+		if(pipe == nil && GetExtraVertColourPtr(geo) && RpGeometryGetPreLightColors(geo))
+			return TRUE;
 
 	return FALSE;
 }

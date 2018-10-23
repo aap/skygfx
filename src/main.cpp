@@ -13,6 +13,7 @@ char asipath[MAX_PATH];
 bool disableClouds;
 bool disableGamma;
 bool fixPcCarLight;
+bool explicitBuildingPipe;
 int transparentLockon;
 bool iCanHasNeoDrops = true;
 bool iCanHasbuildingPipe = true;
@@ -318,40 +319,65 @@ clamp(float f, float max)
 }
 
 // For Mobile-style lights
-static RwRGBAReal savedAmb;
-static RwRGBAReal savedDir;
-void
-BrightenLights(void)
-{
-	savedAmb = pAmbient->color;
-	pAmbient->color.red = clamp(pAmbient->color.red*1.5f, 1.0f);
-	pAmbient->color.green = clamp(pAmbient->color.green*1.5f, 1.0f);
-	pAmbient->color.blue = clamp(pAmbient->color.blue*1.5f, 1.0f);
-	savedDir = pDirect->color;
-	pDirect->color.red = clamp(pDirect->color.red*1.5f, 1.0f);
-	pDirect->color.green = clamp(pDirect->color.green*1.5f, 1.0f);
-	pDirect->color.blue = clamp(pDirect->color.blue*1.5f, 1.0f);
-}
-
-void
-RestoreLights(void)
-{
-	pAmbient->color = savedAmb;
-	pDirect->color = savedDir;
-}
+//static RwRGBAReal savedAmb;
+//static RwRGBAReal savedDir;
+//void
+//BrightenLights(void)
+//{
+//	savedAmb = pAmbient->color;
+//	pAmbient->color.red = clamp(pAmbient->color.red*1.5f, 1.0f);
+//	pAmbient->color.green = clamp(pAmbient->color.green*1.5f, 1.0f);
+//	pAmbient->color.blue = clamp(pAmbient->color.blue*1.5f, 1.0f);
+//	savedDir = pDirect->color;
+//	pDirect->color.red = clamp(pDirect->color.red*1.5f, 1.0f);
+//	pDirect->color.green = clamp(pDirect->color.green*1.5f, 1.0f);
+//	pDirect->color.blue = clamp(pDirect->color.blue*1.5f, 1.0f);
+//}
+//
+//void
+//RestoreLights(void)
+//{
+//	pAmbient->color = savedAmb;
+//	pDirect->color = savedDir;
+//}
 
 // no longer needed as we're using our own render functions now
-RxNodeDefinition *nodeD3D9SkinAtomicAllInOneCSL = (RxNodeDefinition*)0x8DED08;
-RxNodeBodyFn __rwSkinD3D9AtomicAllInOneNode_orig;
-RwBool __rwSkinD3D9AtomicAllInOneNode_hook(RxPipelineNode *self, const RxPipelineNodeParam *params)
+//RxNodeDefinition *nodeD3D9SkinAtomicAllInOneCSL = (RxNodeDefinition*)0x8DED08;
+//RxNodeBodyFn __rwSkinD3D9AtomicAllInOneNode_orig;
+//RwBool __rwSkinD3D9AtomicAllInOneNode_hook(RxPipelineNode *self, const RxPipelineNodeParam *params)
+//{
+//	// Don't render peds when we're rendering reflections
+//	if(gRenderingSpheremap)
+//		return 1;
+////	BrightenLights();
+//	RwBool ret = __rwSkinD3D9AtomicAllInOneNode_orig(self, params);
+////	RestoreLights();
+//	return ret;
+//}
+
+RwRGBAReal &AmbientLightColourForFrame_PedsCarsAndObjects = *(RwRGBAReal*)0xC886C4;
+RwRGBAReal &DirectionalLightColourForFrame = *(RwRGBAReal*)0xC886B4;
+
+
+void (*SetLightsWithTimeOfDayColour_orig)(RpWorld*);
+void
+SetLightsWithTimeOfDayColour(RpWorld *world)
 {
-	// Don't render peds when we're rendering reflections
-	if(gRenderingSpheremap)
-		return 1;
-//	BrightenLights();
-	RwBool ret = __rwSkinD3D9AtomicAllInOneNode_orig(self, params);
-//	RestoreLights();
-	return ret;
+	SetLightsWithTimeOfDayColour_orig(world);
+return;
+
+	// Multiplied by 1.5 on mobile
+
+	float mult = 1.5f;
+
+	AmbientLightColourForFrame_PedsCarsAndObjects.red = clamp(AmbientLightColourForFrame_PedsCarsAndObjects.red*mult, 1.0f);
+	AmbientLightColourForFrame_PedsCarsAndObjects.green = clamp(AmbientLightColourForFrame_PedsCarsAndObjects.green*mult, 1.0f);
+	AmbientLightColourForFrame_PedsCarsAndObjects.blue = clamp(AmbientLightColourForFrame_PedsCarsAndObjects.blue*mult, 1.0f);
+
+	DirectionalLightColourForFrame.red = clamp(DirectionalLightColourForFrame.red*mult, 1.0f);
+	DirectionalLightColourForFrame.green = clamp(DirectionalLightColourForFrame.green*mult, 1.0f);
+	DirectionalLightColourForFrame.blue = clamp(DirectionalLightColourForFrame.blue*mult, 1.0f);
+	RpLightSetColor(pDirect, &DirectionalLightColourForFrame);
 }
 
 
@@ -776,6 +802,8 @@ readfloat(const std::string &s, float default = 0)
 	}
 }
 
+static bool explicitBuildingPipe_tmp;
+
 void
 readIni(int n)
 {
@@ -935,6 +963,7 @@ readIni(int n)
 	}
 	c->neoBloodDrops = readint(cfg.get("SkyGfx", "neoBloodDrops", ""), 0);
 	fixPcCarLight = readint(cfg.get("SkyGfx", "fixPcCarLight", ""), 0);
+	explicitBuildingPipe_tmp = readint(cfg.get("SkyGfx", "explicitBuildingPipe", ""), 0);
 
 	c->zwriteThreshold = readint(cfg.get("SkyGfx", "zwriteThreshold", ""), 128);
 	if(c->zwriteThreshold < 0) c->zwriteThreshold = 0;
@@ -1218,6 +1247,9 @@ InjectDelayedPatches()
 	// vehicle, pole
 	InjectHook(0x70F9B8, &FX::GetFxQuality_stencil);
 
+	// don't assign building pipe just because a model has two sets of prelight
+	explicitBuildingPipe = explicitBuildingPipe_tmp;
+
 	if(fixPcCarLight){
 		// carenv light diffuse
 		Patch<uint>(0x5D88D1 +6, 0);
@@ -1257,16 +1289,16 @@ InjectDelayedPatches()
 		static const char *loadsc0 = "loadsc0";
 		Patch(0x5901BD + 1, loadsc0);
 
-		// lens flare for police cars
-		Patch<uint8>(0x6AB9E6 + 1, 2);
-		Patch<uint8>(0x6ABA33 + 1, 2);
-		// and change distance to 50 (150*LODdist normally)
-		static const float one = 1.0f;
-		Patch(0x6AB9BE + 2, &one);
-		Patch(0x6ABA0B + 2, &one);
-		static const float flaredist = 50.0f;
-		Patch(0x6AB9C6 + 2, &flaredist);
-		Patch(0x6ABA13 + 2, &flaredist);
+	//	// lens flare for police cars
+	//	Patch<uint8>(0x6AB9E6 + 1, 2);
+	//	Patch<uint8>(0x6ABA33 + 1, 2);
+	//	// and change distance to 50 (150*LODdist normally)
+	//	static const float one = 1.0f;
+	//	Patch(0x6AB9BE + 2, &one);
+	//	Patch(0x6ABA0B + 2, &one);
+	//	static const float flaredist = 50.0f;
+	//	Patch(0x6AB9C6 + 2, &flaredist);
+	//	Patch(0x6ABA13 + 2, &flaredist);
 	}
 
 	installMenu();
@@ -1313,6 +1345,7 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		// disable forced ztest on coronas. PS2 doesn't do it
 		Nop(0x6FB17C, 3);
 		// for reference: to get ztest on sun corona:
+		// (works badly however because lens flare isn't LOS tested)
 		// Patch<uint8>(0x6FC705 + 1, 0);
 
 		IsAlreadyRunning = (int(*)())(*(int*)(0x74872D+1) + 0x74872D + 5);
@@ -1410,6 +1443,8 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		// No longer needed
 //		__rwSkinD3D9AtomicAllInOneNode_orig = nodeD3D9SkinAtomicAllInOneCSL->nodeMethods.nodeBody;
 //		nodeD3D9SkinAtomicAllInOneCSL->nodeMethods.nodeBody = __rwSkinD3D9AtomicAllInOneNode_hook;
+
+		InterceptCall(&SetLightsWithTimeOfDayColour_orig, SetLightsWithTimeOfDayColour, 0x53E997);
 
 void hooktexdb();
 		hooktexdb();

@@ -168,3 +168,5 @@ WRAPPER RwMatrix *RwMatrixTransform(RwMatrix*, const RwMatrix*, RwOpCombineType)
 WRAPPER RwMatrix *RwMatrixOptimize(RwMatrix*, const RwMatrixTolerance*) { EAXJMP(0x7F17E0); }
 
 WRAPPER void _rwD3D9EnableClippingIfNeeded(void *object, RwUInt32 type) { EAXJMP(0x756D90); }
+
+WRAPPER RpLight *RpLightSetColor(RpLight *light, const RwRGBAReal *color) { EAXJMP(0x751A90); }
