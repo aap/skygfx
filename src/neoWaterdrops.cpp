@@ -283,7 +283,7 @@ hookWaterDrops()
     }; injector::MakeInline<watercannonhook>(0x729492, 0x729492 + 7);
 
     //Boat splashes
-    struct watersplashhook
+    struct vortexhook
     {
         void operator()(injector::reg_pack& regs)
         {
@@ -294,11 +294,28 @@ hookWaterDrops()
                 RwV3d dist;
                 RwV3dSub(&dist, (RwV3d*)regs.eax, &WaterDrops::ms_lastPos);
 
-                if (RwV3dLength(&dist) <= 10.0f)
+                if (RwV3dLength(&dist) <= 15.0f)
                     WaterDrops::FillScreenMoving(1.0f, false);
             }
         }
-    }; injector::MakeInline<watersplashhook>(0x6AA865, 0x6AA865 + 6);
+    }; injector::MakeInline<vortexhook>(0x6AA865, 0x6AA865 + 6);
+
+    struct boathook
+    {
+        void operator()(injector::reg_pack& regs)
+        {
+            *(uint32_t*)(regs.edi + 0x30) = regs.eax;
+            *(uint32_t*)(regs.edi + 0x34) = regs.ecx;
+
+            if (config->neoWaterDrops) {
+                RwV3d dist;
+                RwV3dSub(&dist, (RwV3d*)(regs.esp + 0x28), &WaterDrops::ms_lastPos);
+
+                if (RwV3dLength(&dist) <= 15.0f)
+                    WaterDrops::FillScreenMoving(1.0f, false);
+            }
+        }
+    }; injector::MakeInline<boathook>(0x6F16A8, 0x6F16A8 + 6);
 }
 
 void
