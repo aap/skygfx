@@ -304,18 +304,17 @@ hookWaterDrops()
     {
         void operator()(injector::reg_pack& regs)
         {
-            *(uint32_t*)(regs.edi + 0x30) = regs.eax;
-            *(uint32_t*)(regs.edi + 0x34) = regs.ecx;
+            regs.eax = regs.esp + 0x80;
 
             if (config->neoWaterDrops) {
                 RwV3d dist;
-                RwV3dSub(&dist, (RwV3d*)(regs.esp + 0x28), &WaterDrops::ms_lastPos);
+                RwV3dSub(&dist, (RwV3d*)(regs.esp + 0x38), &WaterDrops::ms_lastPos);
 
-                if (RwV3dLength(&dist) <= 15.0f)
+                if (RwV3dLength(&dist) <= 30.0f)
                     WaterDrops::FillScreenMoving(1.0f, false);
             }
         }
-    }; injector::MakeInline<boathook>(0x6F16A8, 0x6F16A8 + 6);
+    }; injector::MakeInline<boathook>(0x6DD6AB, 0x6DD6AB + 7);
 }
 
 void
