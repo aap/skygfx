@@ -233,7 +233,7 @@ hookWaterDrops()
                 RwV3d dist;
                 RwV3dSub(&dist, (RwV3d*)(regs.esp + 0x24), &WaterDrops::ms_lastPos);
 
-                if (RwV3dLength(&dist) <= 10.0f)
+                if (RwV3dLength(&dist) <= 30.0f)
                     WaterDrops::FillScreenMoving(1.0f, false);
             }
         }
@@ -310,7 +310,7 @@ hookWaterDrops()
                 RwV3d dist;
                 RwV3dSub(&dist, (RwV3d*)(regs.esp + 0x38), &WaterDrops::ms_lastPos);
 
-                if (RwV3dLength(&dist) <= 30.0f)
+                if (RwV3dLength(&dist) <= 40.0f)
                     WaterDrops::FillScreenMoving(1.0f, false);
             }
         }
@@ -416,7 +416,7 @@ WaterDrops::CalculateMovement(void)
 bool
 WaterDrops::NoDrops(void)
 {
-    return CWeather__UnderWaterness > 0.0f || *CEntryExitManager__ms_exitEnterState != 0;
+    return CWeather__UnderWaterness > 0.339731634f || *CEntryExitManager__ms_exitEnterState != 0;
 }
 
 bool
@@ -682,6 +682,13 @@ WaterDrops::Render(void)
     bool nofirstperson = FindPlayerVehicle(-1, 0) == 0 && getCamMode() == MODE_1STPERSON;
     if (!ms_enabled || ms_numDrops <= 0 || nofirstperson || CCutsceneMgr__ms_running)
         return;
+
+    //when you put camera underwater, droplets disappear instantly instead of fading out
+    if (NoDrops())
+    {
+        Clear();
+        return;
+    }
 
     IDirect3DVertexBuffer9 *vbuf = (IDirect3DVertexBuffer9*)ms_vertexBuf;
     vbuf->Lock(0, 0, (void**)&ms_vertPtr, 0);
