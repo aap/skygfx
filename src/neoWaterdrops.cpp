@@ -315,6 +315,22 @@ hookWaterDrops()
             }
         }
     }; injector::MakeInline<boathook>(0x6DD6AB, 0x6DD6AB + 7);
+
+    struct harvesterhook
+    {
+        void operator()(injector::reg_pack& regs)
+        {
+            *(uint8_t*)(regs.esi + 0x13C) = 3;
+
+            if (config->neoWaterDrops) {
+                RwV3d dist;
+                RwV3dSub(&dist, (RwV3d*)(regs.esp + 0x134), &WaterDrops::ms_lastPos);
+
+                if (RwV3dLength(&dist) <= 20.0f)
+                    WaterDrops::FillScreenMoving(0.5f, true);
+            }
+        }
+    }; injector::MakeInline<harvesterhook>(0x6A9BA4, 0x6A9BA4 + 7);
 }
 
 void
