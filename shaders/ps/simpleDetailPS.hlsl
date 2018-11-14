@@ -2,6 +2,7 @@ uniform sampler2D tex0 : register(s0);
 uniform sampler2D tex1 : register(s1);
 uniform sampler2D tex2 : register(s2);
 
+uniform float4 colorscale : register(c0);
 uniform float detailtile : register(c1);
 
 struct PS_INPUT
@@ -14,7 +15,7 @@ struct PS_INPUT
 float4
 main(PS_INPUT IN) : COLOR
 {
-	float4 final = tex2D(tex0, IN.texcoord0)*IN.color;
+	float4 final = tex2D(tex0, IN.texcoord0)*IN.color*colorscale.x;
 	final.rgb *= tex2D(tex2, IN.texcoord0*detailtile).rgb*2.0;
 	return final;
 }

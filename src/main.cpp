@@ -844,7 +844,6 @@ readIni(int n)
 		{"PS2",     BUILDING_PS2},
 		{"PC",      BUILDING_XBOX},
 		{"Xbox",    BUILDING_XBOX},
-		{"Mobile",  BUILDING_MOBILE},
 		{"",       -1},
 	};
 	c->buildingPipe = StrAssoc::get(buildPipeMap, cfg.get("SkyGfx", "buildingPipe", "").c_str());
@@ -852,6 +851,7 @@ readIni(int n)
 		iCanHasbuildingPipe = false;
 		c->buildingPipe = 0;
 	}
+	c->detailMaps = readint(cfg.get("SkyGfx", "detailMaps", ""), 0);
 
 	c->ps2ModulateBuilding = readint(cfg.get("SkyGfx", "ps2ModulateBuilding", ""), config->ps2ModulateGlobal);
 	c->dualPassBuilding = readint(cfg.get("SkyGfx", "dualPassBuilding", ""), config->dualPassGlobal);
@@ -1034,6 +1034,7 @@ afterStreamIni(void)
 	X(dualPassPed)			\
 	X(dualPassGrass)				\
 	X(buildingPipe)				\
+	X(detailMaps)				\
 	X(vehiclePipe)				\
 	X(leedsShininessMult)				\
 	X(neoShininessMult)				\
@@ -1126,6 +1127,7 @@ installMenu(void)
 		if(iCanHasbuildingPipe){
 			menu.buildingPipe = DebugMenuAddVar("SkyGFX", "Building Pipeline", &config->buildingPipe, nil, 1, BUILDING_PS2, NUMBUILDINGPIPES-1, buildPipeStr);
 			DebugMenuEntrySetWrap(menu.buildingPipe, true);
+			menu.detailMaps = DebugMenuAddVarBool32("SkyGFX", "Detail Maps", &config->detailMaps, nil);
 		}
 		if(iCanHasvehiclePipe){
 			menu.vehiclePipe = DebugMenuAddVar("SkyGFX", "Vehicle Pipeline", &config->vehiclePipe, nil, 1, CAR_PS2, NUMCARPIPES-1, vehPipeStr);

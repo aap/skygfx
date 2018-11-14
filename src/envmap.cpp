@@ -2,7 +2,7 @@
 #include "LinkList.h"
 
 #ifndef RELEASE
-//#define DEBUGENVTEX
+#define DEBUGENVTEX
 #endif
 
 extern RwCamera *reflectionCam;

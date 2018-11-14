@@ -17,7 +17,6 @@ float3		campos		: register(c44);
 struct VS_INPUT
 {
 	float4 Position		: POSITION;
-	float3 Normal		: NORMAL;
 	float2 TexCoord		: TEXCOORD0;
 	float4 NightColor	: COLOR0;
 	float4 DayColor		: COLOR1;
@@ -26,7 +25,6 @@ struct VS_INPUT
 struct VS_OUTPUT {
 	float4 Position		: POSITION;
 	float2 Texcoord0	: TEXCOORD0;
-	float2 Texcoord1	: TEXCOORD1;
 	float4 Color		: COLOR0;
 };
 
@@ -43,7 +41,6 @@ VS_OUTPUT main(in VS_INPUT IN)
 	OUT.Position = float4(ReflPos.xy, length(ReflVector)*0.002, 1.0);
 
 	OUT.Texcoord0 = mul(texmat, float4(IN.TexCoord, 0.0, 1.0)).xy;
-	OUT.Texcoord1 = mul(envmat, IN.Normal).xy;
 
 	OUT.Color = IN.DayColor*dayparam + IN.NightColor*nightparam;
 	OUT.Color.rgb += ambient*surfAmb;

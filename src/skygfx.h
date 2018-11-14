@@ -2,6 +2,7 @@
 #pragma warning(disable: 4244)	// int to float
 #pragma warning(disable: 4800)	// int to bool
 #pragma warning(disable: 4838)  // narrowing conversion
+#pragma warning(disable: 4996)  // strcmpi
 
 #define _USE_MATH_DEFINES
 
@@ -52,7 +53,6 @@ enum BuildingPipeline
 {
 	BUILDING_PS2,
 	BUILDING_XBOX,
-	BUILDING_MOBILE,
 
 	NUMBUILDINGPIPES
 };
@@ -98,6 +98,7 @@ struct Config {
 	int zwriteThreshold;
 
 	float leedsShininessMult;
+	RwBool detailMaps;
 };
 extern int numConfigs;
 extern int currentConfig;
@@ -277,7 +278,7 @@ extern void *gradingPS, *contrastPS;
 // building
 extern void *ps2BuildingVS, *ps2BuildingFxVS;
 extern void *xboxBuildingVS, *xboxBuildingPS;
-extern void *mobileBuildingVS, *mobileBuildingPS;
+extern void *simpleDetailPS;
 extern void *sphereBuildingVS;
 void CreateShaders(void);
 void RwToD3DMatrix(void *d3d, RwMatrix *rw);

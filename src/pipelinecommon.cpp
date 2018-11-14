@@ -262,8 +262,7 @@ CreateShaders(void)
 	makeVS(IDR_PS2BUILDINGVS, &ps2BuildingVS);
 	makeVS(IDR_PS2BUILDINGFXVS, &ps2BuildingFxVS);
 	makeVS(IDR_XBOXBUILDINGVS, &xboxBuildingVS);
-	makeVS(IDR_MOBILEBUILDINGVS, &mobileBuildingVS);
 	makePS(IDR_XBOXBUILDINGPS, &xboxBuildingPS);
-	makePS(IDR_MOBILEBUILDINGPS, &mobileBuildingPS);
+	makePS(IDR_SIMPLEDETAILPS, &simpleDetailPS);
 	makeVS(IDR_SPHEREBUILDINGVS, &sphereBuildingVS);
 }

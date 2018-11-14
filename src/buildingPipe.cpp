@@ -2,7 +2,7 @@
 
 void *ps2BuildingVS, *ps2BuildingFxVS;
 void *xboxBuildingVS, *xboxBuildingPS;
-void *mobileBuildingVS, *mobileBuildingPS;
+void *simpleDetailPS;
 void *sphereBuildingVS;
 RxPipeline *buildingPipeline, *buildingDNPipeline;
 
@@ -137,10 +137,12 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 	RwV4d envXform;
 	RwMatrix envmat;
 	float transform[16];
-
-	_rwD3D9EnableClippingIfNeeded(object, type);
+	RwMatrix ident, *m1, *m2;
 
 	atomic = (RpAtomic*)object;
+	RwMatrixSetIdentity(&ident);
+
+	_rwD3D9EnableClippingIfNeeded(object, type);
 
 	pipeGetComposedTransformMatrix(atomic, transform);
 	RwD3D9SetVertexShaderConstant(REG_transform, transform, 4);
@@ -181,14 +183,10 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 
 		int effect = RpMatFXMaterialGetEffects(material);
 		if(effect == rpMATFXEFFECTUVTRANSFORM){
-			RwMatrix *m1, *m2;
 			RpMatFXMaterialGetUVTransformMatrices(material, &m1, &m2);
 			RwD3D9SetVertexShaderConstant(REG_texmat, m1, 4);
-		}else{
-			RwMatrix m;
-			RwMatrixSetIdentity(&m);
-			RwD3D9SetVertexShaderConstant(REG_texmat, &m, 4);
-		}
+		}else
+			RwD3D9SetVertexShaderConstant(REG_texmat, &ident, 4);
 
 		hasAlpha = instancedData->vertexAlpha || instancedData->material->color.alpha != 255;
 		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)hasAlpha);
@@ -199,7 +197,15 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 		RwD3D9SetVertexShaderConstant(REG_surfProps, &material->surfaceProps, 1);
 
 		RwD3D9SetVertexShader(ps2BuildingVS);
-		RwD3D9SetPixelShader(simplePS);
+
+		TexInfo *texinfo = RwTextureGetTexDBInfo(material->texture);
+		if(config->detailMaps && texinfo->detail){
+			float tile = texinfo->detailtile/10.0f;
+			RwD3D9SetPixelShaderConstant(1, &tile, 1);
+			pipeSetTexture(texinfo->detail, 2);
+			RwD3D9SetPixelShader(simpleDetailPS);
+		}else
+			RwD3D9SetPixelShader(simplePS);
 
 		D3D9RenderDual(config->dualPassBuilding, resEntryHeader, instancedData);
 
@@ -264,8 +270,10 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *o
 	RwV4d envXform;
 	RwMatrix envmat;
 	float transform[16];
+	RwMatrix ident, *m1, *m2;
 
 	atomic = (RpAtomic*)object;
+	RwMatrixSetIdentity(&ident);
 
 	_rwD3D9EnableClippingIfNeeded(object, type);
 
@@ -287,16 +295,7 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *o
 	CustomBuildingEnvMapPipeline__SetupEnv(atomic, NULL, &envmat);
 	RwD3D9SetVertexShaderConstant(REG_envmat, &envmat, 3);
 
-	int alphafunc, alpharef;
-	int src, dst;
-	int fog;
-	int zwrite;
-	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, &alpharef);
-	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &alphafunc);
-	RwRenderStateGet(rwRENDERSTATESRCBLEND, &src);
-	RwRenderStateGet(rwRENDERSTATEDESTBLEND, &dst);
-	RwRenderStateGet(rwRENDERSTATEFOGENABLE, &fog);
-	RwRenderStateGet(rwRENDERSTATEZWRITEENABLE, &zwrite);
+	RwD3D9SetVertexShader(xboxBuildingVS);
 
 	numMeshes = resEntryHeader->numMeshes;
 	while(numMeshes--){
@@ -306,14 +305,10 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *o
 
 		int effect = RpMatFXMaterialGetEffects(material);
 		if(effect == rpMATFXEFFECTUVTRANSFORM){
-			RwMatrix *m1, *m2;
 			RpMatFXMaterialGetUVTransformMatrices(material, &m1, &m2);
 			RwD3D9SetVertexShaderConstant(REG_texmat, m1, 4);
-		}else{
-			RwMatrix m;
-			RwMatrixSetIdentity(&m);
-			RwD3D9SetVertexShaderConstant(REG_texmat, &m, 4);
-		}
+		}else
+			RwD3D9SetVertexShaderConstant(REG_texmat, &ident, 4);
 
 		hasAlpha = instancedData->vertexAlpha || instancedData->material->color.alpha != 255;
 		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)hasAlpha);
@@ -330,6 +325,7 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *o
 			RwD3D9SetVertexShaderConstant(REG_surfProps, &surf, 1);
 		}
 
+		TexInfo *texinfo = RwTextureGetTexDBInfo(material->texture);
 		if(*(int*)&material->surfaceProps.specular & 1){
 			envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
 			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
@@ -343,17 +339,18 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *o
 			RwD3D9SetVertexShaderConstant(REG_envXform, &envXform, 1);
 			RwD3D9SetVertexShaderConstant(REG_fxParams, &fxParams, 1);
 			RwD3D9SetPixelShader(xboxBuildingPS);
+		}else if(config->detailMaps && texinfo->detail){
+			float tile = texinfo->detailtile/10.0f;
+			RwD3D9SetPixelShaderConstant(1, &tile, 1);
+			pipeSetTexture(texinfo->detail, 2);
+			RwD3D9SetPixelShader(simpleDetailPS);
 		}else
 			RwD3D9SetPixelShader(simplePS);
-
-		RwD3D9SetVertexShader(xboxBuildingVS);
 
 		D3D9RenderDual(config->dualPassBuilding, resEntryHeader, instancedData);
 
 		instancedData++;
 	}
-	RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)alpharef);
-	RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphafunc);
 	RwD3D9SetTexture(NULL, 1);
 	RwD3D9SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_DISABLE);
 	RwD3D9SetTextureStageState(1, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
@@ -362,20 +359,20 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *o
 }
 
 void
-CCustomBuildingDNPipeline__CustomPipeRenderCB_Mobile(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
+CCustomBuildingDNPipeline__CustomPipeRenderCB_Sphere(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
 {
 	RpAtomic *atomic;
 	RxD3D9ResEntryHeader *resEntryHeader;
 	RxD3D9InstanceData *instancedData;
 	RpMaterial *material;
 	RwInt32	numMeshes;
-	CustomEnvMapPipeMaterialData *envData;
 	RwBool hasAlpha;
 	float colorScale;
-	RwMatrix envmat;
 	float transform[16];
+	RwMatrix ident, *m1, *m2;
 
 	atomic = (RpAtomic*)object;
+	RwMatrixSetIdentity(&ident);
 
 	_rwD3D9EnableClippingIfNeeded(object, type);
 
@@ -394,98 +391,38 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_Mobile(RwResEntry *repEntry, void 
 
 	setDnParams(atomic);
 
-	CustomBuildingEnvMapPipeline__SetupEnv(atomic, NULL, &envmat);
-	RwD3D9SetVertexShaderConstant(REG_envmat, &envmat, 3);
-
-	int alphafunc, alpharef;
-	int src, dst;
-	int fog;
-	int zwrite;
-	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, &alpharef);
-	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &alphafunc);
-	RwRenderStateGet(rwRENDERSTATESRCBLEND, &src);
-	RwRenderStateGet(rwRENDERSTATEDESTBLEND, &dst);
-	RwRenderStateGet(rwRENDERSTATEFOGENABLE, &fog);
-	RwRenderStateGet(rwRENDERSTATEZWRITEENABLE, &zwrite);
-
-
-	// Sphere Map TEST
-	if(gRenderingSpheremap){
-		RwD3D9SetVertexShaderConstant(44, &reflectionCamPos, 1);
-		float worldmat[16];
-		RwToD3DMatrix(worldmat, RwFrameGetLTM(RpAtomicGetFrame(atomic)));
-		RwD3D9SetVertexShaderConstant(REG_transform, worldmat, 4);
-		RwD3D9SetVertexShader(sphereBuildingVS);
-	}else
-		RwD3D9SetVertexShader(mobileBuildingVS);
-
-
+	RwD3D9SetVertexShaderConstant(44, &reflectionCamPos, 1);
+	float worldmat[16];
+	RwToD3DMatrix(worldmat, RwFrameGetLTM(RpAtomicGetFrame(atomic)));
+	RwD3D9SetVertexShaderConstant(REG_transform, worldmat, 4);
+	RwD3D9SetVertexShader(sphereBuildingVS);
+	RwD3D9SetPixelShader(simplePS);
 
 	numMeshes = resEntryHeader->numMeshes;
 	while(numMeshes--){
 		material = instancedData->material;
 
-		TexInfo *texinfo = RwTextureGetTexDBInfo(material->texture);
 		pipeSetTexture(material->texture, 0);
 
 		int effect = RpMatFXMaterialGetEffects(material);
 		if(effect == rpMATFXEFFECTUVTRANSFORM){
-			RwMatrix *m1, *m2;
 			RpMatFXMaterialGetUVTransformMatrices(material, &m1, &m2);
 			RwD3D9SetVertexShaderConstant(REG_texmat, m1, 4);
-		}else{
-			RwMatrix m;
-			RwMatrixSetIdentity(&m);
-			RwD3D9SetVertexShaderConstant(REG_texmat, &m, 4);
-		}
+		}else
+			RwD3D9SetVertexShaderConstant(REG_texmat, &ident, 4);
 
 		hasAlpha = instancedData->vertexAlpha || instancedData->material->color.alpha != 255;
 		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)hasAlpha);
 
 		pipeUploadMatCol(flags, material, REG_matCol);
 
-		if(flags & rpGEOMETRYLIGHT)
-			RwD3D9SetVertexShaderConstant(REG_ambient, &buildingAmbient, 1);
-		else
-			pipeUploadZero(REG_ambient);
+		RwD3D9SetVertexShaderConstant(REG_ambient, &buildingAmbient, 1);
 		RwD3D9SetVertexShaderConstant(REG_surfProps, &material->surfaceProps, 1);
 
-/*
-		if(*(int*)&material->surfaceProps.specular & 1){
-			envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
-			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
-			RwD3D9SetTexture(envData->texture, 1);
-			RwD3D9SetPixelShader(xboxBuildingPS);
-		}else
-			RwD3D9SetPixelShader(simplePS);
-*/
-		if(texinfo->detail && !(GetAsyncKeyState(VK_F4) & 0x8000)){
-			float tile = texinfo->detailtile/10.0f;
-			RwD3D9SetPixelShaderConstant(1, &tile, 1);
-			pipeSetTexture(texinfo->detail, 2);
-			RwD3D9SetPixelShader(mobileBuildingPS);
-		}else
-			RwD3D9SetPixelShader(simplePS);
-
-//if(texinfo->alphamode == 2){
-//	int hasalpha;
-//	RwD3D9GetRenderState(D3DRS_ALPHABLENDENABLE, &hasAlpha);
-//	RwD3D9SetRenderState(D3DRS_ALPHABLENDENABLE, 0);
-//	D3D9Render(resEntryHeader, instancedData);
-//	RwD3D9SetRenderState(D3DRS_ALPHABLENDENABLE, hasAlpha);
-//}else
-		D3D9RenderDual(config->dualPassBuilding, resEntryHeader, instancedData);
+		D3D9Render(resEntryHeader, instancedData);
 
 		instancedData++;
 	}
-	RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)alpharef);
-	RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphafunc);
-	RwD3D9SetTexture(NULL, 1);
-	RwD3D9SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_DISABLE);
-	RwD3D9SetTextureStageState(1, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
-	RwD3D9SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, 1);
-	RwD3D9SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_DISABLE);
-
 }
 
 void
@@ -495,18 +432,14 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_Switch(RwResEntry *repEntry, void 
 //		return;
 
 	if(gRenderingSpheremap)
-		CCustomBuildingDNPipeline__CustomPipeRenderCB_Mobile(repEntry, object, type, flags);
-	else
-	switch(config->buildingPipe){
+		CCustomBuildingDNPipeline__CustomPipeRenderCB_Sphere(repEntry, object, type, flags);
+	else switch(config->buildingPipe){
 	default:
 	case BUILDING_PS2:
 		CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(repEntry, object, type, flags);
 		break;
 	case BUILDING_XBOX:
 		CCustomBuildingDNPipeline__CustomPipeRenderCB_Xbox(repEntry, object, type, flags);
-		break;
-	case BUILDING_MOBILE:
-		CCustomBuildingDNPipeline__CustomPipeRenderCB_Mobile(repEntry, object, type, flags);
 		break;
 	}
 	fixSAMP();
