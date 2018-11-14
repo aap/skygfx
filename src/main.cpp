@@ -666,8 +666,8 @@ static uint32_t RenderScene_A;
 WRAPPER void RenderScene(void) { VARJMP(RenderScene_A); }
 
 void RenderReflectionMap_leeds(void);
-void RenderReflectionMap_mobile(void);
 void RenderReflectionScene(void);
+void DrawDebugEnvMap(void);
 
 void
 RenderScene_hook(void)
@@ -678,8 +678,7 @@ RenderScene_hook(void)
 		CarPipe::RenderEnvTex();
 	else if(config->vehiclePipe == CAR_LCS || config->vehiclePipe == CAR_VCS)
 		RenderReflectionMap_leeds();
-	else if(config->vehiclePipe == CAR_MOBILE)
-		RenderReflectionMap_mobile();
+	DrawDebugEnvMap();
 }
 
 int (*PipelinePluginAttach)(void);
@@ -695,6 +694,8 @@ InitialiseGame_hook(void)
 {
 	ONCE;
 	InterceptCall(&RenderScene_A, RenderScene_hook, 0x53EABF);
+void envmaphooks(void);
+envmaphooks();
 	neoInit();
 	initTexDB();
 	InitialiseGame();

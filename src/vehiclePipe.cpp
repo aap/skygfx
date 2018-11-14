@@ -1244,7 +1244,9 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Switch(RwResEntry *repEntry, void *
 		CCustomCarEnvMapPipeline__CustomPipeRenderCB_leeds(repEntry, object, type, flags);
 		break;
 	case CAR_MOBILE:
-		CCustomCarEnvMapPipeline__CustomPipeRenderCB_mobile(repEntry, object, type, flags);
+		/* Need hooked building pipe for sphere maps */
+		if(iCanHasbuildingPipe)
+			CCustomCarEnvMapPipeline__CustomPipeRenderCB_mobile(repEntry, object, type, flags);
 		break;
 	}
 	fixSAMP();

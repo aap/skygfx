@@ -109,6 +109,8 @@ void refreshIni(void);
 void reloadAllInis(void);
 void setConfig(void);
 
+extern bool iCanHasbuildingPipe;
+
 extern int envMapSize;
 extern bool explicitBuildingPipe;
 

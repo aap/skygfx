@@ -67,6 +67,27 @@ MakeScreenQuad(void)
 
 #endif
 
+struct CBoundingBox
+{
+	CVector min;
+	CVector max;
+};
+
+struct CBoundingSphere
+{
+	CVector center;
+	float radius;
+};
+
+struct CColModel
+{
+	CBoundingBox box;
+	CBoundingSphere sphere;
+	char flags;
+	char allocationFlag;
+	void *colData;
+};
+
 class CBaseModelInfo
 {
 public:
@@ -89,7 +110,7 @@ public:
 	uint16	GetDoBackfaceCulling(void) { return m_flags & (1<<6); }
 	uint16	GetOwnsColModel(void) { return m_flags & (1<<7); }
 
-	void	*pColModel;
+	CColModel	*pColModel;
 	float	fLodDistanceUnscaled;
 	RwObject	*pRwObject;
 };
@@ -103,6 +124,10 @@ public:
 	uint16 GetDontCollideWithFlyer(void) { return m_flags & (1<<10); }
 	// more...
 };
+
+class CEntity;
+CBaseModelInfo *GetModelInfo(CEntity *e);
+
 
 class CEntity : public CPlaceable
 {
@@ -121,6 +146,11 @@ public:
 	uint8 numLodChildrenRendered;
 	uint8 nType : 3;
 	uint8 nStatus : 5;
+
+	void GetBoundCentre(CVector *v);
+	float GetBoundRadius(void) { return GetModelInfo(this)->pColModel->sphere.radius; }
+	bool GetIsOnScreen(void);
+	bool GetIsOnScreen_orig(void);
 };
 static_assert(sizeof(CEntity) == 0x38, "Wrong size: CEntity");
 
@@ -135,6 +165,9 @@ enum eEntityType
 	ENTITY_TYPE_DUMMY,
 	ENTITY_TYPE_NOTINPOOLS
 };
+
+WRAPPER void CEntity::GetBoundCentre(CVector *v) { EAXJMP(0x534290); }
+WRAPPER bool CEntity::GetIsOnScreen_orig(void) { EAXJMP(0x534540); }
 
 // TODO: FLAify this?
 CBaseModelInfo **CModelInfo__ms_modelInfoPtrs = (CBaseModelInfo**)0xA9B0C8;
@@ -203,6 +236,29 @@ CLinkList<CVisibilityPlugins::AlphaObjectInfo> &CVisibilityPlugins::m_alphaEntit
 CLinkList<CVisibilityPlugins::AlphaObjectInfo> &CVisibilityPlugins::m_alphaUnderwaterEntityList = *(CLinkList<CVisibilityPlugins::AlphaObjectInfo>*)0xC88178;
 CLinkList<CVisibilityPlugins::AlphaObjectInfo> &CVisibilityPlugins::m_alphaReallyDrawLastList = *(CLinkList<CVisibilityPlugins::AlphaObjectInfo>*)0xC881D0;
 
+
+
+inline float sq(float f) { return f*f; }
+float sphereRadius;
+
+bool
+CEntity::GetIsOnScreen(void)
+{
+	if(sphereRadius != 0.0f){
+		float r;
+		CVector c;
+		GetBoundCentre(&c);
+		r = GetBoundRadius();
+		return sq(r) + sq(sphereRadius) >
+			sq(reflectionCamPos.x - c.x) +
+			sq(reflectionCamPos.y - c.y) +
+			sq(reflectionCamPos.z - c.z);
+		return false;
+	}
+	return GetIsOnScreen_orig();
+}
+
+
 void
 CVisibilityPlugins::RenderFadingBuildings(void)
 {
@@ -244,7 +300,6 @@ CRenderer::RenderFadingInBuildings(void)
 	DeActivateDirectional();
 	SetAmbientColours();
 	CVisibilityPlugins::RenderFadingBuildings();
-
 }
 
 
@@ -352,6 +407,16 @@ DrawEnvMapCoronas(RwV3d at)
 }
 
 void
+DrawDebugEnvMap(void)
+{
+#ifdef DEBUGENVTEX
+	MakeScreenQuad();
+	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, reflectionTex->raster);
+	RwIm2DRenderIndexedPrimitive(rwPRIMTYPETRILIST, screenQuad, 4, screenindices, 6);
+#endif
+}
+
+void
 RenderReflectionMap_leeds(void)
 {
 	RwCamera *cam = Scene.camera;
@@ -380,44 +445,50 @@ RenderReflectionMap_leeds(void)
 	RwCameraEndUpdate(reflectionCam);
 
 	RwCameraBeginUpdate(cam);
+}
 
-#ifdef DEBUGENVTEX
-	MakeScreenQuad();
-	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, reflectionTex->raster);
-	RwIm2DRenderIndexedPrimitive(rwPRIMTYPETRILIST, screenQuad, 4, screenindices, 6);
-#endif
+void (*CRenderer__ConstructRenderList)(void);
+
+void
+RenderSphereReflections(void)
+{
+	if(iCanHasbuildingPipe && config->vehiclePipe == CAR_MOBILE){
+		RwCamera *cam = Scene.camera;
+		RwRaster *fb, *zb;
+
+		fb = RwCameraGetRaster(cam);
+		zb = RwCameraGetZRaster(cam);
+		RwCameraSetRaster(cam, RwCameraGetRaster(reflectionCam));
+		RwCameraSetZRaster(cam, RwCameraGetZRaster(reflectionCam));
+		RwRGBA color = { skyTopRed, skyTopGreen, skyTopBlue, 255 };
+		if(color.red < 64) color.red = 64;
+		if(color.green < 64) color.green = 64;
+		if(color.blue < 64) color.blue = 64;
+		RwCameraClear(cam, &color, rwCAMERACLEARIMAGE | rwCAMERACLEARZ);
+
+//		if(!(GetAsyncKeyState(VK_F4) & 0x8000))
+		sphereRadius = 60.0f;	// TODO? ini option?
+		gRenderingSpheremap = true;
+		CRenderer__ConstructRenderList();
+		RwCameraBeginUpdate(cam);
+		RenderReflectionScene();
+		RwCameraEndUpdate(cam);
+		gRenderingSpheremap = false;
+		sphereRadius = 0.0f;
+
+		RwCameraSetRaster(cam, fb);
+		RwCameraSetZRaster(cam, zb);
+	}
+	CRenderer__ConstructRenderList();
 }
 
 void
-RenderReflectionMap_mobile(void)
+envmaphooks(void)
 {
-	RwCamera *cam = Scene.camera;
-	RwCameraEndUpdate(cam);
-
-	RwCameraSetViewWindow(reflectionCam, &cam->viewWindow);
-
-	RwFrameTransform(RwCameraGetFrame(reflectionCam), &RwCameraGetFrame(cam)->ltm, rwCOMBINEREPLACE);
-
-	RwRGBA color = { skyTopRed, skyTopGreen, skyTopBlue, 255 };
-	if(color.red < 64) color.red = 64;
-	if(color.green < 64) color.green = 64;
-	if(color.blue < 64) color.blue = 64;
-	RwCameraClear(reflectionCam, &color, rwCAMERACLEARIMAGE | rwCAMERACLEARZ);
-
-	RwCameraBeginUpdate(reflectionCam);
-	RwCamera *savedcam = Scene.camera;
-	Scene.camera = reflectionCam;	// they do some begin/end updates with this in the called functions :/
-	gRenderingSpheremap = true;
-	RenderReflectionScene();
-	gRenderingSpheremap = false;
-	Scene.camera = savedcam;
-	RwCameraEndUpdate(reflectionCam);
-
-	RwCameraBeginUpdate(cam);
-
-#ifdef DEBUGENVTEX
-	MakeScreenQuad();
-	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, reflectionTex->raster);
-	RwIm2DRenderIndexedPrimitive(rwPRIMTYPETRILIST, screenQuad, 4, screenindices, 6);
-#endif
+	InjectHook(0x5540AD, &CEntity::GetIsOnScreen);
+	InjectHook(0x554174, &CEntity::GetIsOnScreen);
+	InjectHook(0x5543C2, &CEntity::GetIsOnScreen);
+	InjectHook(0x554504, &CEntity::GetIsOnScreen);
+	InjectHook(0x55495E, &CEntity::GetIsOnScreen);
+	InterceptCall(&CRenderer__ConstructRenderList, RenderSphereReflections, 0x53E9F9);
 }
