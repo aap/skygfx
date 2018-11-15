@@ -1209,6 +1209,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_mobile(RwResEntry *repEntry, void *
 void
 CCustomCarEnvMapPipeline__CustomPipeRenderCB_Switch(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
 {
+if(GetAsyncKeyState(VK_F4) & 0x8000) return;
 	switch(config->vehiclePipe){
 	case CAR_PS2:
 		CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(repEntry, object, type, flags);
@@ -1246,9 +1247,25 @@ setVehiclePipeCB(RxPipelineNode *node, RxD3D9AllInOneRenderCallBack callback)
 	RxD3D9AllInOneSetRenderCallBack(node, CCustomCarEnvMapPipeline__CustomPipeRenderCB_Switch);
 }
 
+int CCarFXRenderer__IsCCPCPipelineAttached(RpAtomic *atomic)
+{
+	// Temporary to disable car pipeline and fall back to MatFX
+	return false;
+//	return GetPipelineID(atomic) == RSPIPE_PC_CustomCarEnvMap_PipeID;
+}
+
 void
 hookVehiclePipe(void)
 {
 	InjectHook(0x5D9FE9, setVehiclePipeCB);
 	InterceptCall(&CCustomCarEnvMapPipeline__PreRenderUpdate_orig, CCustomCarEnvMapPipeline__PreRenderUpdate, 0x5D5B10);
+
+	// TEMP - disable car pipe
+#if 0
+	InjectHook(0x5D5B80, CCarFXRenderer__IsCCPCPipelineAttached, PATCH_JUMP);
+	Nop(0x4C8907, 5);	// don't auto-assign on vehicles
+	*(float*)0x8A7780 = 1.0f;	// hardcoded coefficient
+//	Nop(0x4C8899, 5);	// don't set coefficient
+	Nop(0x4C982F, 5);	// don't update coefficient for lighting
+#endif
 }

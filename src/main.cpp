@@ -312,10 +312,34 @@ myDefaultCallback(RpAtomic *atomic)
 	return pipe ? atomic : NULL;
 }
 
+void (*CTagManager__RenderTagForPC)(RpAtomic *atomic);
+void (*CTagManager__SetupAtomic_orig)(RpAtomic *atomic);
+void
+CTagManager__SetupAtomic(RpAtomic *atomic)
+{
+	CTagManager__SetupAtomic_orig(atomic);
+	/* Set the building pipeline so we have control over drawing.
+	 * Note that we need the non-DN version. This works because this function
+	 * is called after the building pipeline has already been set up. */
+	SetPipelineID(atomic, RSPIPE_PC_CustomBuilding_PipeID);
+	RpAtomicSetPipeline(atomic, CCustomBuildingPipeline__ObjPipeline);
+	atomic->pipeline = CCustomBuildingPipeline__ObjPipeline;
+}
 void
 CTagManager__RenderTag(RpAtomic *atomic)
 {
-	atomic->renderCallBack(atomic);
+	if(iCanHasbuildingPipe){
+		/* building pipe can handle accurate PS2 behaviour */
+		assert(atomic->pipeline == CCustomBuildingPipeline__ObjPipeline);
+		atomic->renderCallBack(atomic);
+	}else{
+		/* Otherwise fall back */
+		int alpharef;
+		RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)&alpharef);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)64);
+		CTagManager__RenderTagForPC(atomic);
+		RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)alpharef);
+	}
 }
 
 float
@@ -1383,7 +1407,8 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		InterceptCall(&CSkidmarks__Render_orig, CSkidmarks__Render, 0x53E175);
 
 		/* Don't change tag material. Instead handle it by special code in the render CB */
-		InjectHook(0x534335, CTagManager__RenderTag);
+		InterceptCall(&CTagManager__RenderTagForPC, CTagManager__RenderTag, 0x534335);
+		InterceptCall(&CTagManager__SetupAtomic_orig, CTagManager__SetupAtomic, 0x4C4412);
 		*(void**)0xA9AD78 = (void*)TagRenderCB;	/* This is the (unused) material pipeline of player tags */
 
 		// postfx

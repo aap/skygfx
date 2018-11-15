@@ -49,15 +49,15 @@ pdsAtmCB(void *object, RwInt32, RwInt32, RwUInt32 extraData)
 	if(extraData == PDS_PS2_CustomBuilding_AtmPipeID ||
 	   extraData == PDS_PS2_CustomBuildingEnvMap_AtmPipeID ||
 	   extraData == PDS_PS2_CustomBuildingUVA_AtmPipeID)
-		if(buildingPipeline){
-			atomic->pipeline = buildingPipeline;
+		if(CCustomBuildingPipeline__ObjPipeline){
+			atomic->pipeline = CCustomBuildingPipeline__ObjPipeline;
 			SetPipelineID(atomic, RSPIPE_PC_CustomBuilding_PipeID);
 		}
 	if(extraData == PDS_PS2_CustomBuildingDN_AtmPipeID ||
 	   extraData == PDS_PS2_CustomBuildingDNEnvMap_AtmPipeID ||
 	   extraData == PDS_PS2_CustomBuildingDNUVA_AtmPipeID)
-		if(buildingDNPipeline){
-			atomic->pipeline = buildingDNPipeline;
+		if(CCustomBuildingDNPipeline__ObjPipeline){
+			atomic->pipeline = CCustomBuildingDNPipeline__ObjPipeline;
 			SetPipelineID(atomic, RSPIPE_PC_CustomBuildingDN_PipeID);
 		}
 	return TRUE;

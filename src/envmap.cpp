@@ -1,7 +1,7 @@
 #include "skygfx.h"
 
 #ifdef DEBUG
-#define DEBUGENVTEX
+//#define DEBUGENVTEX
 #endif
 
 

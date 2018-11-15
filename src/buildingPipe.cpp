@@ -5,7 +5,8 @@ void *xboxBuildingVS, *xboxBuildingPS;
 void *simpleDetailPS;
 void *simpleFogPS;
 void *sphereBuildingVS;
-RxPipeline *buildingPipeline, *buildingDNPipeline;
+RxPipeline *&CCustomBuildingPipeline__ObjPipeline = *(RxPipeline**)0xC02C68;
+RxPipeline *&CCustomBuildingDNPipeline__ObjPipeline = *(RxPipeline**)0xC02C1C;
 
 float &CWeather__WetRoads = *(float*)0xC81308;
 
@@ -124,8 +125,10 @@ TagRenderCB(RpAtomic *atomic, RxD3D9ResEntryHeader *resEntryHeader, RxD3D9Instan
 {
 	int alpha, alpharef;
 	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)&alpharef);
-	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
-	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDZERO);
+	if(config->buildingPipe == BUILDING_PS2){
+		RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
+		RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDZERO);
+	}
 
 	alpha = CVisibilityPlugins::GetUserValue(atomic);
 	RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)(255 - (int)(240.0f*alpha/255.0f)));
@@ -546,16 +549,23 @@ DNInstance_PS2(void *object, RxD3D9ResEntryHeader *resEntryHeader, RwBool reinst
 	int numMeshes;
 	void *vertexData;
 	int lastLocked;
+	uint32 pipeID;
 	RwRGBA *day, *night;
 
 	atomic = (RpAtomic*)object;
+	pipeID = GetPipelineID(atomic);
 	geometry = atomic->geometry;
 	isTextured = (geometry->flags & (rpGEOMETRYTEXTURED|rpGEOMETRYTEXTURED2)) != 0;
 	morphTarget = geometry->morphTarget;
 	isPrelit = geometry->flags & rpGEOMETRYPRELIT;
 	hasNormals = geometry->flags & rpGEOMETRYNORMALS;
 	day = GetInstVertexColors(geometry);
-	night = GetInstExtraColors(geometry);
+	/* If the non-DN pipe was forced (as we do with tags),
+	 * ignore extra colours that might be there */
+	if(pipeID == RSPIPE_PC_CustomBuildingDN_PipeID)
+		night = GetInstExtraColors(geometry);
+	else
+		night = nil;
 	if(reinstance){
 		IDirect3DVertexDeclaration9 *vertDecl = (IDirect3DVertexDeclaration9*)resEntryHeader->vertexDeclaration;
 		vertDecl->GetDeclaration(dcl, (UINT*)&i);
@@ -696,19 +706,6 @@ DNInstance_PS2(void *object, RxD3D9ResEntryHeader *resEntryHeader, RwBool reinst
 
 		if(vertexData)
 			vertBuffer->Unlock();
-/*
-		// this is bad, better not do it
-		RwRGBA **night = RWPLUGINOFFSET(RwRGBA*, geometry, CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset);
-		RwRGBA **day = RWPLUGINOFFSET(RwRGBA*, geometry, CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset + 4);
-		if(*night != nullptr){
-			GTAfree(*night);
-			*night = nullptr;
-		}
-		if(*day != nullptr){
-			GTAfree(*day);
-			*day = nullptr;
-		}
-*/
 	}
 	return 1;
 }
@@ -741,7 +738,6 @@ CCustomBuildingPipeline__CreateCustomObjPipe_PS2(void)
 
 	pipeline->pluginId = RSPIPE_PC_CustomBuilding_PipeID;
 	pipeline->pluginData = RSPIPE_PC_CustomBuilding_PipeID;
-	buildingPipeline = pipeline;
 	return pipeline;
 }
 
@@ -773,7 +769,6 @@ CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2(void)
 
 	pipeline->pluginId = RSPIPE_PC_CustomBuildingDN_PipeID;
 	pipeline->pluginData = RSPIPE_PC_CustomBuildingDN_PipeID;
-	buildingDNPipeline = pipeline;
 	return pipeline;
 }
 

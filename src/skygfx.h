@@ -256,6 +256,8 @@ void initTexDB(void);
 extern bool gRenderingSpheremap;
 extern CVector reflectionCamPos;
 
+extern RxPipeline *&CCustomBuildingDNPipeline__ObjPipeline;
+extern RxPipeline *&CCustomBuildingPipeline__ObjPipeline;
 void TagRenderCB(RpAtomic *atomic, RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData);
 RxPipeline *CCustomBuildingPipeline__CreateCustomObjPipe_PS2(void);
 RxPipeline *CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2(void);
@@ -266,8 +268,6 @@ void D3D9Render(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instan
 void D3D9RenderDual(int dual, RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instancedData);
 
 void fixSAMP(void);
-
-extern RxPipeline *buildingPipeline, *buildingDNPipeline;
 
 extern RwInt32 pdsOffset;
 
