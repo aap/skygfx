@@ -62,7 +62,7 @@ WRAPPER RwRaster *RwRasterUnlock(RwRaster*) { EAXJMP(0x7FAEC0); }
 WRAPPER RwCamera *RwCameraBeginUpdate(RwCamera *camera) { EAXJMP(0x7EE190); }
 WRAPPER RwCamera *RwCameraEndUpdate(RwCamera *camera) { EAXJMP(0x7EE180); }
 WRAPPER RwTexture *RwTextureCreate(RwRaster*) { EAXJMP(0x7F37C0); }
-
+WRAPPER RwTexture *RwTextureSetRaster(RwTexture*, RwRaster*) { EAXJMP(0x7F35D0); }
 WRAPPER RwInt32 RpMaterialRegisterPlugin(RwInt32, RwUInt32, RwPluginObjectConstructor,
 	RwPluginObjectDestructor, RwPluginObjectCopy) { EAXJMP(0x74DBF0); }
 WRAPPER RwInt32 RpMaterialSetStreamRightsCallBack(RwUInt32, RwPluginDataChunkRightsCallBack) { EAXJMP(0x74DC70); }

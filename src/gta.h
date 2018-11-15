@@ -5,6 +5,11 @@ public:
 	static float GetATanOfXY(float x, float y);
 };
 
+
+class CEntity;
+class CBaseModelInfo;
+CBaseModelInfo *GetModelInfo(CEntity *e);
+
 struct CVector
 {
 	float x, y, z;
@@ -16,6 +21,57 @@ struct CMatrix
 	RwMatrix *pMatrix;
 	int haveRwMatrix;
 };
+
+
+struct CBoundingBox
+{
+	CVector min;
+	CVector max;
+};
+
+struct CBoundingSphere
+{
+	CVector center;
+	float radius;
+};
+
+struct CColModel
+{
+	CBoundingBox box;
+	CBoundingSphere sphere;
+	char flags;
+	char allocationFlag;
+	void *colData;
+};
+
+class CBaseModelInfo
+{
+public:
+	void	*vtable;
+	uint32	m_hashKey;
+	uint16	m_numRefs;
+	int16	m_texDict;
+	uint8	m_alpha;
+	uint8	m_numOf2dEffects;
+	uint16	m_first2dEffect;
+	uint16	m_dynamicIndex;
+	uint16	m_flags;
+
+	uint16	GetHasBeenPreRendered(void) { return m_flags & (1<<0); }
+	uint16	GetDrawLast(void) { return m_flags & (1<<1); }
+	uint16	GetDrawAdditive(void) { return m_flags & (1<<2); }
+	uint16	GetDontWriteZ(void) { return m_flags & (1<<3); }
+	uint16	GetNoShadows(void) { return m_flags & (1<<4); }
+	uint16	GetIsLod(void) { return m_flags & (1<<5); }
+	uint16	GetDoBackfaceCulling(void) { return m_flags & (1<<6); }
+	uint16	GetOwnsColModel(void) { return m_flags & (1<<7); }
+
+	CColModel	*pColModel;
+	float	fLodDistanceUnscaled;
+	RwObject	*pRwObject;
+};
+static_assert(sizeof(CBaseModelInfo) == 0x20, "Wrong size: CBaseModelInfo");
+
 
 struct CSimpleTransform
 {
@@ -35,6 +91,66 @@ struct CPlaceable
 			return placement.pos;
 	}
 };
+
+class CEntity : public CPlaceable
+{
+public:
+	RwObject *m_pRWObject;
+	uint32 m_flags;
+	uint16 RandomSeed;
+	uint16 m_nModelIndex;
+	void *pReferences;
+	void *m_pLastRenderedLink;
+	uint16 m_nScanCode;
+	uint8 m_iplIndex;
+	uint8 m_areaCode;
+	CEntity *m_pLod;
+	uint8 numLodChildren;
+	uint8 numLodChildrenRendered;
+	uint8 nType : 3;
+	uint8 nStatus : 5;
+
+	void GetBoundCentre(CVector *v);
+	float GetBoundRadius(void) { return GetModelInfo(this)->pColModel->sphere.radius; }
+	bool GetIsOnScreen(void);
+	bool GetIsOnScreen_orig(void);
+	bool IsEntityOccluded(void);
+};
+static_assert(sizeof(CEntity) == 0x38, "Wrong size: CEntity");
+
+enum eEntityType
+{
+
+	ENTITY_TYPE_NOTHING,
+	ENTITY_TYPE_BUILDING,
+	ENTITY_TYPE_VEHICLE,
+	ENTITY_TYPE_PED,
+	ENTITY_TYPE_OBJECT,
+	ENTITY_TYPE_DUMMY,
+	ENTITY_TYPE_NOTINPOOLS
+};
+
+class CVisibilityPlugins
+{
+public:
+	typedef void	(*VisibilityCallback)(void*, float);
+	struct AlphaObjectInfo
+	{
+		void*	pObject;
+		VisibilityCallback callback;
+		float	fCompareValue;
+	};
+
+	static CLinkList<AlphaObjectInfo> &m_alphaList;
+	static CLinkList<AlphaObjectInfo> &m_alphaBoatAtomicList;
+	static CLinkList<AlphaObjectInfo> &m_alphaEntityList;
+	static CLinkList<AlphaObjectInfo> &m_alphaUnderwaterEntityList;
+	static CLinkList<AlphaObjectInfo> &m_alphaReallyDrawLastList;
+
+	static void RenderFadingBuildings(void);
+	static uint16 CVisibilityPlugins::GetUserValue(RpAtomic *atm);
+};
+
 struct CCamera : CPlaceable
 {
 };

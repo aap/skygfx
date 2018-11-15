@@ -46,8 +46,6 @@ static RwV3d carfx_lightdir;	// view space
 static RwFrame *carfx_env1Frame, *carfx_env2Frame;
 
 // Leeds reflections
-RwCamera *reflectionCam;
-RwTexture *reflectionTex;
 static D3DMATRIX envtexmat;
 
 CustomEnvMapPipeAtomicData*
@@ -73,6 +71,12 @@ CCustomCarEnvMapPipeline__Init(void)
 	static RwV3d axis_Y = { 0.0, 1.0, 0.0 };
 	static RwV3d axis_Z = { 0.0, 0.0, 1.0 };
 
+	reflectionTex = RwTextureCreate(nil);
+	RwTextureSetFilterMode(reflectionTex, rwFILTERLINEAR);
+
+	MakeEnvmapCam();
+	MakeEnvmapRasters();
+
 	CreateShaders();
 
 	if(carfx_env1Frame == NULL){
@@ -88,23 +92,6 @@ CCustomCarEnvMapPipeline__Init(void)
 		RwFrameSetIdentity(carfx_env2Frame);
 		RwFrameUpdateObjects(carfx_env2Frame);
 	}
-
-	// leeds reflections
-	RwRaster *envFB = RwRasterCreate(envMapSize, envMapSize, 0, rwRASTERTYPECAMERATEXTURE);
-	RwRaster *envZB = RwRasterCreate(envMapSize, envMapSize, 0, rwRASTERTYPEZBUFFER);
-	reflectionCam = RwCameraCreate();
-	RwCameraSetRaster(reflectionCam, envFB);
-	RwCameraSetZRaster(reflectionCam, envZB);
-	RwCameraSetFrame(reflectionCam, RwFrameCreate());
-	RwCameraSetNearClipPlane(reflectionCam, 0.1f);
-	RwCameraSetFarClipPlane(reflectionCam, 250.0f);
-	RwV2d vw;
-	vw.x = vw.y = 0.4f;
-	RwCameraSetViewWindow(reflectionCam, &vw);
-	RpWorldAddCamera(Scene.world, reflectionCam);
-
-	reflectionTex = RwTextureCreate(envFB);
-	RwTextureSetFilterMode(reflectionTex, rwFILTERLINEAR);
 
 	envtexmat.m[0][0] = 0.5f;
 	envtexmat.m[0][1] = 0.0f;

@@ -42,9 +42,7 @@ InterpolatedLight CarPipe::specColor(Color(0.7f, 0.7f, 0.7f, 1.0f));
 void *CarPipe::vertexShaderPass1;
 void *CarPipe::vertexShaderPass2;
 // reflection map
-RwCamera *CarPipe::reflectionCam;
 RwTexture *CarPipe::reflectionMask;
-RwTexture *CarPipe::reflectionTex;
 RwIm2DVertex CarPipe::screenQuad[4];
 RwImVertexIndex CarPipe::screenindices[6] = { 0, 1, 2, 0, 2, 3 };
 
@@ -55,38 +53,11 @@ neoCarPipeInit(void)
 {
 	ONCE;
 	carpipe.Init();
-	CarPipe::SetupEnvMap();
 }
 
 //
 // Reflection map
 //
-
-int envMapSize;
-
-void
-CarPipe::SetupEnvMap(void)
-{
-	reflectionMask = RwTextureRead("CarReflectionMask", NULL);
-
-	RwRaster *envFB = RwRasterCreate(envMapSize, envMapSize, 0, rwRASTERTYPECAMERATEXTURE);
-	RwRaster *envZB = RwRasterCreate(envMapSize, envMapSize, 0, rwRASTERTYPEZBUFFER);
-	reflectionCam = RwCameraCreate();
-	RwCameraSetRaster(reflectionCam, envFB);
-	RwCameraSetZRaster(reflectionCam, envZB);
-	RwCameraSetFrame(reflectionCam, RwFrameCreate());
-	RwCameraSetNearClipPlane(reflectionCam, 0.1f);
-	RwCameraSetFarClipPlane(reflectionCam, 250.0f);
-	RwV2d vw;
-	vw.x = vw.y = 0.4f;
-	RwCameraSetViewWindow(reflectionCam, &vw);
-	RpWorldAddCamera(Scene.world, reflectionCam);
-
-	reflectionTex = RwTextureCreate(envFB);
-	RwTextureSetFilterMode(reflectionTex, rwFILTERLINEAR);
-
-	MakeScreenQuad();
-}
 
 void
 CarPipe::MakeQuadTexCoords(bool textureSpace)
@@ -150,6 +121,8 @@ CarPipe::RenderEnvTex(void)
 {
 	RwCameraEndUpdate(Scene.camera);
 
+	MakeEnvmapRasters();
+
 	RwV2d oldvw, vw = { 2.0f, 2.0f };
 	oldvw = reflectionCam->viewWindow;
 	RwCameraSetViewWindow(reflectionCam, &vw);
@@ -183,6 +156,8 @@ CarPipe::RenderEnvTex(void)
 	Scene.camera = reflectionCam;	// they do some begin/end updates with this in the called functions :/
 	RenderReflectionScene();
 	Scene.camera = savedcam;
+
+	MakeScreenQuad();
 
 	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)1);
 	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDZERO);
@@ -219,6 +194,7 @@ CarPipe::Init(void)
 //	SetRenderCallback(RenderCallback);
 	CreateShaders();
 	LoadTweakingTable();
+	reflectionMask = RwTextureRead("CarReflectionMask", NULL);
 	// some camera begin/end stuff in barroads with the rw cam
 //	Nop(0x553C68, 0x553C9F-0x553C68);
 //	Nop(0x553CA4, 3);

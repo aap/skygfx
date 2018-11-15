@@ -10,6 +10,7 @@ float4x4	texmat		: register(c32);
 float3x3	envmat		: register(c38);
 
 float3		campos		: register(c44);
+//float2		fogdist		: register(c45);
 
 #define colorScale (shaderParams.x)
 #define surfAmb (surfProps.x)
@@ -25,7 +26,9 @@ struct VS_INPUT
 struct VS_OUTPUT {
 	float4 Position		: POSITION;
 	float2 Texcoord0	: TEXCOORD0;
+	float3 WorldPos		: TEXCOORD1;
 	float4 Color		: COLOR0;
+//	float Fog		: COLOR1;
 };
 
 VS_OUTPUT main(in VS_INPUT IN)
@@ -35,10 +38,13 @@ VS_OUTPUT main(in VS_INPUT IN)
 	// Sphere map
 	// 'combined' is world matrix
 	float4 WorldPos = mul(IN.Position, combined);
+	OUT.WorldPos = WorldPos;
 	float3 ReflVector = WorldPos.xyz - campos;
 	float3 ReflPos = normalize(ReflVector);
 	ReflPos.xy = normalize(ReflPos.xy) * (ReflPos.z * 0.5 + 0.5);
 	OUT.Position = float4(ReflPos.xy, length(ReflVector)*0.002, 1.0);
+	// Done in Pixel shader now
+//	OUT.Fog = clamp((fogdist.x - length(ReflVector)) / fogdist.y, 0.0, 1.0);
 
 	OUT.Texcoord0 = mul(texmat, float4(IN.TexCoord, 0.0, 1.0)).xy;
 

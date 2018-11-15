@@ -19,6 +19,7 @@
 #include "resource.h"
 #include "MemoryMgr.h"
 #include "Pools.h"
+#include "LinkList.h"
 
 typedef uint8_t uint8, uchar;
 typedef uint16_t uint16, ushort;
@@ -99,6 +100,7 @@ struct Config {
 
 	float leedsShininessMult;
 	RwBool detailMaps;
+	int envMapSize;
 };
 extern int numConfigs;
 extern int currentConfig;
@@ -110,9 +112,14 @@ void reloadAllInis(void);
 void setConfig(void);
 
 extern bool iCanHasbuildingPipe;
-
-extern int envMapSize;
 extern bool explicitBuildingPipe;
+
+/* Env map */
+extern RwCamera *reflectionCam;
+extern RwRaster *envFB, *envZB;
+extern RwTexture *reflectionTex;
+void MakeEnvmapRasters(void);
+void MakeEnvmapCam(void);
 
 enum {
 	COLORFILTER_NONE   = 0,
@@ -249,6 +256,7 @@ void initTexDB(void);
 extern bool gRenderingSpheremap;
 extern CVector reflectionCamPos;
 
+void TagRenderCB(RpAtomic *atomic, RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData);
 RxPipeline *CCustomBuildingPipeline__CreateCustomObjPipe_PS2(void);
 RxPipeline *CCustomBuildingDNPipeline__CreateCustomObjPipe_PS2(void);
 int PDSPipePluginAttach(void);
@@ -281,6 +289,7 @@ extern void *gradingPS, *contrastPS;
 extern void *ps2BuildingVS, *ps2BuildingFxVS;
 extern void *xboxBuildingVS, *xboxBuildingPS;
 extern void *simpleDetailPS;
+extern void *simpleFogPS;
 extern void *sphereBuildingVS;
 void CreateShaders(void);
 void RwToD3DMatrix(void *d3d, RwMatrix *rw);

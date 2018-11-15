@@ -312,6 +312,12 @@ myDefaultCallback(RpAtomic *atomic)
 	return pipe ? atomic : NULL;
 }
 
+void
+CTagManager__RenderTag(RpAtomic *atomic)
+{
+	atomic->renderCallBack(atomic);
+}
+
 float
 clamp(float f, float max)
 {
@@ -879,10 +885,10 @@ readIni(int n)
 	c->leedsShininessMult = readfloat(cfg.get("SkyGfx", "leedsShininessMult", ""), 1.0);
 	c->neoShininessMult = readfloat(cfg.get("SkyGfx", "neoShininessMult", ""), 1.0);
 	c->neoSpecularityMult = readfloat(cfg.get("SkyGfx", "neoSpecularityMult", ""), 1.0);
-	envMapSize = readint(cfg.get("SkyGfx", "neoEnvMapSize", ""), 128);
+	c->envMapSize = readint(cfg.get("SkyGfx", "envMapSize", ""), 256);
 	int i = 1;
-	while(i < envMapSize) i *= 2;
-	envMapSize = i;
+	while(i < c->envMapSize) i *= 2;
+	c->envMapSize = i;
 	c->doglare = readint(cfg.get("SkyGfx", "sunGlare", ""), -1);
 	if(c->doglare < 0){
 		iCanHasSunGlare = false;
@@ -1375,6 +1381,10 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		InjectHook(0x553AD1, 0x553AE5, PATCH_JUMP);
 		// ... was not enough. disable alpha test for skidmarks
 		InterceptCall(&CSkidmarks__Render_orig, CSkidmarks__Render, 0x53E175);
+
+		/* Don't change tag material. Instead handle it by special code in the render CB */
+		InjectHook(0x534335, CTagManager__RenderTag);
+		*(void**)0xA9AD78 = (void*)TagRenderCB;	/* This is the (unused) material pipeline of player tags */
 
 		// postfx
 		InterceptCall(&CPostEffects::Initialise_orig, CPostEffects::Initialise, 0x5BD779);

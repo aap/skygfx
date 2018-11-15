@@ -264,5 +264,6 @@ CreateShaders(void)
 	makeVS(IDR_XBOXBUILDINGVS, &xboxBuildingVS);
 	makePS(IDR_XBOXBUILDINGPS, &xboxBuildingPS);
 	makePS(IDR_SIMPLEDETAILPS, &simpleDetailPS);
+	makePS(IDR_SIMPLEFOGPS, &simpleFogPS);
 	makeVS(IDR_SPHEREBUILDINGVS, &sphereBuildingVS);
 }

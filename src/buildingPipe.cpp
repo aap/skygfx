@@ -3,6 +3,7 @@
 void *ps2BuildingVS, *ps2BuildingFxVS;
 void *xboxBuildingVS, *xboxBuildingPS;
 void *simpleDetailPS;
+void *simpleFogPS;
 void *sphereBuildingVS;
 RxPipeline *buildingPipeline, *buildingDNPipeline;
 
@@ -116,8 +117,24 @@ setDnParams(RpAtomic *atomic)
 	RwD3D9SetVertexShaderConstant(REG_nightparam, nightparam, 1);
 }
 
-struct CBaseModelInfo;
 WRAPPER CBaseModelInfo *CVisibilityPlugins__GetModelInfo(RpAtomic*) { EAXJMP(0x732260); }
+
+void
+TagRenderCB(RpAtomic *atomic, RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instanceData)
+{
+	int alpha, alpharef;
+	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)&alpharef);
+	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
+	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDZERO);
+
+	alpha = CVisibilityPlugins::GetUserValue(atomic);
+	RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)(255 - (int)(240.0f*alpha/255.0f)));
+	D3D9Render(resEntryHeader, instanceData);
+
+	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDSRCALPHA);
+	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDINVSRCALPHA);
+	RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)alpharef);
+}
 
 void
 CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
@@ -170,8 +187,7 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 	RwRenderStateGet(rwRENDERSTATEFOGENABLE, &fog);
 	RwRenderStateGet(rwRENDERSTATEZWRITEENABLE, &zwrite);
 
-	numMeshes = resEntryHeader->numMeshes;
-	while(numMeshes--){
+	for(numMeshes = resEntryHeader->numMeshes; numMeshes--; instancedData++){
 		material = instancedData->material;
 
 		colorScale = 1.0f;
@@ -207,6 +223,11 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 		}else
 			RwD3D9SetPixelShader(simplePS);
 
+		if(material->pipeline == (RxPipeline*)TagRenderCB){
+			TagRenderCB(atomic, resEntryHeader, instancedData);
+			continue;
+		}
+
 		D3D9RenderDual(config->dualPassBuilding, resEntryHeader, instancedData);
 
 		// Reflection
@@ -239,8 +260,6 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 			RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)dst);
 			RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphafunc);
 		}
-
-		instancedData++;
 	}
 	RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTIONREF, (void*)alpharef);
 	RwRenderStateSet(rwRENDERSTATEALPHATESTFUNCTION, (void*)alphafunc);
@@ -297,8 +316,7 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *o
 
 	RwD3D9SetVertexShader(xboxBuildingVS);
 
-	numMeshes = resEntryHeader->numMeshes;
-	while(numMeshes--){
+	for(numMeshes = resEntryHeader->numMeshes; numMeshes--; instancedData++){
 		material = instancedData->material;
 
 		pipeSetTexture(material->texture, 0);
@@ -347,9 +365,12 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *o
 		}else
 			RwD3D9SetPixelShader(simplePS);
 
-		D3D9RenderDual(config->dualPassBuilding, resEntryHeader, instancedData);
+		if(material->pipeline == (RxPipeline*)TagRenderCB){
+			TagRenderCB(atomic, resEntryHeader, instancedData);
+			continue;
+		}
 
-		instancedData++;
+		D3D9RenderDual(config->dualPassBuilding, resEntryHeader, instancedData);
 	}
 	RwD3D9SetTexture(NULL, 1);
 	RwD3D9SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_DISABLE);
@@ -358,6 +379,7 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *o
 	RwD3D9SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_DISABLE);
 }
 
+extern RwRGBAReal spheremapfog;
 void
 CCustomBuildingDNPipeline__CustomPipeRenderCB_Sphere(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
 {
@@ -367,7 +389,6 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_Sphere(RwResEntry *repEntry, void 
 	RpMaterial *material;
 	RwInt32	numMeshes;
 	RwBool hasAlpha;
-	float colorScale;
 	float transform[16];
 	RwMatrix ident, *m1, *m2;
 
@@ -376,11 +397,18 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_Sphere(RwResEntry *repEntry, void 
 
 	_rwD3D9EnableClippingIfNeeded(object, type);
 
-	colorScale = 1.0f;
-	RwD3D9SetPixelShaderConstant(0, &colorScale, 1);
+	RwD3D9SetPixelShaderConstant(0, &spheremapfog, 1);
 
 	pipeGetComposedTransformMatrix(atomic, transform);
 	RwD3D9SetVertexShaderConstant(REG_transform, transform, 4);
+
+
+	RwCamera *cam = (RwCamera*)RWSRCGLOBAL(curCamera);
+	float fog[2];
+	fog[0] = RwCameraGetFarClipPlane(cam);
+	fog[1] = fog[0] - RwCameraGetFogDistance(cam);
+//	RwD3D9SetVertexShaderConstant(45, fog, 1);
+	RwD3D9SetPixelShaderConstant(2, fog, 1);
 
 	resEntryHeader = (RxD3D9ResEntryHeader*)(repEntry + 1);
 	instancedData = (RxD3D9InstanceData*)(resEntryHeader + 1);;
@@ -392,11 +420,12 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_Sphere(RwResEntry *repEntry, void 
 	setDnParams(atomic);
 
 	RwD3D9SetVertexShaderConstant(44, &reflectionCamPos, 1);
+	RwD3D9SetPixelShaderConstant(1, &reflectionCamPos, 1);
 	float worldmat[16];
 	RwToD3DMatrix(worldmat, RwFrameGetLTM(RpAtomicGetFrame(atomic)));
 	RwD3D9SetVertexShaderConstant(REG_transform, worldmat, 4);
 	RwD3D9SetVertexShader(sphereBuildingVS);
-	RwD3D9SetPixelShader(simplePS);
+	RwD3D9SetPixelShader(simpleFogPS);
 
 	numMeshes = resEntryHeader->numMeshes;
 	while(numMeshes--){

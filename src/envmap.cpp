@@ -1,17 +1,45 @@
 #include "skygfx.h"
-#include "LinkList.h"
 
-#ifndef RELEASE
+#ifdef DEBUG
 #define DEBUGENVTEX
 #endif
-
-extern RwCamera *reflectionCam;
-extern RwTexture *reflectionTex;
 
 
 WRAPPER void DeActivateDirectional(void) { EAXJMP(0x735C70); }
 WRAPPER void SetAmbientColours(void) { EAXJMP(0x735D30); }
 
+// We'll use these for all env maps now
+RwCamera *reflectionCam;
+RwRaster *envFB, *envZB;
+RwTexture *reflectionTex;
+
+/* Create envmap rasters as we need them and attach them to cam */
+void
+MakeEnvmapRasters(void)
+{
+	if(envFB && envFB->width == config->envMapSize)
+		return;
+	if(envFB) RwRasterDestroy(envFB);
+	if(envZB) RwRasterDestroy(envZB);
+	envFB = RwRasterCreate(config->envMapSize, config->envMapSize, 0, rwRASTERTYPECAMERATEXTURE);
+	envZB = RwRasterCreate(config->envMapSize, config->envMapSize, 0, rwRASTERTYPEZBUFFER);
+	RwCameraSetRaster(reflectionCam, envFB);
+	RwCameraSetZRaster(reflectionCam, envZB);
+	RwTextureSetRaster(reflectionTex, envFB);
+}
+
+void
+MakeEnvmapCam(void)
+{
+	reflectionCam = RwCameraCreate();
+	RwCameraSetFrame(reflectionCam, RwFrameCreate());
+	RwCameraSetNearClipPlane(reflectionCam, 0.1f);
+	RwCameraSetFarClipPlane(reflectionCam, 250.0f);
+	RwV2d vw;
+	vw.x = vw.y = 0.4f;
+	RwCameraSetViewWindow(reflectionCam, &vw);
+	RpWorldAddCamera(Scene.world, reflectionCam);
+}
 
 #ifdef DEBUGENVTEX
 static RwIm2DVertex screenQuad[4];
@@ -67,55 +95,6 @@ MakeScreenQuad(void)
 
 #endif
 
-struct CBoundingBox
-{
-	CVector min;
-	CVector max;
-};
-
-struct CBoundingSphere
-{
-	CVector center;
-	float radius;
-};
-
-struct CColModel
-{
-	CBoundingBox box;
-	CBoundingSphere sphere;
-	char flags;
-	char allocationFlag;
-	void *colData;
-};
-
-class CBaseModelInfo
-{
-public:
-	void	*vtable;
-	uint32	m_hashKey;
-	uint16	m_numRefs;
-	int16	m_texDict;
-	uint8	m_alpha;
-	uint8	m_numOf2dEffects;
-	uint16	m_first2dEffect;
-	uint16	m_dynamicIndex;
-	uint16	m_flags;
-
-	uint16	GetHasBeenPreRendered(void) { return m_flags & (1<<0); }
-	uint16	GetDrawLast(void) { return m_flags & (1<<1); }
-	uint16	GetDrawAdditive(void) { return m_flags & (1<<2); }
-	uint16	GetDontWriteZ(void) { return m_flags & (1<<3); }
-	uint16	GetNoShadows(void) { return m_flags & (1<<4); }
-	uint16	GetIsLod(void) { return m_flags & (1<<5); }
-	uint16	GetDoBackfaceCulling(void) { return m_flags & (1<<6); }
-	uint16	GetOwnsColModel(void) { return m_flags & (1<<7); }
-
-	CColModel	*pColModel;
-	float	fLodDistanceUnscaled;
-	RwObject	*pRwObject;
-};
-static_assert(sizeof(CBaseModelInfo) == 0x20, "Wrong size: CBaseModelInfo");
-
 class CAtomicModelInfo : public CBaseModelInfo
 {
 public:
@@ -125,46 +104,6 @@ public:
 	// more...
 };
 
-class CEntity;
-CBaseModelInfo *GetModelInfo(CEntity *e);
-
-
-class CEntity : public CPlaceable
-{
-public:
-	RwObject *m_pRWObject;
-	uint32 m_flags;
-	uint16 RandomSeed;
-	uint16 m_nModelIndex;
-	void *pReferences;
-	void *m_pLastRenderedLink;
-	uint16 m_nScanCode;
-	uint8 m_iplIndex;
-	uint8 m_areaCode;
-	CEntity *m_pLod;
-	uint8 numLodChildren;
-	uint8 numLodChildrenRendered;
-	uint8 nType : 3;
-	uint8 nStatus : 5;
-
-	void GetBoundCentre(CVector *v);
-	float GetBoundRadius(void) { return GetModelInfo(this)->pColModel->sphere.radius; }
-	bool GetIsOnScreen(void);
-	bool GetIsOnScreen_orig(void);
-};
-static_assert(sizeof(CEntity) == 0x38, "Wrong size: CEntity");
-
-enum eEntityType
-{
-
-	ENTITY_TYPE_NOTHING,
-	ENTITY_TYPE_BUILDING,
-	ENTITY_TYPE_VEHICLE,
-	ENTITY_TYPE_PED,
-	ENTITY_TYPE_OBJECT,
-	ENTITY_TYPE_DUMMY,
-	ENTITY_TYPE_NOTINPOOLS
-};
 
 WRAPPER void CEntity::GetBoundCentre(CVector *v) { EAXJMP(0x534290); }
 WRAPPER bool CEntity::GetIsOnScreen_orig(void) { EAXJMP(0x534540); }
@@ -210,37 +149,22 @@ WRAPPER void CRenderer::RenderEverythingBarRoads(void) { EAXJMP(0x553AA0); }
 WRAPPER void CRenderer::RenderFadingInEntities(void) { EAXJMP(0x5531E0); }
 WRAPPER void CRenderer::RenderFadingInUnderwaterEntities(void) { EAXJMP(0x553220); }
 
-class CVisibilityPlugins
-{
-public:
-	typedef void	(*VisibilityCallback)(void*, float);
-	struct AlphaObjectInfo
-	{
-		void*	pObject;
-		VisibilityCallback callback;
-		float	fCompareValue;
-	};
-
-	static CLinkList<AlphaObjectInfo> &m_alphaList;
-	static CLinkList<AlphaObjectInfo> &m_alphaBoatAtomicList;
-	static CLinkList<AlphaObjectInfo> &m_alphaEntityList;
-	static CLinkList<AlphaObjectInfo> &m_alphaUnderwaterEntityList;
-	static CLinkList<AlphaObjectInfo> &m_alphaReallyDrawLastList;
-
-	static void RenderFadingBuildings(void);
-};
 
 CLinkList<CVisibilityPlugins::AlphaObjectInfo> &CVisibilityPlugins::m_alphaList = *(CLinkList<CVisibilityPlugins::AlphaObjectInfo>*)0xC88070;
 CLinkList<CVisibilityPlugins::AlphaObjectInfo> &CVisibilityPlugins::m_alphaBoatAtomicList = *(CLinkList<CVisibilityPlugins::AlphaObjectInfo>*)0xC880C8;
 CLinkList<CVisibilityPlugins::AlphaObjectInfo> &CVisibilityPlugins::m_alphaEntityList = *(CLinkList<CVisibilityPlugins::AlphaObjectInfo>*)0xC88120;
 CLinkList<CVisibilityPlugins::AlphaObjectInfo> &CVisibilityPlugins::m_alphaUnderwaterEntityList = *(CLinkList<CVisibilityPlugins::AlphaObjectInfo>*)0xC88178;
 CLinkList<CVisibilityPlugins::AlphaObjectInfo> &CVisibilityPlugins::m_alphaReallyDrawLastList = *(CLinkList<CVisibilityPlugins::AlphaObjectInfo>*)0xC881D0;
+WRAPPER uint16 CVisibilityPlugins::GetUserValue(RpAtomic *atm) { EAXJMP(0x7323A0); }
 
 
 
 inline float sq(float f) { return f*f; }
 float sphereRadius;
 
+/* This is unfortunately not enough to render sphere maps.
+ * The game has more logic to cull objects, but I don't quite know where.
+ * In the worst case whole sectors will be culled. */
 bool
 CEntity::GetIsOnScreen(void)
 {
@@ -258,6 +182,11 @@ CEntity::GetIsOnScreen(void)
 	return GetIsOnScreen_orig();
 }
 
+//bool
+//CEntity::IsEntityOccluded(void)
+//{
+//	return false;
+//}
 
 void
 CVisibilityPlugins::RenderFadingBuildings(void)
@@ -313,6 +242,7 @@ RenderReflectionScene(void)
 		reflectionCamPos = FindPlayerPed(-1)->GetPosition();
 
 	DefinedState();
+	/* We do have fog for the sphere map but we have to calculate it ourselves  */
 	RwRenderStateSet(rwRENDERSTATEFOGENABLE, 0);
 
 	// Render the opaque world
@@ -409,6 +339,8 @@ DrawEnvMapCoronas(RwV3d at)
 void
 DrawDebugEnvMap(void)
 {
+	if(GetAsyncKeyState(VK_F3) & 0x8000)
+		return;
 #ifdef DEBUGENVTEX
 	MakeScreenQuad();
 	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, reflectionTex->raster);
@@ -421,6 +353,8 @@ RenderReflectionMap_leeds(void)
 {
 	RwCamera *cam = Scene.camera;
 	RwCameraEndUpdate(cam);
+
+	MakeEnvmapRasters();
 
 	RwCameraSetViewWindow(reflectionCam, &cam->viewWindow);
 
@@ -449,35 +383,52 @@ RenderReflectionMap_leeds(void)
 
 void (*CRenderer__ConstructRenderList)(void);
 
+int &CMirrors__TypeOfMirror = *(int*)0xC7C724;
+bool &bFudgeNow = *(bool*)0xC7C72A;
+
+RwRGBAReal spheremapfog;
 void
 RenderSphereReflections(void)
 {
 	if(iCanHasbuildingPipe && config->vehiclePipe == CAR_MOBILE){
+		MakeEnvmapRasters();
+
 		RwCamera *cam = Scene.camera;
+		float farplane, fog;
 		RwRaster *fb, *zb;
+
+		sphereRadius = 60.0f;	// TODO? ini option?
 
 		fb = RwCameraGetRaster(cam);
 		zb = RwCameraGetZRaster(cam);
+		farplane = RwCameraGetFarClipPlane(cam);
+		fog = RwCameraGetFogDistance(cam);
 		RwCameraSetRaster(cam, RwCameraGetRaster(reflectionCam));
 		RwCameraSetZRaster(cam, RwCameraGetZRaster(reflectionCam));
+		RwCameraSetFarClipPlane(cam, sphereRadius);
+		RwCameraSetFogDistance(cam, sphereRadius*0.75f);
+
 		RwRGBA color = { skyTopRed, skyTopGreen, skyTopBlue, 255 };
 		if(color.red < 64) color.red = 64;
 		if(color.green < 64) color.green = 64;
 		if(color.blue < 64) color.blue = 64;
 		RwCameraClear(cam, &color, rwCAMERACLEARIMAGE | rwCAMERACLEARZ);
+		RwRGBARealFromRwRGBA(&spheremapfog, &color);
 
-//		if(!(GetAsyncKeyState(VK_F4) & 0x8000))
-		sphereRadius = 60.0f;	// TODO? ini option?
+		bFudgeNow = true;	/* Don't know if this actually fudges, but it might help a bit */
 		gRenderingSpheremap = true;
 		CRenderer__ConstructRenderList();
 		RwCameraBeginUpdate(cam);
 		RenderReflectionScene();
 		RwCameraEndUpdate(cam);
 		gRenderingSpheremap = false;
+		bFudgeNow = false;
 		sphereRadius = 0.0f;
 
 		RwCameraSetRaster(cam, fb);
 		RwCameraSetZRaster(cam, zb);
+		RwCameraSetFarClipPlane(cam, farplane);
+		RwCameraSetFogDistance(cam, fog);
 	}
 	CRenderer__ConstructRenderList();
 }
@@ -485,10 +436,14 @@ RenderSphereReflections(void)
 void
 envmaphooks(void)
 {
-	InjectHook(0x5540AD, &CEntity::GetIsOnScreen);
-	InjectHook(0x554174, &CEntity::GetIsOnScreen);
-	InjectHook(0x5543C2, &CEntity::GetIsOnScreen);
-	InjectHook(0x554504, &CEntity::GetIsOnScreen);
-	InjectHook(0x55495E, &CEntity::GetIsOnScreen);
+	InjectHook(0x536BCE, &CEntity::GetIsOnScreen);	// CEntity::IsVisible
+	InjectHook(0x5540AD, &CEntity::GetIsOnScreen);	// CRenderer::SetupMapEntityVisibility
+	InjectHook(0x554174, &CEntity::GetIsOnScreen);	// CRenderer::SetupMapEntityVisibility
+	InjectHook(0x5543C2, &CEntity::GetIsOnScreen);	// CRenderer::SetupEntityVisibility
+	InjectHook(0x554504, &CEntity::GetIsOnScreen);	// CRenderer::SetupEntityVisibility
+	InjectHook(0x55495E, &CEntity::GetIsOnScreen);	// CRenderer::ScanSectorList
+	InjectHook(0x409870, &CEntity::GetIsOnScreen);	// CStreaming::DeleteLeastUsedEntityRwObject
+//	InjectHook(0x71FAE0, &CEntity::IsEntityOccluded, PATCH_JUMP);
+//	InjectHook(0x420C40, madness, PATCH_JUMP);
 	InterceptCall(&CRenderer__ConstructRenderList, RenderSphereReflections, 0x53E9F9);
 }

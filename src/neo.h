@@ -84,16 +84,13 @@ public:
 	static void *vertexShaderPass1;
 	static void *vertexShaderPass2;
 	// reflection map
-	static RwCamera *reflectionCam;
 	static RwTexture *reflectionMask;
-	static RwTexture *reflectionTex;
 	static RwIm2DVertex screenQuad[4];
 	static RwImVertexIndex screenindices[6];
 
 	CarPipe(void);
 	void Init(void);
 	static void RenderEnvTex(void);
-	static void SetupEnvMap(void);
 	static void RenderCallback(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags);
 	static void ShaderSetup(RpAtomic *atomic);
 	static void DiffusePass(RxD3D9ResEntryHeader *header, RpAtomic *atomic);
