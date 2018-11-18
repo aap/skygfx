@@ -13,7 +13,7 @@ char asipath[MAX_PATH];
 bool disableClouds;
 bool disableGamma;
 bool fixPcCarLight;
-bool explicitBuildingPipe;
+int explicitBuildingPipe;
 int transparentLockon;
 bool iCanHasNeoDrops = true;
 bool iCanHasbuildingPipe = true;
@@ -58,7 +58,7 @@ getpath(char *path)
 	FILE *f;
 
 	f = fopen(path, "r");
-	if (f) {
+	if(f){
 		fclose(f);
 		return path;
 	}
@@ -66,7 +66,7 @@ getpath(char *path)
 	strncpy(tmppath, asipath, MAX_PATH);
 	strcat(tmppath, path);
 	f = fopen(tmppath, "r");
-	if (f) {
+	if(f){
 		fclose(f);
 		return tmppath;
 	}
@@ -833,7 +833,7 @@ readfloat(const std::string &s, float default = 0)
 	}
 }
 
-static bool explicitBuildingPipe_tmp;
+static int explicitBuildingPipe_tmp;
 
 void
 readIni(int n)
@@ -994,7 +994,7 @@ readIni(int n)
 	}
 	c->neoBloodDrops = readint(cfg.get("SkyGfx", "neoBloodDrops", ""), 0);
 	fixPcCarLight = readint(cfg.get("SkyGfx", "fixPcCarLight", ""), 0);
-	explicitBuildingPipe_tmp = readint(cfg.get("SkyGfx", "explicitBuildingPipe", ""), 0);
+	explicitBuildingPipe_tmp = readint(cfg.get("SkyGfx", "explicitBuildingPipe", ""), -1);
 
 	c->zwriteThreshold = readint(cfg.get("SkyGfx", "zwriteThreshold", ""), 128);
 	if(c->zwriteThreshold < 0) c->zwriteThreshold = 0;
@@ -1098,7 +1098,8 @@ afterStreamIni(void)
 	X(cbScale)				\
 	X(cbOffset)				\
 	X(crScale)				\
-	X(crOffset)
+	X(crOffset)				\
+	X(envMapSize)
 
 struct SkyGfxMenu
 {
@@ -1139,13 +1140,25 @@ toggledModulation(void)
 }
 
 void
+changeEnvMapSize(void)
+{
+	int i = 1;
+	// increase or decrease by power of two. doesn't work for 4 or below
+	if(config->envMapSize+1 & config->envMapSize)
+		while(i < config->envMapSize) i *= 2;
+	else
+		while(i < config->envMapSize/2) i *= 2;
+	config->envMapSize = i;
+}
+
+void
 installMenu(void)
 {
 	DebugMenuEntry *e;
 	if(DebugMenuLoad()){
 		static const char *ps2pcStr[] = { "PS2", "PC" };
 		static const char *buildPipeStr[] = { "PS2", "Xbox", "Mobile" };
-		static const char *vehPipeStr[] = { "PS2", "PC", "Xbox", "Spec", "Neo", "LCS", "VCS", "Mobile" };
+		static const char *vehPipeStr[] = { "PS2", "PC", "Xbox", "Spec", "Mobile", "Neo", "LCS", "VCS" };
 		static const char *colFilterStr[] = { "None", "PS2", "PC", "Mobile", "III", "VC", "VCS" };
 		static const char *lightningStr[] = { "Sky only", "Sky and objects" };
 		static const char *shadStr[] = { "Default", "PS2", "PC" };
@@ -1164,6 +1177,7 @@ installMenu(void)
 			menu.vehiclePipe = DebugMenuAddVar("SkyGFX", "Vehicle Pipeline", &config->vehiclePipe, nil, 1, CAR_PS2, NUMCARPIPES-1, vehPipeStr);
 			DebugMenuEntrySetWrap(menu.vehiclePipe, true);
 		}
+		menu.envMapSize = DebugMenuAddVar("SkyGFX", "Vehicle Env Map Size", &config->envMapSize, changeEnvMapSize, 1, 4, 2048, nil);
 		menu.grassAddAmbient = DebugMenuAddVarBool32("SkyGFX", "Add Ambient to Grass", &config->grassAddAmbient, nil);
 		menu.backfaceCull = DebugMenuAddVarBool32("SkyGFX", "Grass Backface Culling", &config->backfaceCull, nil);
 		menu.pedShadows = DebugMenuAddVar("SkyGFX", "Ped Shadows", &config->pedShadows, nil, 1, -1, 1, shadStr);
@@ -1245,6 +1259,10 @@ InjectDelayedPatches()
 	Nop(0x5BBF6F, 2);
 	Nop(0x5BBF83, 2);
 
+	// don't assign building pipe just because a model has two sets of prelight
+	// or when it already has a pipeline
+	explicitBuildingPipe = explicitBuildingPipe_tmp;
+
 	// custom building pipeline
 	if(iCanHasbuildingPipe)
 		hookBuildingPipe();
@@ -1279,9 +1297,6 @@ InjectDelayedPatches()
 	InjectHook(0x711D95, &FX::GetFxQuality_stencil);
 	// vehicle, pole
 	InjectHook(0x70F9B8, &FX::GetFxQuality_stencil);
-
-	// don't assign building pipe just because a model has two sets of prelight
-	explicitBuildingPipe = explicitBuildingPipe_tmp;
 
 	if(fixPcCarLight){
 		// carenv light diffuse
@@ -1358,6 +1373,9 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 
 		for(int i = 0; i < 10; i++)
 			configs[i].version = VERSION;
+
+		/* Fix order of multiplication */
+		InjectHook(0x7646E0, _rwD3D9VSGetComposedTransformMatrix, PATCH_JUMP);
 
 		defaultColourLeftUOffset = CPostEffects::m_colourLeftUOffset;
 		defaultColourRightUOffset = CPostEffects::m_colourRightUOffset;

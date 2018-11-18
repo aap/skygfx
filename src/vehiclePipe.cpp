@@ -29,6 +29,7 @@ void *specCarFxVS, *specCarFxPS;
 void *xboxCarVS;
 void *leedsCarFxVS;
 void *mobileVehiclePipeVS, *mobileVehiclePipePS;
+int renderingWheel;
 
 float black4f[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 float white4f[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
@@ -419,6 +420,10 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 
 	for(; numMeshes--; instancedData++){
 		material = instancedData->material;
+
+		if(instancedData->material->color.alpha == 0)
+			continue;
+
 		pipeSetTexture(material->texture, 0);
 
 		hasAlpha = instancedData->vertexAlpha || instancedData->material->color.alpha != 255;
@@ -445,7 +450,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 		materialFlags = *(RwUInt32*)&material->surfaceProps.specular;
 		hasEnv1  = !!(materialFlags & 1);
 		hasEnv2  = !!(materialFlags & 2);
-		hasSpec  = !!(materialFlags & 4);
+		hasSpec  = !!(materialFlags & 4) && !renderingWheel;
 		if(RpMatFXMaterialGetEffects(material) != rpMATFXEFFECTENVMAP){
 			hasEnv1 = false;
 			hasEnv2 = false;
@@ -488,7 +493,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 			fxpass = 1;
 		}
 
-		if(fxpass && instancedData->material->color.alpha > 0){
+		if(fxpass){
 			RwD3D9SetVertexShader(ps2CarFxVS);
 			RwD3D9SetPixelShader(ps2EnvSpecFxPS);
 
@@ -584,6 +589,10 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(RwResEntry *repEntry, void
 
 	for(; numMeshes--; instancedData++){
 		material = instancedData->material;
+
+		if(instancedData->material->color.alpha == 0)
+			continue;
+
 		pipeSetTexture(material->texture, 0);
 
 		hasAlpha = instancedData->vertexAlpha || instancedData->material->color.alpha != 255;
@@ -610,7 +619,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(RwResEntry *repEntry, void
 		materialFlags = *(RwUInt32*)&material->surfaceProps.specular;
 		hasEnv1  = !!(materialFlags & 1);
 		hasEnv2  = !!(materialFlags & 2);
-		hasSpec  = !!(materialFlags & 4);
+		hasSpec  = !!(materialFlags & 4) && !renderingWheel;
 		if(RpMatFXMaterialGetEffects(material) != rpMATFXEFFECTENVMAP){
 			hasEnv1 = false;
 			hasEnv2 = false;
@@ -652,7 +661,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(RwResEntry *repEntry, void
 			fxpass = 1;
 		}
 
-		if(fxpass && instancedData->material->color.alpha > 0){
+		if(fxpass){
 			RwD3D9SetVertexShader(specCarFxVS);
 			RwD3D9SetPixelShader(specCarFxPS);
 
@@ -790,14 +799,18 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *ob
 	RwD3D9SetVertexDeclaration(resEntryHeader->vertexDeclaration);
 	numMeshes = resEntryHeader->numMeshes;
 
-	while(numMeshes--){
-		envSwitch = 1;
+	for(; numMeshes--; instancedData++){
 		material = instancedData->material;
+
+		if(instancedData->material->color.alpha == 0)
+			continue;
+
+		envSwitch = 1;
 		materialFlags = *(RwUInt32*)&material->surfaceProps.specular;
 
 		hasEnv1  = (materialFlags & 1) && !noFx;
 		hasEnv2  = (materialFlags & 2) && !noFx && (flags & rpGEOMETRYTEXTURED2);
-		hasSpec  = (materialFlags & 4) && !noFx;
+		hasSpec  = (materialFlags & 4) && !noFx && !renderingWheel;
 
 		hasAlpha = instancedData->vertexAlpha || instancedData->material->color.alpha != 255;
 		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)hasAlpha);
@@ -896,8 +909,6 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *ob
 			RwD3D9SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_DIFFUSE);
 		}
 		D3D9RenderDual(config->dualPassVehicle, resEntryHeader, instancedData);
-
-		instancedData++;
 	}
 	RwD3D9SetVertexShader(NULL);
 	RwD3D9SetPixelShader(NULL);
@@ -975,6 +986,10 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_leeds(RwResEntry *repEntry, void *o
 
 	for(; numMeshes--; instancedData++){
 		material = instancedData->material;
+
+		if(instancedData->material->color.alpha == 0)
+			continue;
+
 		pipeSetTexture(material->texture, 0);
 
 		hasAlpha = instancedData->vertexAlpha || instancedData->material->color.alpha != 255;
@@ -1119,6 +1134,10 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_mobile(RwResEntry *repEntry, void *
 
 	for(; numMeshes--; instancedData++){
 		material = instancedData->material;
+
+		if(instancedData->material->color.alpha == 0)
+			continue;
+
 		bool lighttex = material->texture && strstr(material->texture->name, "vehiclelights");
 		pipeSetTexture(material->texture, 0);
 
@@ -1135,7 +1154,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_mobile(RwResEntry *repEntry, void *
 		materialFlags = *(RwUInt32*)&material->surfaceProps.specular;
 		hasEnv1  = !!(materialFlags & 1);
 		hasEnv2  = !!(materialFlags & 2);
-		hasSpec  = !!(materialFlags & 4);
+		hasSpec  = !!(materialFlags & 4) && !renderingWheel;
 		if(noFx || RpMatFXMaterialGetEffects(material) != rpMATFXEFFECTENVMAP){
 			hasEnv1 = false;
 			hasEnv2 = false;
@@ -1209,7 +1228,6 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_mobile(RwResEntry *repEntry, void *
 void
 CCustomCarEnvMapPipeline__CustomPipeRenderCB_Switch(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
 {
-if(GetAsyncKeyState(VK_F4) & 0x8000) return;
 	switch(config->vehiclePipe){
 	case CAR_PS2:
 		CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(repEntry, object, type, flags);
@@ -1247,6 +1265,15 @@ setVehiclePipeCB(RxPipelineNode *node, RxD3D9AllInOneRenderCallBack callback)
 	RxD3D9AllInOneSetRenderCallBack(node, CCustomCarEnvMapPipeline__CustomPipeRenderCB_Switch);
 }
 
+RpAtomic*
+CVisibilityPlugins__RenderWheelAtomicCB(RpAtomic *atomic)
+{
+	renderingWheel = 1;
+	AtomicDefaultRenderCallBack(atomic);
+	renderingWheel = 0;
+	return atomic;
+}
+
 int CCarFXRenderer__IsCCPCPipelineAttached(RpAtomic *atomic)
 {
 	// Temporary to disable car pipeline and fall back to MatFX
@@ -1259,6 +1286,7 @@ hookVehiclePipe(void)
 {
 	InjectHook(0x5D9FE9, setVehiclePipeCB);
 	InterceptCall(&CCustomCarEnvMapPipeline__PreRenderUpdate_orig, CCustomCarEnvMapPipeline__PreRenderUpdate, 0x5D5B10);
+	InjectHook(0x7323C0, CVisibilityPlugins__RenderWheelAtomicCB, PATCH_JUMP);
 
 	// TEMP - disable car pipe
 #if 0

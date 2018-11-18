@@ -1,5 +1,39 @@
+
 #include "skygfx.h"
 #include <DirectXMath.h>
+
+typedef D3DMATRIX D3DXMATRIX;
+
+D3DMATRIX &_RwD3D9D3D9ViewTransform = *(D3DMATRIX*)0xC9BC80;
+D3DMATRIX &_RwD3D9D3D9ProjTransform = *(D3DMATRIX*)0x8E2458;
+D3DMATRIX &D3D9ViewProjTransform = *(D3DMATRIX*)0xC94C30;
+D3DMATRIX &D3D9Transform = *(D3DMATRIX*)0x8D7390;
+D3DMATRIX *&_RwD3D9ActiveViewProjTransform = *(D3DMATRIX**)0xC97C64;
+RwMatrix *&D3D9ActiveTransform = *(RwMatrix**)0xC94C70;
+D3DMATRIX D3D9WorldViewTransform;	/* not in RW */
+
+WRAPPER D3DXMATRIX *__stdcall D3DXMatrixMultiply(D3DXMATRIX*, const D3DXMATRIX*, const D3DXMATRIX*) { EAXJMP(0x7672E1); }
+WRAPPER D3DXMATRIX *__stdcall D3DXMatrixMultiplyTranspose(D3DXMATRIX*, const D3DXMATRIX*, const D3DXMATRIX*) { EAXJMP(0x7676C7); }
+WRAPPER D3DXMATRIX *__stdcall D3DXMatrixTranspose(D3DXMATRIX*, const D3DXMATRIX*) { EAXJMP(0x7675EE); }
+
+/* Fixed RW function */
+void
+_rwD3D9VSGetComposedTransformMatrix(void *transformMatrix)
+{
+	/* Probably not that useful anymore */
+	if(_RwD3D9ActiveViewProjTransform == NULL){
+		D3DXMatrixMultiply(&D3D9ViewProjTransform, &_RwD3D9D3D9ViewTransform, &_RwD3D9D3D9ProjTransform);
+		_RwD3D9ActiveViewProjTransform = &D3D9ViewProjTransform;
+	}
+
+	if(D3D9ActiveTransform != NULL){
+		/* W * (V * P) is bad. we want (W * V) * P */
+		//D3DXMatrixMultiplyTranspose((D3DMATRIX*)transformMatrix, &D3D9Transform, _RwD3D9ActiveViewProjTransform);
+		D3DXMatrixMultiply(&D3D9WorldViewTransform, &D3D9Transform, &_RwD3D9D3D9ViewTransform);
+		D3DXMatrixMultiplyTranspose((D3DMATRIX*)transformMatrix, &D3D9WorldViewTransform, &_RwD3D9D3D9ProjTransform);
+	}else
+		D3DXMatrixTranspose((D3DMATRIX*)transformMatrix, _RwD3D9ActiveViewProjTransform);
+}
 
 void
 RwToD3DMatrix(void *d3d, RwMatrix *rw)
@@ -52,10 +86,6 @@ enum {
 	LOC_combined = 0,
 	LOC_world = 1,
 };
-
-float *RwD3D9D3D9ViewTransform = (float*)0xC9BC80;
-float *RwD3D9D3D9ProjTransform = (float*)0x8E2458;
-
 void
 transpose(void *dst, void *src)
 {
@@ -87,8 +117,8 @@ pipeGetComposedTransformMatrix(RpAtomic *atomic, float *out)
 	RwMatrix *world = RwFrameGetLTM(RpAtomicGetFrame(atomic));
 
 	RwToD3DMatrix(&pipeWorldMat, world);
-	transpose(&pipeViewMat, RwD3D9D3D9ViewTransform);
-	transpose(&pipeProjMat, RwD3D9D3D9ProjTransform);
+	transpose(&pipeViewMat, &_RwD3D9D3D9ViewTransform);
+	transpose(&pipeProjMat, &_RwD3D9D3D9ProjTransform);
 
 	DirectX::XMMATRIX combined = DirectX::XMMatrixMultiply(pipeProjMat, DirectX::XMMatrixMultiply(pipeViewMat, pipeWorldMat));
 	memcpy(out, &combined, 64);

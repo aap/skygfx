@@ -784,13 +784,12 @@ CCustomBuildingRenderer__IsCBPCPipelineAttached(RpAtomic *atomic)
 	if(pipeID == RSPIPE_PC_CustomBuilding_PipeID || pipeID == RSPIPE_PC_CustomBuildingDN_PipeID)
 		return TRUE;
 
-	if(!explicitBuildingPipe)
-		// This is only a building in this case if we don't have another pipe attached already!
-		// Skin or MatFX may already be attached and we'd like to use them
-		if(pipe == nil && GetExtraVertColourPtr(geo) && RpGeometryGetPreLightColors(geo))
-			return TRUE;
+	if(explicitBuildingPipe > 0)
+		return FALSE;
 
-	return FALSE;
+	// This is only a building in this case if we don't have another pipe attached already!
+	// Skin or MatFX may already be attached and we'd like to use them
+	return pipe == nil && GetExtraVertColourPtr(geo) && RpGeometryGetPreLightColors(geo);
 }
 
 void
@@ -801,7 +800,8 @@ hookBuildingPipe(void)
 	InjectHook(0x5D7D90, CCustomBuildingPipeline__CreateCustomObjPipe_PS2);
 	Patch<uint8>(0x5D7200, 0xC3);	// disable interpolation
 
-	InjectHook(0x5D7F40, CCustomBuildingRenderer__IsCBPCPipelineAttached, PATCH_JUMP);
+	if(explicitBuildingPipe >= 0)
+		InjectHook(0x5D7F40, CCustomBuildingRenderer__IsCBPCPipelineAttached, PATCH_JUMP);
 
 
 //	Patch<BYTE>(0x732B40, 0xC3);	// disable fading entities

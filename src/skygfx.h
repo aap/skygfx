@@ -42,10 +42,10 @@ enum CarPipeline
 	CAR_PC,
 	CAR_XBOX,
 	CAR_SPEC,
+	CAR_MOBILE,
 	CAR_NEO,
 	CAR_LCS,
 	CAR_VCS,
-	CAR_MOBILE,
 
 	NUMCARPIPES
 };
@@ -112,7 +112,7 @@ void reloadAllInis(void);
 void setConfig(void);
 
 extern bool iCanHasbuildingPipe;
-extern bool explicitBuildingPipe;
+extern int explicitBuildingPipe;
 
 /* Env map */
 extern RwCamera *reflectionCam;

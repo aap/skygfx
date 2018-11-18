@@ -2,6 +2,8 @@
 #include "neo.h"
 #include <DirectXMath.h>
 
+extern int renderingWheel;
+
 enum {
 	LOC_combined    = 0,
 	LOC_world       = 4,
@@ -18,7 +20,6 @@ enum {
 	LOC_reflProps   = 31,
 	LOC_surfProps	= 32,
 };
-
 
 //#define DEBUGTEX
 
@@ -272,10 +273,10 @@ CarPipe::ShaderSetup(RpAtomic *atomic)
 	RwMatrix *camfrm = RwFrameGetLTM(RwCameraGetFrame(cam));
 	RwD3D9SetVertexShaderConstant(LOC_eye, (void*)RwMatrixGetPos(camfrm), 1);
 
-	UploadLightColorWithSpecular(pAmbient, LOC_ambient);
-	UploadLightColorWithSpecular(pDirect, LOC_directCol);
+	pipeUploadLightColor(pAmbient, LOC_ambient);		// Seems to work better without spec
+	UploadLightColorWithSpecular(pDirect, LOC_directCol);	// NOT actually used
 	pipeUploadLightDirection(pDirect, LOC_directDir);
-	for(int i = 0 ; i < 6; i++)
+	for(int i = 0; i < 6; i++)
 		if(i < NumExtraDirLightsInWorld && RpLightGetType(pExtraDirectionals[i]) == rpLIGHTDIRECTIONAL){
 			pipeUploadLightDirection(pExtraDirectionals[i], LOC_lightDir+i);
 			UploadLightColorWithSpecular(pExtraDirectionals[i], LOC_lightCol+i);
@@ -372,7 +373,9 @@ CarPipe::SpecularPass(RxD3D9ResEntryHeader *header, RpAtomic *atomic)
 	RwBool lighting;
 	RxD3D9InstanceData *inst = (RxD3D9InstanceData*)&header[1];
 	CustomSpecMapPipeMaterialData *specData;
-	int noRefl;
+
+	if(CVisibilityPlugins__GetAtomicId(atomic) & 0x6000)
+		return;
 
 	RwRenderStateGet(rwRENDERSTATEZWRITEENABLE, &zwrite);
 	RwRenderStateGet(rwRENDERSTATEFOGENABLE, &fog);
@@ -393,18 +396,17 @@ CarPipe::SpecularPass(RxD3D9ResEntryHeader *header, RpAtomic *atomic)
 	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)1);
 
 	RwD3D9GetRenderState(D3DRS_LIGHTING, &lighting);
-	noRefl = CVisibilityPlugins__GetAtomicId(atomic) & 0x6000;
 
 	float lightmult = 1.85f * CCustomCarEnvMapPipeline__m_EnvMapLightingMult;
 	for(uint i = 0; i < header->numMeshes; i++){
 		RwUInt32 materialFlags = *(RwUInt32*)&inst->material->surfaceProps.specular;
-		bool hasSpec  = !((materialFlags & 4) == 0 || !lighting);
+		bool hasSpec = !((materialFlags & 4) == 0 || !lighting) && inst->material->color.alpha > 0;
 		int matfx = RpMatFXMaterialGetEffects(inst->material);
 		if(matfx != rpMATFXEFFECTENVMAP)
 			hasSpec = false;
 
-		specData = *RWPLUGINOFFSET(CustomSpecMapPipeMaterialData*, inst->material, CCustomCarEnvMapPipeline__ms_specularMapPluginOffset);
-		if(hasSpec && !noRefl){
+		if(hasSpec){
+			specData = *RWPLUGINOFFSET(CustomSpecMapPipeMaterialData*, inst->material, CCustomCarEnvMapPipeline__ms_specularMapPluginOffset);
 			RwSurfaceProperties surfprops;
 			surfprops.specular = specData->specularity*5.0f*config->neoSpecularityMult*lightmult;
 			if(surfprops.specular > 1.0f) surfprops.specular = 1.0f;
@@ -449,7 +451,8 @@ CarPipe::RenderCallback(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt
 	RwD3D9SetPixelShader(NULL);
 
 	DiffusePass(header, (RpAtomic*)object);
-	SpecularPass(header, (RpAtomic*)object);
+	if(!renderingWheel)
+		SpecularPass(header, (RpAtomic*)object);
 	RwD3D9SetTexture(NULL, 1);
 	RwD3D9SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_DISABLE);
 	RwD3D9SetTextureStageState(1, D3DTSS_ALPHAOP, D3DTOP_DISABLE);

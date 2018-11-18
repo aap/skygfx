@@ -78,7 +78,7 @@ WRAPPER RwBool RwD3D9CreatePixelShader(const RwUInt32 *function, void **shader) 
 WRAPPER RwBool RwD3D9CreateVertexShader(const RwUInt32 *function, void **shader) { EAXJMP(0x7FAC60); }
 WRAPPER void _rwD3D9SetPixelShaderConstant(RwUInt32 i, const void *data, RwUInt32 size) { EAXJMP(0x7FAD00); }
 WRAPPER void _rwD3D9VSSetActiveWorldMatrix(const RwMatrix *worldMatrix) { EAXJMP(0x764650); }
-WRAPPER void _rwD3D9VSGetComposedTransformMatrix(void *transformMatrix) { EAXJMP(0x7646E0); }
+//WRAPPER void _rwD3D9VSGetComposedTransformMatrix(void *transformMatrix) { EAXJMP(0x7646E0); }
 WRAPPER void _rwD3D9VSGetInverseWorldMatrix(void *inverseWorldMatrix) { EAXJMP(0x7647B0); }
 WRAPPER void RwD3D9GetRenderState(RwUInt32 state, void *value) { EAXJMP(0x7FC320); }
 WRAPPER void RwD3D9SetRenderState(RwUInt32 state, RwUInt32 value) { EAXJMP(0x7FC2D0); }
