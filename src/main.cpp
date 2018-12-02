@@ -1468,9 +1468,19 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		InjectHook(0x5A3CB9, ps2rand);
 		InjectHook(0x5A3CDB, ps2rand);
 		InjectHook(0x5A3CF2, ps2rand);
-		Patch<float*>(0x5A3CC8, (float*)&ps2randnormalize);
-		Patch<float*>(0x5A3CEA, (float*)&ps2randnormalize);
-		Patch<float*>(0x5A3D05, (float*)&ps2randnormalize);
+		Patch(0x5A3CC8, &ps2randnormalize);
+		Patch(0x5A3CEA, &ps2randnormalize);
+		Patch(0x5A3D05, &ps2randnormalize);
+		// a few more procobjs
+		InjectHook(0x5A3476, ps2rand);
+		InjectHook(0x5A34AB, ps2rand);
+		InjectHook(0x5A34E0, ps2rand);
+		InjectHook(0x5A3515, ps2rand);
+		Patch(0x5A348D + 2, &ps2randnormalize);
+		Patch(0x5A34C2 + 2, &ps2randnormalize);
+		Patch(0x5A34FB + 2, &ps2randnormalize);
+		Patch(0x5A352F + 2, &ps2randnormalize);
+
 //		InjectHook(0x5A3C6E, floatbitpattern);
 
 		// increase multipass distance

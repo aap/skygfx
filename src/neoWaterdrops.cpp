@@ -23,7 +23,7 @@ enum eCamMode
 	MODE_AIMING, //=5, 
 	MODE_DEBUG, //=6, 
 	MODE_SNIPER, //=7, 
-	MODE_ROCKETLAUNCHER, //=8,   
+	MODE_ROCKETLAUNCHER, //=8,
 	MODE_MODELVIEW, //=9, 
 	MODE_BILL, //=10, 
 	MODE_SYPHON, //=11, 
@@ -33,14 +33,14 @@ enum eCamMode
 	MODE_FIXED, //=15, 
 	MODE_1STPERSON, //=16, 
 	MODE_FLYBY, //=17, 
-	MODE_CAM_ON_A_STRING, //=18,  
+	MODE_CAM_ON_A_STRING, //=18,
 	MODE_REACTION, //=19, 
 	MODE_FOLLOW_PED_WITH_BIND, //=20, 
 	MODE_CHRIS, //21
 	MODE_BEHINDBOAT, //=22, 
 	MODE_PLAYER_FALLEN_WATER, //=23, 
 	MODE_CAM_ON_TRAIN_ROOF, //=24, 
-	MODE_CAM_RUNNING_SIDE_TRAIN, //=25,  
+	MODE_CAM_RUNNING_SIDE_TRAIN, //=25,
 	MODE_BLOOD_ON_THE_TRACKS, //=26, 
 	MODE_IM_THE_PASSENGER_WOOWOO, //=27, 
 	MODE_SYPHON_CRIM_IN_FRONT,// =28, 
@@ -55,7 +55,7 @@ enum eCamMode
 	MODE_TOP_DOWN_PED, //=37,
 	MODE_LIGHTHOUSE, //=38
 	MODE_SNIPER_RUNABOUT, //=39, 
-	MODE_ROCKETLAUNCHER_RUNABOUT, //=40,  
+	MODE_ROCKETLAUNCHER_RUNABOUT, //=40,
 	MODE_1STPERSON_RUNABOUT, //=41,
 	MODE_M16_1STPERSON_RUNABOUT, //=42,
 	MODE_FIGHT_CAM_RUNABOUT, //=43,
@@ -219,74 +219,74 @@ hookWaterDrops()
 		}
 		return CreateFxSystem.fun(_this, edx, name, point, m, flag);
 	};
-    auto f = static_cast<void*(__fastcall*)(void*, int, char*, RwV3d*, RwMatrix*, char)>(CreateFxSystemHook);
-    CreateFxSystem.fun = injector::MakeCALL(0x4A10C9, f, true).get();// "water_splash_big"
-    injector::MakeCALL(0x4A1139, f, true); // "water_splash"
-    injector::MakeCALL(0x4A11A9, f, true); // "water_splsh_sml"
-    injector::MakeCALL(0x68AEBA, f, true); // "water_swim"
-    injector::MakeCALL(0x68AF15, f, true); // "water_swim"
-    injector::MakeCALL(0x68AF66, f, true); // "water_swim"
-    injector::MakeCALL(0x68AFB3, f, true); // "water_swim"
+	auto f = static_cast<void*(__fastcall*)(void*, int, char*, RwV3d*, RwMatrix*, char)>(CreateFxSystemHook);
+	CreateFxSystem.fun = injector::MakeCALL(0x4A10C9, f, true).get();// "water_splash_big"
+	injector::MakeCALL(0x4A1139, f, true); // "water_splash"
+	injector::MakeCALL(0x4A11A9, f, true); // "water_splsh_sml"
+	injector::MakeCALL(0x68AEBA, f, true); // "water_swim"
+	injector::MakeCALL(0x68AF15, f, true); // "water_swim"
+	injector::MakeCALL(0x68AF66, f, true); // "water_swim"
+	injector::MakeCALL(0x68AFB3, f, true); // "water_swim"
 
-    //AddParticle
-    struct Fx_c {
-        void* prt_blood;
-        void* prt_boatsplash;
-        void* prt_bubble;
-        void* prt_cardebris;
-        void* prt_collisionsmoke;
-        void* prt_gunshell;
-        void* prt_sand;
-        void* prt_sand2;
-        void* prt_smoke_huge;
-        void* prt_smokeII_3_expand;
-        void* prt_spark;
-        void* prt_spark_2;
-        void* prt_splash;
-        void* prt_wake;
-        void* prt_watersplash;
-        void* prt_wheeldirt;
-        void* prt_glass;
-        //...
-    };
-    static Fx_c &g_fx = *(Fx_c*)0xA9AE00;
-    static injector::hook_back<void*(__fastcall*)(void*, int, RwV3d*, RwV3d*, float, void*, float, float, float, unsigned char)> AddParticle;
-    auto AddParticleHook = [](void* _this, int edx, RwV3d* position, RwV3d* velocity, float arg2, void* prtMult, float arg4, float brightness, float arg6, unsigned char arg7) -> void*
-    {
-        if (config->neoWaterDrops) {
-            RwV3d dist;
-            RwV3dSub(&dist, position, &WaterDrops::ms_lastPos);
-            float pd = 20.0f;
-            bool isBlood = false;
-            if (_this == g_fx.prt_blood) { pd = 5.0; isBlood = true; }
-            else if (_this == g_fx.prt_boatsplash) { pd = 40.0; }
-            else if (_this == g_fx.prt_splash) { pd = 15.0; }
-            else if (_this == g_fx.prt_wake) { pd = 10.0; }
-            else if (_this == g_fx.prt_watersplash) { pd = 30.0; }
+	//AddParticle
+	struct Fx_c {
+		void* prt_blood;
+		void* prt_boatsplash;
+		void* prt_bubble;
+		void* prt_cardebris;
+		void* prt_collisionsmoke;
+		void* prt_gunshell;
+		void* prt_sand;
+		void* prt_sand2;
+		void* prt_smoke_huge;
+		void* prt_smokeII_3_expand;
+		void* prt_spark;
+		void* prt_spark_2;
+		void* prt_splash;
+		void* prt_wake;
+		void* prt_watersplash;
+		void* prt_wheeldirt;
+		void* prt_glass;
+		//...
+	};
+	static Fx_c &g_fx = *(Fx_c*)0xA9AE00;
+	static injector::hook_back<void*(__fastcall*)(void*, int, RwV3d*, RwV3d*, float, void*, float, float, float, unsigned char)> AddParticle;
+	auto AddParticleHook = [](void* _this, int edx, RwV3d* position, RwV3d* velocity, float arg2, void* prtMult, float arg4, float brightness, float arg6, unsigned char arg7) -> void*
+	{
+		if(config->neoWaterDrops){
+			RwV3d dist;
+			RwV3dSub(&dist, position, &WaterDrops::ms_lastPos);
+			float pd = 20.0f;
+			bool isBlood = false;
+			if(_this == g_fx.prt_blood) { pd = 5.0; isBlood = true; }
+			else if(_this == g_fx.prt_boatsplash) { pd = 40.0; }
+			else if(_this == g_fx.prt_splash) { pd = 15.0; }
+			else if(_this == g_fx.prt_wake) { pd = 10.0; }
+			else if(_this == g_fx.prt_watersplash) { pd = 30.0; }
 
-            auto len = RwV3dLength(&dist);
-            if (len <= pd)
-                WaterDrops::FillScreenMoving(1.0f / (len / 2.0f), isBlood);
-        }
-        return AddParticle.fun(_this, edx, position, velocity, arg2, prtMult, arg4, brightness, arg6, arg7);
-    };
-    auto f2 = static_cast<void*(__fastcall*)(void*, int, RwV3d*, RwV3d*, float, void*, float, float, float, unsigned char)>(AddParticleHook);
-    AddParticle.fun = injector::MakeCALL(0x72AD55, f2, true).get(); // "prt_splash"
-    injector::MakeCALL(0x7294A6, f2, true); // "prt_watersplash"
-    injector::MakeCALL(0x6DE21A, f2, true); // "prt_splash"
-    injector::MakeCALL(0x6DD6C5, f2, true); // "prt_boatsplash"
-    injector::MakeCALL(0x6DD589, f2, true); // "prt_boatsplash"
-    injector::MakeCALL(0x6C3ABE, f2, true); // "prt_wake"
-    injector::MakeCALL(0x6C3939, f2, true); // "prt_watersplash"
-    injector::MakeCALL(0x6AA86F, f2, true); // "prt_watersplash"
-    injector::MakeCALL(0x68ADE2, f2, true); // "prt_wake"
-    injector::MakeCALL(0x5E7649, f2, true); // "prt_watersplash"
-    injector::MakeCALL(0x5E74DC, f2, true); // "prt_splash"
-    injector::MakeCALL(0x5E37AF, f2, true); // "prt_splash"
-    injector::MakeCALL(0x5E3782, f2, true); // "prt_splash"
-    injector::MakeCALL(0x49FEEE, f2, true); // "prt_boatsplash"
-    injector::MakeCALL(0x49F01F, f2, true); // "prt_blood"
-    injector::MakeCALL(0x49EC92, f2, true); // "prt_blood"
+			float len = RwV3dLength(&dist);
+			if(len <= pd)
+				WaterDrops::FillScreenMoving(1.0f / (len / 2.0f), isBlood);
+		}
+		return AddParticle.fun(_this, edx, position, velocity, arg2, prtMult, arg4, brightness, arg6, arg7);
+	};
+	auto f2 = static_cast<void*(__fastcall*)(void*, int, RwV3d*, RwV3d*, float, void*, float, float, float, unsigned char)>(AddParticleHook);
+	AddParticle.fun = injector::MakeCALL(0x72AD55, f2, true).get(); // "prt_splash"
+	injector::MakeCALL(0x7294A6, f2, true); // "prt_watersplash"
+	injector::MakeCALL(0x6DE21A, f2, true); // "prt_splash"
+	injector::MakeCALL(0x6DD6C5, f2, true); // "prt_boatsplash"
+	injector::MakeCALL(0x6DD589, f2, true); // "prt_boatsplash"
+	injector::MakeCALL(0x6C3ABE, f2, true); // "prt_wake"
+	injector::MakeCALL(0x6C3939, f2, true); // "prt_watersplash"
+	injector::MakeCALL(0x6AA86F, f2, true); // "prt_watersplash"
+	injector::MakeCALL(0x68ADE2, f2, true); // "prt_wake"
+	injector::MakeCALL(0x5E7649, f2, true); // "prt_watersplash"
+	injector::MakeCALL(0x5E74DC, f2, true); // "prt_splash"
+	injector::MakeCALL(0x5E37AF, f2, true); // "prt_splash"
+	injector::MakeCALL(0x5E3782, f2, true); // "prt_splash"
+	injector::MakeCALL(0x49FEEE, f2, true); // "prt_boatsplash"
+	injector::MakeCALL(0x49F01F, f2, true); // "prt_blood"
+	injector::MakeCALL(0x49EC92, f2, true); // "prt_blood"
 
 	//chainsaw
 	static injector::hook_back<void(__fastcall*)(void* _this, int edx, int eventID)> CAEPedWeaponAudioEntityAddAudioEvent;
@@ -297,20 +297,20 @@ hookWaterDrops()
 		return CAEPedWeaponAudioEntityAddAudioEvent.fun(_this, edx, eventID);
 	}; CAEPedWeaponAudioEntityAddAudioEvent.fun = injector::MakeCALL(0x61CD73, static_cast<void(__fastcall*)(void*, int, int)>(CAEPedWeaponAudioEntityAddAudioEventHook), true).get();
 
-    //harvester
-    static injector::hook_back<void(__cdecl*)(CEntity*)> WorldAdd;
-    auto WorldAddHook = [](CEntity* entity)
-    {
-        WorldAdd.fun(entity);
-
-        if (config->neoWaterDrops) {
-            RwV3d dist;
-            RwV3dSub(&dist, (RwV3d*)&entity->GetPosition(), &WaterDrops::ms_lastPos);
-            if (RwV3dLength(&dist) <= 20.0f)
-                WaterDrops::FillScreenMoving(0.5f, true);
-        }
-    };
-    WorldAdd.fun = injector::MakeCALL(0x6A9BE2, static_cast<void(__cdecl*)(CEntity*)>(WorldAddHook), true).get();
+	//harvester
+	static injector::hook_back<void(__cdecl*)(CEntity*)> WorldAdd;
+	auto WorldAddHook = [](CEntity* entity)
+	{
+		WorldAdd.fun(entity);
+		
+		if(config->neoWaterDrops){
+			RwV3d dist;
+			RwV3dSub(&dist, (RwV3d*)&entity->GetPosition(), &WaterDrops::ms_lastPos);
+			if(RwV3dLength(&dist) <= 20.0f)
+				WaterDrops::FillScreenMoving(0.5f, true);
+		}
+	};
+	WorldAdd.fun = injector::MakeCALL(0x6A9BE2, static_cast<void(__cdecl*)(CEntity*)>(WorldAddHook), true).get();
 }
 
 void
@@ -511,7 +511,7 @@ WaterDrops::SprayDrops(void)
 		if(ms_numDrops < MAXDROPS){
 			//if(isIII()){
 			//	if(ms_splashObject){
-			//      RwV3d dist;
+			//	RwV3d dist;
 			//		RwV3dSub(&dist, &ms_splashObject->matrix.matrix.pos, &ms_lastPos);
 			//		int n = ndrops[ms_splashDuration] * (1.0f - (RwV3dLength(&dist) - 5.0f) / 15.0f);
 			//		while(n--)
