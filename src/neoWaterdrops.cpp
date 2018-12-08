@@ -223,10 +223,10 @@ hookWaterDrops()
     CreateFxSystem.fun = injector::MakeCALL(0x4A10C9, f, true).get();// "water_splash_big"
     injector::MakeCALL(0x4A1139, f, true); // "water_splash"
     injector::MakeCALL(0x4A11A9, f, true); // "water_splsh_sml"
-    injector::MakeCALL(0x68AEBA, f, true); // "water_swim"
-    injector::MakeCALL(0x68AF15, f, true); // "water_swim"
-    injector::MakeCALL(0x68AF66, f, true); // "water_swim"
-    injector::MakeCALL(0x68AFB3, f, true); // "water_swim"
+    //injector::MakeCALL(0x68AEBA, f, true); // "water_swim"
+    //injector::MakeCALL(0x68AF15, f, true); // "water_swim"
+    //injector::MakeCALL(0x68AF66, f, true); // "water_swim"
+    //injector::MakeCALL(0x68AFB3, f, true); // "water_swim"
 
     //AddParticle
     struct Fx_c {
@@ -271,9 +271,9 @@ hookWaterDrops()
         return AddParticle.fun(_this, edx, position, velocity, arg2, prtMult, arg4, brightness, arg6, arg7);
     };
     auto f2 = static_cast<void*(__fastcall*)(void*, int, RwV3d*, RwV3d*, float, void*, float, float, float, unsigned char)>(AddParticleHook);
-    AddParticle.fun = injector::MakeCALL(0x72AD55, f2, true).get(); // "prt_splash"
-    injector::MakeCALL(0x7294A6, f2, true); // "prt_watersplash"
-    injector::MakeCALL(0x6DE21A, f2, true); // "prt_splash"
+    //injector::MakeCALL(0x72AD55, f2, true); // "prt_splash"
+    AddParticle.fun = injector::MakeCALL(0x7294A6, f2, true).get(); // "prt_watersplash"
+    //injector::MakeCALL(0x6DE21A, f2, true); // "prt_splash"
     injector::MakeCALL(0x6DD6C5, f2, true); // "prt_boatsplash"
     injector::MakeCALL(0x6DD589, f2, true); // "prt_boatsplash"
     injector::MakeCALL(0x6C3ABE, f2, true); // "prt_wake"
@@ -281,9 +281,9 @@ hookWaterDrops()
     injector::MakeCALL(0x6AA86F, f2, true); // "prt_watersplash"
     injector::MakeCALL(0x68ADE2, f2, true); // "prt_wake"
     injector::MakeCALL(0x5E7649, f2, true); // "prt_watersplash"
-    injector::MakeCALL(0x5E74DC, f2, true); // "prt_splash"
-    injector::MakeCALL(0x5E37AF, f2, true); // "prt_splash"
-    injector::MakeCALL(0x5E3782, f2, true); // "prt_splash"
+    //injector::MakeCALL(0x5E74DC, f2, true); // "prt_splash"
+    //injector::MakeCALL(0x5E37AF, f2, true); // "prt_splash"
+    //injector::MakeCALL(0x5E3782, f2, true); // "prt_splash"
     injector::MakeCALL(0x49FEEE, f2, true); // "prt_boatsplash"
     injector::MakeCALL(0x49F01F, f2, true); // "prt_blood"
     injector::MakeCALL(0x49EC92, f2, true); // "prt_blood"
