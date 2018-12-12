@@ -559,7 +559,7 @@ FX::GetFxQuality_stencil(void)
 }
 
 unsigned __int64 rand_seed = 1;
-float ps2randnormalize = 1.0f/0x7FFFFFFF;
+float ps2randnormalize = 1.0f/0x80000000;
 
 int ps2rand()
 {
