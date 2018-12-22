@@ -34,6 +34,8 @@ int renderingWheel;
 float black4f[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 float white4f[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
 
+int betaEnvmaptest = 0;
+
 CPool<CustomEnvMapPipeAtomicData> *&gEnvMapPipeAtmDataPool = *(CPool<CustomEnvMapPipeAtomicData>**)0xC02D2C;
 
 void*
@@ -52,15 +54,14 @@ static D3DMATRIX envtexmat;
 CustomEnvMapPipeAtomicData*
 CCustomCarEnvMapPipeline__AllocEnvMapPipeAtomicData(RpAtomic *atomic)
 {
-	CustomEnvMapPipeAtomicData *atmEnvData = *RWPLUGINOFFSET(CustomEnvMapPipeAtomicData*, atomic,
-	                             CCustomCarEnvMapPipeline__ms_envMapAtmPluginOffset);
+	CustomEnvMapPipeAtomicData *atmEnvData = *GETENVMAPATM(atomic);
 	if(atmEnvData == NULL){
 		atmEnvData = new CustomEnvMapPipeAtomicData;
+		// TODO: do we always have this?
 		atmEnvData->trans = 0;
 		atmEnvData->posx = 0;
 		atmEnvData->posy = 0;
-		*RWPLUGINOFFSET(CustomEnvMapPipeAtomicData*, atomic,
-		                CCustomCarEnvMapPipeline__ms_envMapAtmPluginOffset) = atmEnvData;
+		*GETENVMAPATM(atomic) = atmEnvData;
 	}
 	return atmEnvData;
 }
@@ -138,6 +139,10 @@ CCustomCarEnvMapPipeline__Env1Xform(RwMatrix *envmat,
 	float sclx, scly;
 	sclx = envData->transScaleX/8.0f*50.0f;
 	scly = envData->transScaleY/8.0f*50.0f;
+if(0 && betaEnvmaptest){
+sclx *= 4.0f;
+scly *= 4.0f;
+}
 	// fractional parts of pos/scl
 	envXform[0] = (envmat->pos.x - ((float)(int)(envmat->pos.x/sclx))*sclx)/sclx;
 	envXform[1] = (envmat->pos.y - ((float)(int)(envmat->pos.y/scly))*scly)/scly;
@@ -451,6 +456,8 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 		hasEnv1  = !!(materialFlags & 1);
 		hasEnv2  = !!(materialFlags & 2);
 		hasSpec  = !!(materialFlags & 4) && !renderingWheel;
+if(betaEnvmaptest) hasSpec = false;
+		// TODO: is this even needed?
 		if(RpMatFXMaterialGetEffects(material) != rpMATFXEFFECTENVMAP){
 			hasEnv1 = false;
 			hasEnv2 = false;
@@ -460,8 +467,8 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 		int fxpass = 0;
 		fxParams.shininess = 0.0f;
 		fxParams.specularity = 0.0f;
-		envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
-		specData = *RWPLUGINOFFSET(CustomSpecMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_specularMapPluginOffset);
+		envData = *GETENVMAP(material);
+		specData = *GETSPECMAP(material);
 		if(hasEnv1){
 			fxParams.fxSwitch = 1;
 			fxParams.shininess = envData->shininess/255.0f;
@@ -629,8 +636,8 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(RwResEntry *repEntry, void
 		int fxpass = 0;
 		fxParams.shininess = 0.0f;
 		fxParams.specularity = 0.0f;
-		envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
-		specData = *RWPLUGINOFFSET(CustomSpecMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_specularMapPluginOffset);
+		envData = *GETENVMAP(material);
+		specData = *GETSPECMAP(material);
 		if(hasEnv1){
 			fxParams.fxSwitch = 1;
 			fxParams.shininess = envData->shininess/255.0f;
@@ -824,8 +831,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *ob
 			if(specularity > 1.0f) specularity = 1.0f;
 		}
 
-		envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
-		RwTexture *tex1 = envData->texture;
+		envData = *GETENVMAP(material);
 		if(blownUp){
 			if(hasEnv2)
 				envSwitch = 3;
@@ -1021,10 +1027,10 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_leeds(RwResEntry *repEntry, void *o
 
 		RwD3D9SetVertexShader(leedsCarFxVS);
 
-		envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
+		envData = *GETENVMAP(material);
 
 		fxParams.lightmult = 1.0f;
-		fxParams.shininess = envData->shininess/255.0f * 3.0f * config->leedsShininessMult;
+		fxParams.shininess = envData ? envData->shininess/255.0f * 3.0f * config->leedsShininessMult : 0.0f;
 		if(fxParams.shininess > 1.0f)
 			fxParams.shininess = 1.0f;
 		fxParams.shininess *= 0.5f;
@@ -1165,10 +1171,10 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_mobile(RwResEntry *repEntry, void *
 			hasEnv1 = false;
 			hasEnv2 = false;
 		}
-		envData = *RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, material, CCustomCarEnvMapPipeline__ms_envMapPluginOffset);
+		envData = *GETENVMAP(material);
 
 		if(hasEnv1 || hasEnv2 || hasSpec){
-			float shininess = envData->shininess/255.0f;
+			float shininess = envData ? envData->shininess/255.0f : 0.0f;
 
 			if(!hasAlpha){
 				float sum = material->color.red + material->color.green + material->color.blue;
@@ -1281,6 +1287,14 @@ int CCarFXRenderer__IsCCPCPipelineAttached(RpAtomic *atomic)
 //	return GetPipelineID(atomic) == RSPIPE_PC_CustomCarEnvMap_PipeID;
 }
 
+#include "debugmenu_public.h"
+RwTexture *RwTextureRead_HACK(const RwChar * name, const RwChar * maskName)
+{
+	if(strcmp(name, "xvehicleenv128") == 0)
+		return RwTextureRead("vehicleenvmap128", maskName);
+	return RwTextureRead(name, maskName);
+}
+
 void
 hookVehiclePipe(void)
 {
@@ -1296,4 +1310,11 @@ hookVehiclePipe(void)
 //	Nop(0x4C8899, 5);	// don't set coefficient
 	Nop(0x4C982F, 5);	// don't update coefficient for lighting
 #endif
+	// temp hack RwTextureRead to read other env map
+	if(betaEnvmaptest){
+		InjectHook(0x80483C, RwTextureRead_HACK);
+		if(DebugMenuLoad()){
+			DebugMenuAddVarBool32("SkyGFX", "Beta Env map test", &betaEnvmaptest, nil);
+		}
+	}
 }

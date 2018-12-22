@@ -723,6 +723,7 @@ void
 InitialiseGame_hook(void)
 {
 	ONCE;
+//	_controlfp(_PC_53,_MCW_PC);	// no use, reset somewhere else
 	InterceptCall(&RenderScene_A, RenderScene_hook, 0x53EABF);
 void envmaphooks(void);
 envmaphooks();

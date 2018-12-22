@@ -279,6 +279,10 @@ extern void **rwengine;
 extern RwInt32 &CCustomCarEnvMapPipeline__ms_envMapPluginOffset;
 extern RwInt32 &CCustomCarEnvMapPipeline__ms_envMapAtmPluginOffset;
 extern RwInt32 &CCustomCarEnvMapPipeline__ms_specularMapPluginOffset;
+#define GETENVMAP(m) RWPLUGINOFFSET(CustomEnvMapPipeMaterialData*, m, CCustomCarEnvMapPipeline__ms_envMapPluginOffset)
+#define GETENVMAPATM(m) RWPLUGINOFFSET(CustomEnvMapPipeAtomicData*, m, CCustomCarEnvMapPipeline__ms_envMapAtmPluginOffset)
+#define GETSPECMAP(m) RWPLUGINOFFSET(CustomSpecMapPipeMaterialData*, m, CCustomCarEnvMapPipeline__ms_specularMapPluginOffset)
+
 extern RwReal &CCustomCarEnvMapPipeline__m_EnvMapLightingMult;
 extern RwInt32 &CCustomBuildingDNPipeline__ms_extraVertColourPluginOffset;
 extern RwReal &CCustomBuildingDNPipeline__m_fDNBalanceParam;
