@@ -35,6 +35,8 @@ float black4f[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 float white4f[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
 
 int betaEnvmaptest = 0;
+float envmap1tweak = 1.0f;
+float envmap2tweak = 1.0f;
 
 CPool<CustomEnvMapPipeAtomicData> *&gEnvMapPipeAtmDataPool = *(CPool<CustomEnvMapPipeAtomicData>**)0xC02D2C;
 
@@ -83,9 +85,13 @@ CCustomCarEnvMapPipeline__Init(void)
 
 	if(carfx_env1Frame == NULL){
 		carfx_env1Frame = RwFrameCreate();
+if(betaEnvmaptest)
+		RwMatrixRotate(RwFrameGetMatrix(carfx_env1Frame), &axis_X, 60.0f, rwCOMBINEREPLACE);
+else{
 		RwMatrixRotate(RwFrameGetMatrix(carfx_env1Frame), &axis_X, 33.0, rwCOMBINEREPLACE);
 		RwMatrixRotate(RwFrameGetMatrix(carfx_env1Frame), &axis_Y, -33.0, rwCOMBINEPOSTCONCAT);
 		RwMatrixRotate(RwFrameGetMatrix(carfx_env1Frame), &axis_Z, 50.0, rwCOMBINEPOSTCONCAT);
+}
 		RwFrameUpdateObjects(carfx_env1Frame);
 		RwFrameGetLTM(carfx_env1Frame);
 	}
@@ -137,11 +143,11 @@ CCustomCarEnvMapPipeline__Env1Xform(RwMatrix *envmat,
 	CustomEnvMapPipeMaterialData *envData, float *envXform)
 {
 	float sclx, scly;
-	sclx = envData->transScaleX/8.0f*50.0f;
-	scly = envData->transScaleY/8.0f*50.0f;
-if(0 && betaEnvmaptest){
-sclx *= 4.0f;
-scly *= 4.0f;
+	sclx = envData->GetTransScaleX()*50.0f;
+	scly = envData->GetTransScaleY()*50.0f;
+if(betaEnvmaptest){
+sclx *= envmap1tweak;
+scly *= envmap1tweak;
 }
 	// fractional parts of pos/scl
 	envXform[0] = (envmat->pos.x - ((float)(int)(envmat->pos.x/sclx))*sclx)/sclx;
@@ -173,8 +179,8 @@ CCustomCarEnvMapPipeline__Env2Xform(RpAtomic *atomic, RwMatrix *envmat,
 	float val1, val2;
 	int sub;
 
-	sclx = envData->transScaleX/8.0f*50.0f;
-	scly = envData->transScaleY/8.0f*50.0f;
+	sclx = envData->GetTransScaleX()*50.0f;
+	scly = envData->GetTransScaleY()*50.0f;
 
 	if(lastrenderframe != RWSRCGLOBAL(renderFrame) ||
 	   lastobject != atomic ||
@@ -225,8 +231,8 @@ CCustomCarEnvMapPipeline__Env1Xform_PC(RpAtomic *atomic,
 	float sclx, scly;
 	RwMatrix *envmat;
 	envmat = RwFrameGetLTM(RpAtomicGetClump(atomic) ? RpClumpGetFrame(RpAtomicGetClump(atomic)) : RpAtomicGetFrame(atomic));
-	sclx = envData->transScaleX/8.0f*50.0f;
-	scly = envData->transScaleY/8.0f*50.0f;
+	sclx = envData->GetTransScaleX()*50.0f;
+	scly = envData->GetTransScaleY()*50.0f;
 	// fractional parts of pos/scl
 	envXform[0] = -(envmat->pos.x - ((float)(int)(envmat->pos.x/sclx))*sclx)/sclx;
 	envXform[1] = -(envmat->pos.y - ((float)(int)(envmat->pos.y/scly))*scly)/scly;
@@ -249,8 +255,8 @@ CCustomCarEnvMapPipeline__Env2Xform_PC(RpAtomic *atomic,
 	int sub;
 	RwMatrix *envmat;
 
-	sclx = envData->transScaleX/8.0f*50.0f;
-	scly = envData->transScaleY/8.0f*50.0f;
+	sclx = envData->GetTransScaleX()*50.0f;
+	scly = envData->GetTransScaleY()*50.0f;
 	envmat = RwFrameGetLTM(RpAtomicGetClump(atomic) ? RpClumpGetFrame(RpAtomicGetClump(atomic)) : RpAtomicGetFrame(atomic));
 
 	if(lastrenderframe != RWSRCGLOBAL(renderFrame) ||
@@ -415,7 +421,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *obj
 	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &alphafunc);
 	RwRenderStateGet(rwRENDERSTATESRCBLEND, &src);
 	RwRenderStateGet(rwRENDERSTATEDESTBLEND, &dst);
-	RwRenderStateGet(rwRENDERSTATEFOGENABLE, &fog);
+	RwRenderStateGet(rwRENDERSTATEFOGCOLOR, &fog);
 
 	noFx = CVisibilityPlugins__GetAtomicId(atomic) & 0x6000;
 	fxParams.lightmult = CCustomCarEnvMapPipeline__m_EnvMapLightingMult;
@@ -471,26 +477,30 @@ if(betaEnvmaptest) hasSpec = false;
 		specData = *GETSPECMAP(material);
 		if(hasEnv1){
 			fxParams.fxSwitch = 1;
-			fxParams.shininess = envData->shininess/255.0f;
+			fxParams.shininess = envData->GetShininess();
 			CCustomCarEnvMapPipeline__SetupEnv(atomic, carfx_env1Frame, &carfx_env1Inv, &envmat);
 			RwD3D9SetVertexShaderConstant(REG_envmat, &envmat, 3);
 			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);	// is this needed?
 			RwD3D9SetTexture(envData->texture, 1);
 			CCustomCarEnvMapPipeline__Env1Xform(&envmat, envData, &envXform.x);
-			envXform.z = envData->scaleX / 8.0f;
-			envXform.w = envData->scaleY / 8.0f;
+			envXform.z = envData->GetScaleX();
+			envXform.w = envData->GetScaleY();
+if(betaEnvmaptest){
+	envXform.z *= envmap2tweak;
+	envXform.w *= envmap2tweak;
+}
 			fxpass = 1;
 		}else if(hasEnv2){
 			fxParams.fxSwitch = 2;
-			fxParams.shininess = envData->shininess/255.0f;
+			fxParams.shininess = envData->GetShininess();
 			CCustomCarEnvMapPipeline__SetupEnv(atomic, carfx_env2Frame, &carfx_env2Inv, &envmat);
 			RwD3D9SetVertexShaderConstant(REG_envmat, &envmat, 3);
 			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);	// is this needed?
 			RwD3D9SetTexture(envData->texture, 1);
 			atmEnvData = CCustomCarEnvMapPipeline__AllocEnvMapPipeAtomicData(atomic);
 			CCustomCarEnvMapPipeline__Env2Xform(atomic, &envmat, envData, atmEnvData, &envXform.x);
-			envXform.z = envData->scaleX / 8.0f;
-			envXform.w = envData->scaleY / 8.0f;
+			envXform.z = envData->GetScaleX();
+			envXform.w = envData->GetScaleY();
 			fxpass = 1;
 		}
 
@@ -512,9 +522,9 @@ if(betaEnvmaptest) hasSpec = false;
 			RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
 			RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
 			RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
-			RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)0);
+			RwRenderStateSet(rwRENDERSTATEFOGCOLOR, (void*)0);
 			D3D9Render(resEntryHeader, instancedData);
-			RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)fog);
+			RwRenderStateSet(rwRENDERSTATEFOGCOLOR, (void*)fog);
 			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
 			RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)src);
 			RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)dst);
@@ -586,7 +596,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(RwResEntry *repEntry, void
 	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &alphafunc);
 	RwRenderStateGet(rwRENDERSTATESRCBLEND, &src);
 	RwRenderStateGet(rwRENDERSTATEDESTBLEND, &dst);
-	RwRenderStateGet(rwRENDERSTATEFOGENABLE, &fog);
+	RwRenderStateGet(rwRENDERSTATEFOGCOLOR, &fog);
 
 	noFx = CVisibilityPlugins__GetAtomicId(atomic) & 0x6000;
 	fxParams.lightmult = CCustomCarEnvMapPipeline__m_EnvMapLightingMult;
@@ -640,26 +650,26 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(RwResEntry *repEntry, void
 		specData = *GETSPECMAP(material);
 		if(hasEnv1){
 			fxParams.fxSwitch = 1;
-			fxParams.shininess = envData->shininess/255.0f;
+			fxParams.shininess = envData->GetShininess();
 			CCustomCarEnvMapPipeline__SetupEnv(atomic, carfx_env1Frame, &carfx_env1Inv, &envmat);
 			RwD3D9SetVertexShaderConstant(REG_envmat, &envmat, 3);
 			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);	// is this needed?
 			RwD3D9SetTexture(envData->texture, 1);
 			CCustomCarEnvMapPipeline__Env1Xform(&envmat, envData, &envXform.x);
-			envXform.z = envData->scaleX / 8.0f;
-			envXform.w = envData->scaleY / 8.0f;
+			envXform.z = envData->GetScaleX();
+			envXform.w = envData->GetScaleY();
 			fxpass = 1;
 		}else if(hasEnv2){
 			fxParams.fxSwitch = 2;
-			fxParams.shininess = envData->shininess/255.0f;
+			fxParams.shininess = envData->GetShininess();
 			CCustomCarEnvMapPipeline__SetupEnv(atomic, carfx_env2Frame, &carfx_env2Inv, &envmat);
 			RwD3D9SetVertexShaderConstant(REG_envmat, &envmat, 3);
 			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);	// is this needed?
 			RwD3D9SetTexture(envData->texture, 1);
 			atmEnvData = CCustomCarEnvMapPipeline__AllocEnvMapPipeAtomicData(atomic);
 			CCustomCarEnvMapPipeline__Env2Xform(atomic, &envmat, envData, atmEnvData, &envXform.x);
-			envXform.z = envData->scaleX / 8.0f;
-			envXform.w = envData->scaleY / 8.0f;
+			envXform.z = envData->GetScaleX();
+			envXform.w = envData->GetScaleY();
 			fxpass = 1;
 		}
 
@@ -680,9 +690,9 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(RwResEntry *repEntry, void
 			RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
 			RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
 			RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
-			RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)0);
+			RwRenderStateSet(rwRENDERSTATEFOGCOLOR, (void*)0);
 			D3D9Render(resEntryHeader, instancedData);
-			RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)fog);
+			RwRenderStateSet(rwRENDERSTATEFOGCOLOR, (void*)fog);
 			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
 			RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)src);
 			RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)dst);
@@ -843,8 +853,8 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *ob
 			RwInt32 tfactor;
 
 			RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS, (void*)rwTEXTUREADDRESSWRAP);
-			texMat._11 = envData->scaleX / 8.0f;
-			texMat._22 = envData->scaleY / 8.0f;
+			texMat._11 = envData->GetScaleX();
+			texMat._22 = envData->GetScaleY();
 			texMat._33 = 1.0f;
 			texMat._44 = 1.0f;
 			CCustomCarEnvMapPipeline__Env1Xform_PC(atomic, envData, trans);
@@ -1030,7 +1040,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_leeds(RwResEntry *repEntry, void *o
 		envData = *GETENVMAP(material);
 
 		fxParams.lightmult = 1.0f;
-		fxParams.shininess = envData ? envData->shininess/255.0f * 3.0f * config->leedsShininessMult : 0.0f;
+		fxParams.shininess = envData ? envData->GetShininess() * 3.0f * config->leedsShininessMult : 0.0f;
 		if(fxParams.shininess > 1.0f)
 			fxParams.shininess = 1.0f;
 		fxParams.shininess *= 0.5f;
@@ -1111,14 +1121,6 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_mobile(RwResEntry *repEntry, void *
 	RwD3D9SetVertexDeclaration(resEntryHeader->vertexDeclaration);
 	numMeshes = resEntryHeader->numMeshes;
 
-	int alphafunc;
-	int src, dst;
-	int fog;
-	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &alphafunc);
-	RwRenderStateGet(rwRENDERSTATESRCBLEND, &src);
-	RwRenderStateGet(rwRENDERSTATEDESTBLEND, &dst);
-	RwRenderStateGet(rwRENDERSTATEFOGENABLE, &fog);
-
 	noFx = CVisibilityPlugins__GetAtomicId(atomic) & 0x6000;
 	fxParams.lightmult = CCustomCarEnvMapPipeline__m_EnvMapLightingMult;
 
@@ -1174,7 +1176,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_mobile(RwResEntry *repEntry, void *
 		envData = *GETENVMAP(material);
 
 		if(hasEnv1 || hasEnv2 || hasSpec){
-			float shininess = envData ? envData->shininess/255.0f : 0.0f;
+			float shininess = envData ? envData->GetShininess() : 0.0f;
 
 			if(!hasAlpha){
 				float sum = material->color.red + material->color.green + material->color.blue;
@@ -1315,6 +1317,8 @@ hookVehiclePipe(void)
 		InjectHook(0x80483C, RwTextureRead_HACK);
 		if(DebugMenuLoad()){
 			DebugMenuAddVarBool32("SkyGFX", "Beta Env map test", &betaEnvmaptest, nil);
+			DebugMenuAddVar("SkyGFX", "envmap tweak 1", &envmap1tweak, nil, 0.1f, 0.0f, 10.0f);
+			DebugMenuAddVar("SkyGFX", "envmap tweak 2", &envmap2tweak, nil, 0.1f, 0.0f, 10.0f);
 		}
 	}
 }
