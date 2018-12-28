@@ -187,7 +187,7 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &alphafunc);
 	RwRenderStateGet(rwRENDERSTATESRCBLEND, &src);
 	RwRenderStateGet(rwRENDERSTATEDESTBLEND, &dst);
-	RwRenderStateGet(rwRENDERSTATEFOGENABLE, &fog);
+	RwRenderStateGet(rwRENDERSTATEFOGCOLOR, &fog);
 	RwRenderStateGet(rwRENDERSTATEZWRITEENABLE, &zwrite);
 
 	for(numMeshes = resEntryHeader->numMeshes; numMeshes--; instancedData++){
@@ -255,9 +255,9 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 			RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
 			RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
 			RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
-			RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)0);
+			RwRenderStateSet(rwRENDERSTATEFOGCOLOR, (void*)0);
 			D3D9Render(resEntryHeader, instancedData);
-			RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)fog);
+			RwRenderStateSet(rwRENDERSTATEFOGCOLOR, (void*)fog);
 			RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)zwrite);
 			RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)src);
 			RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)dst);
