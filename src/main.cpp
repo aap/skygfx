@@ -681,7 +681,6 @@ void __declspec(naked) renderMoonMask(void)
 	}
 }
 
-
 void (*CSkidmarks__Render_orig)(void);
 void CSkidmarks__Render(void)
 {
@@ -702,6 +701,10 @@ void DrawDebugEnvMap(void);
 void
 RenderScene_hook(void)
 {
+	// Do this because far and fog plane are set AFTER calling BeingUpdate in Idle()
+	RwCameraEndUpdate(Scene.camera);
+	RwCameraBeginUpdate(Scene.camera);
+
 	RenderScene();
 
 	if(config->vehiclePipe == CAR_NEO)
@@ -1416,8 +1419,9 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		// add dual pass for PC pipeline
 		InjectHook(0x5D9EEB, D3D9RenderDefault_DUAL);
 		InjectHook(0x5D9EFB, D3D9RenderBlack_DUAL);
+
 		// give vehicle pipe to upgrade parts
-		//InjectHook(0x4C88F0, 0x5DA610, PATCH_JUMP);
+		InjectHook(0x4C88F0, 0x5DA610, PATCH_JUMP);
 
 		// jump over code that sets alpha ref to 140 (not on PS2).
 		// This caused skidmarks to disappear when rendering the neo reflection scene
@@ -1512,6 +1516,40 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 //		nodeD3D9SkinAtomicAllInOneCSL->nodeMethods.nodeBody = __rwSkinD3D9AtomicAllInOneNode_hook;
 
 		InterceptCall(&SetLightsWithTimeOfDayColour_orig, SetLightsWithTimeOfDayColour, 0x53E997);
+
+
+		// Camera planes in CRenderer::RenderEverythingBarRoads
+		static float zoffset = 0.0f;
+		Patch(0x553C7D + 2, &zoffset);
+		Nop(0x553C78, 5);
+		Nop(0x553C9A, 5);	// begin update
+		Nop(0x553CD1, 5);
+		Nop(0x553CEC, 5);	// begin update
+		//Nop(0x553CB8, 5);	// render LODs
+
+
+		// Remove 0.06 z-offset from shadows, PS2 doesn't do it
+		static float shadowoffset = 0.0f;
+		Patch(0x709B2D + 2, &shadowoffset);
+		Patch(0x709B8C + 2, &shadowoffset);
+		Patch(0x709BC5 + 2, &shadowoffset);
+		Patch(0x709BF4 + 2, &shadowoffset);
+		Patch(0x709C91 + 2, &shadowoffset);
+
+		Patch(0x709E9C + 2, &shadowoffset);
+		Patch(0x709EBA + 2, &shadowoffset);
+		Patch(0x709ED5 + 2, &shadowoffset);
+
+		Patch(0x70B21F + 2, &shadowoffset);
+		Patch(0x70B371 + 2, &shadowoffset);
+		Patch(0x70B4CF + 2, &shadowoffset);
+		Patch(0x70B633 + 2, &shadowoffset);
+
+		Patch(0x7085A7 + 2, &shadowoffset);
+
+		// Change z-hack multiplier from 2.0 to 256.0 as on PS2
+		*(float*)0x8CD4F0 = 256.0f;
+
 
 void hooktexdb();
 		hooktexdb();
