@@ -1155,6 +1155,17 @@ changeEnvMapSize(void)
 	config->envMapSize = i;
 }
 
+// should we need to check this out again
+//float mirrorVal = 216.0f;
+//void
+//fixMirrors(void)
+//{
+//	Patch(0x726516 + 6, mirrorVal);
+//	Patch(0x726534 + 6, mirrorVal);
+//	Patch(0x726552 + 6, mirrorVal);
+//	Patch(0x726570 + 6, mirrorVal);
+//}
+
 void
 installMenu(void)
 {
@@ -1233,6 +1244,10 @@ installMenu(void)
 		menu.cbOffset     = DebugMenuAddVar("SkyGFX|ScreenFX", "Cb offset", &config->cbOffset, resetValues, 0.004f, -1.0f, 1.0f);
 		menu.crScale      = DebugMenuAddVar("SkyGFX|ScreenFX", "Cr scale", &config->crScale, resetValues, 0.004f, 0.0f, 10.0f);
 		menu.crOffset     = DebugMenuAddVar("SkyGFX|ScreenFX", "Cr offset", &config->crOffset, resetValues, 0.004f, -1.0f, 1.0f);
+
+//#ifdef DEBUG
+//		DebugMenuAddVar("Debug", "Mirror Z", &mirrorVal, fixMirrors, 0.05f, 200.0f, 250.0f);
+//#endif
 
 		hasMenu = true;
 		//void privatepatches(void);
@@ -1550,6 +1565,12 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		// Change z-hack multiplier from 2.0 to 256.0 as on PS2
 		*(float*)0x8CD4F0 = 256.0f;
 
+
+		// Fix mirrors
+		Patch(0x726516 + 6, 216.1f);
+		Patch(0x726534 + 6, 216.1f);
+		Patch(0x726552 + 6, 216.1f);
+		Patch(0x726570 + 6, 216.1f);
 
 void hooktexdb();
 		hooktexdb();

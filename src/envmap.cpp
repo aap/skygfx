@@ -120,8 +120,8 @@ class CRenderer
 {
 public:
 	static CVector &ms_vecCameraPosition;
-	static CEntity **ms_aVisibleEntityPtrs;
-	static CEntity **ms_aVisibleLodPtrs;
+	static CEntity **&ms_aVisibleEntityPtrs;
+	static CEntity **&ms_aVisibleLodPtrs;
 	static int &ms_nNoOfVisibleEntities;
 	static int &ms_nNoOfVisibleLods;
 
@@ -137,8 +137,8 @@ public:
 };
 
 CVector &CRenderer::ms_vecCameraPosition = *(CVector*)0xB76870;
-CEntity **CRenderer::ms_aVisibleEntityPtrs = (CEntity**)0xB75898;	// [1000]
-CEntity **CRenderer::ms_aVisibleLodPtrs = (CEntity**)0xB748F8;		// [1000]
+CEntity **&CRenderer::ms_aVisibleEntityPtrs = *(CEntity***)(0x553526 + 3); //0xB75898;	// [1000]
+CEntity **&CRenderer::ms_aVisibleLodPtrs = *(CEntity***)(0x5534F2 + 3); //0xB748F8;		// [1000]
 int &CRenderer::ms_nNoOfVisibleEntities = *(int*)0xB76844;
 int &CRenderer::ms_nNoOfVisibleLods = *(int*)0xB76840;
 
