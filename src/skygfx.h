@@ -101,6 +101,9 @@ struct Config {
 	float leedsShininessMult;
 	RwBool detailMaps;
 	int envMapSize;
+
+	int radiosity;
+	int coronaZtest;
 };
 extern int numConfigs;
 extern int currentConfig;
@@ -147,6 +150,7 @@ struct CPostEffects
 	static void Blur_VCS(void);
 
 	static void Radiosity(int intensityLimit, int filterPasses, int renderPasses, int intensity);
+	static void Radiosity_shader(int intensityLimit, int filterPasses, int renderPasses, int intensity);
 	static void DarknessFilter(uint8 alpha);
 	static void DarknessFilter_fix(uint8 alpha);
 	static void InfraredVision(RwRGBA c1, RwRGBA c2);
@@ -285,6 +289,7 @@ extern void *mobileVehiclePipeVS, *mobileVehiclePipePS;
 // postfx
 extern void *iiiTrailsPS, *vcTrailsPS;
 extern void *gradingPS, *contrastPS;
+extern void *blurPS, *radiosityPS;
 // building
 extern void *ps2BuildingVS, *ps2BuildingFxVS;
 extern void *xboxBuildingVS, *xboxBuildingPS;

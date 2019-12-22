@@ -549,9 +549,129 @@ CPostEffects::DrawQuadSetDefaultUVs(void)
 	}
 */
 
+void *blurPS, *radiosityPS;
+
+void
+CPostEffects::Radiosity_shader(int intensityLimit, int filterPasses, int renderPasses, int intensity)
+{
+	static RwRaster *workBuffer;
+	if(workBuffer)
+		if(workBuffer->width != pRasterFrontBuffer->width ||
+		   workBuffer->height != pRasterFrontBuffer->height ||
+		   workBuffer->depth != pRasterFrontBuffer->depth){
+			RwRasterDestroy(workBuffer);
+			workBuffer = nil;
+		}
+	if(workBuffer == nil)
+		workBuffer = RwRasterCreate(pRasterFrontBuffer->width, pRasterFrontBuffer->height, pRasterFrontBuffer->depth, rwRASTERTYPECAMERATEXTURE);
+
+	RwRaster *drawBuffer = RwCameraGetRaster(Scene.camera);
+
+
+
+
+
+	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
+	RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)FALSE);
+	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)FALSE);
+	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
+	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, (void*)pRasterFrontBuffer);
+	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)FALSE);
+
+	RwCameraEndUpdate(Scene.camera);
+	RwCameraSetRaster(Scene.camera, workBuffer);
+	RwCameraBeginUpdate(Scene.camera);
+
+	float params[4];
+	params[2] = 1<<filterPasses;
+	params[2] *= drawBuffer->width/640.0f;
+
+	overrideIm2dPixelShader = blurPS;
+	// Blur vertically
+	params[0] = 0;
+	params[1] = 1.0f/RwRasterGetHeight(pRasterFrontBuffer);
+	RwD3D9SetPixelShaderConstant(0, params, 1);
+	RwIm2DRenderIndexedPrimitive(rwPRIMTYPETRILIST, colorfilterVerts, 4, colorfilterIndices, 6);
+	UpdateFrontBuffer();
+	// Blur horizontally
+	params[0] = 1.0f/RwRasterGetWidth(pRasterFrontBuffer);
+	params[1] = 0;
+	RwD3D9SetPixelShaderConstant(0, params, 1);
+	RwIm2DRenderIndexedPrimitive(rwPRIMTYPETRILIST, colorfilterVerts, 4, colorfilterIndices, 6);
+	UpdateFrontBuffer();
+	overrideIm2dPixelShader = nil;
+
+
+	/* Restore original FB */
+	RwCameraEndUpdate(Scene.camera);
+	RwCameraSetRaster(Scene.camera, drawBuffer);
+	RwCameraBeginUpdate(Scene.camera);
+	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, (void*)pRasterFrontBuffer);
+
+	/* Add to framebuffer */
+	params[0] = intensityLimit/255.0f;
+	params[1] = intensity/255.0f;
+	params[2] = renderPasses;
+	RwD3D9SetPixelShaderConstant(0, params, 1);
+
+	float off = ((1<<filterPasses)-1);
+	// only for upper left corner actually
+	// other one has 2,2 harcoded but since these are 2 by default, we'll reuse them
+	float offu = off*m_RadiosityFilterUCorrection;
+	float offv = off*m_RadiosityFilterVCorrection;
+
+	float minu = offu;
+	float minv = offv;
+	float maxu = drawBuffer->width - offu; //off*2;
+	float maxv = drawBuffer->height - offv; //off*2;
+	float cu = (offu*(drawBuffer->width+0.5f) + offu/*off*2*/*0.5f) / drawBuffer->width;
+	float cv = (offv*(drawBuffer->height+0.5f) + offv/*off*2*/*0.5f) / drawBuffer->height;
+
+	params[0] = cu / pRasterFrontBuffer->width;
+	params[1] = cv / pRasterFrontBuffer->height;
+	params[2] = (maxu-minu) / drawBuffer->width;
+	params[3] = (maxv-minv) / drawBuffer->height;
+	RwD3D9SetPixelShaderConstant(1, params, 1);
+
+	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)!m_bRadiosityDebug);
+	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDSRCALPHA);
+	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
+	overrideIm2dPixelShader = radiosityPS;
+	RwIm2DRenderIndexedPrimitive(rwPRIMTYPETRILIST, colorfilterVerts, 4, colorfilterIndices, 6);
+	overrideIm2dPixelShader = nil;
+
+	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
+	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)TRUE);
+	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
+	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, (void*)NULL);
+	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
+	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDSRCALPHA);
+	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDINVSRCALPHA);
+
+	UpdateFrontBuffer();
+}
+
 void
 CPostEffects::Radiosity(int intensityLimit, int filterPasses, int renderPasses, int intensity)
 {
+/*
+	{
+		static bool keystate = false;
+		if(GetAsyncKeyState(VK_F5) & 0x8000){
+			if(!keystate){
+				keystate = true;
+				config->radiosity = !config->radiosity;
+			}
+		}else
+			keystate = false;
+	}
+*/
+
+	if(config->radiosity == 1){
+		Radiosity_shader(intensityLimit, filterPasses, renderPasses, intensity);
+		return;
+	}
+
 	static RwRaster *workBuffer;
 	if(workBuffer)
 		if(workBuffer->width != pRasterFrontBuffer->width ||
@@ -692,7 +812,8 @@ CPostEffects::DarknessFilter_fix(uint8 alpha)
 void
 CPostEffects::ColourFilter_Generic(RwRGBA rgb1, RwRGBA rgb2, void *ps)
 {
-	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERNEAREST);
+//	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERNEAREST);
+	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
 	RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)FALSE);
 	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)FALSE);
 	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
@@ -719,7 +840,8 @@ CPostEffects::ColourFilter_Generic(RwRGBA rgb1, RwRGBA rgb2, void *ps)
 void
 CPostEffects::ColourFilter_Mobile(RwRGBA rgba1, RwRGBA rgba2)
 {
-	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERNEAREST);
+//	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERNEAREST);
+	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
 	RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)FALSE);
 	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)FALSE);
 	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
@@ -809,7 +931,8 @@ CPostEffects::ColourFilter_PS2(RwRGBA rgba1, RwRGBA rgba2)
 
 	verts = colorfilterVerts;
 	// Setup state
-	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERNEAREST);
+//	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERNEAREST);
+	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
 	RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)FALSE);
 	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)FALSE);
 	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
@@ -924,7 +1047,8 @@ CPostEffects::ColourFilter_PC(RwRGBA rgba1, RwRGBA rgba2)
 void
 CPostEffects::SetFilterMainColour_PS2(RwRaster *raster, RwRGBA color)
 {
-	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERNEAREST);
+//	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERNEAREST);
+	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
 	RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)FALSE);
 	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)FALSE);
 	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);

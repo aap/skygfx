@@ -1,12 +1,27 @@
-#define limit (colors.x)
-#define intensity (colors.y)
+uniform sampler2D tex : register(s0);
+uniform float3 fx : register(c0);
+uniform float4 xform : register(c1);
+#define limit (fx.x)
+#define intensity (fx.y)
+#define passes (fx.z)
 
-float4 main(uniform sampler2D frameSmall : register(s0),
-            uniform float3 colors : register(c0),
-
-            in float2 Tex0 : TEXCOORD0) : COLOR0
+struct PS_INPUT
 {
-	float4 color = tex2D(frameSmall, Tex0);
-	float3 blurframe = saturate(color.rgb*2.0 - float3(1,1,1)*limit);
-	return float4(blurframe*intensity, 1.0);
+	float3 texcoord0	: TEXCOORD0;
+};
+
+float4
+main(PS_INPUT IN) : COLOR
+{
+	float2 uv = IN.texcoord0.xy;
+
+//	uv = (uv - xform.xy) * xform.zw + xform.xy;
+	uv = uv*xform.zw + xform.xy;
+
+	float4 c = tex2D(tex, uv);
+
+	c = saturate(c*2.0 - float4(1,1,1,1)*limit);
+	c.a = intensity*passes;
+
+	return c;
 }

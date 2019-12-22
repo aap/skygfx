@@ -15,6 +15,7 @@ bool disableGamma;
 bool fixPcCarLight;
 int explicitBuildingPipe;
 int transparentLockon;
+int fixShadows;
 bool iCanHasNeoDrops = true;
 bool iCanHasbuildingPipe = true;
 bool iCanHasvehiclePipe = true;
@@ -217,6 +218,24 @@ resetValues(void)
 	//	Patch<float>(0x735F8B, 1.0f);
 
 	//*(int*)0x8D37D0 = config->detailedWaterDist;
+
+	// how to handle forced z-test in PC version
+	switch(config->coronaZtest){
+	case 0:
+		// Disable (PS2)
+		Nop(0x6FB17C, 3);
+		break;
+	case 1:
+		// Enable (PC)
+		Patch(0x6FB17C + 0, (uint8)0xFF);
+		Patch(0x6FB17C + 1, (uint8)0x51);
+		Patch(0x6FB17C + 2, (uint8)0x20);
+		break;
+	case -1:
+		// don't touch
+		break;
+	}
+
 }
 
 void
@@ -944,6 +963,7 @@ readIni(int n)
 	disableClouds = readint(cfg.get("SkyGfx", "disableClouds", ""), 0);
 	disableGamma = readint(cfg.get("SkyGfx", "disableGamma", ""), 0);
 	transparentLockon = readint(cfg.get("SkyGfx", "transparentLockon", ""), 0);
+	fixShadows = readint(cfg.get("SkyGfx", "fixShadows", ""), 1);
 	c->lightningIlluminatesWorld = readint(cfg.get("SkyGfx", "lightningIlluminatesWorld", ""), 0);
 
 	static StrAssoc colorFilterMap[] = {
@@ -981,6 +1001,13 @@ readIni(int n)
 
 	tmpint = readint(cfg.get("SkyGfx", "doRadiosity", ""), 4000);
 	c->doRadiosity = tmpint == 4000 ? original_bRadiosity : tmpint;	// saved value from stream.ini
+
+	static StrAssoc ps2shdrMap[] = {
+		{"PS2",     0},
+		{"Shader",  1},
+		{"",        1},
+	};
+	c->radiosity = StrAssoc::get(ps2shdrMap, cfg.get("SkyGfx", "radiosity", "").c_str());
 #ifdef DEBUG
 	c->vcsTrails = readint(cfg.get("SkyGfx", "vcsTrails", ""), 0);
 	c->trailsLimit = readint(cfg.get("SkyGfx", "trailsLimit", ""), 80);
@@ -1003,6 +1030,8 @@ readIni(int n)
 	c->zwriteThreshold = readint(cfg.get("SkyGfx", "zwriteThreshold", ""), 128);
 	if(c->zwriteThreshold < 0) c->zwriteThreshold = 0;
 	if(c->zwriteThreshold > 255) c->zwriteThreshold = 255;
+
+	c->coronaZtest = readint(cfg.get("SkyGfx", "coronaZtest", ""), -1);
 
 	c->bYCbCrFilter = readint(cfg.get("SkyGfx", "YCbCrCorrection", ""), 0);
 	c->lumaScale = readfloat(cfg.get("SkyGfx", "lumaScale", ""), 219.0f/255.0f);
@@ -1082,6 +1111,7 @@ afterStreamIni(void)
 	X(stencilShadows)				\
 	X(colorFilter)					\
 	X(doRadiosity)					\
+	X(radiosity)					\
 	X(lightningIlluminatesWorld)		\
 	X(neoWaterDrops)			\
 	X(neoBloodDrops)			\
@@ -1096,6 +1126,7 @@ afterStreamIni(void)
 	X(radiosityRenderPasses)		\
 	X(radiosityIntensity)			\
 	X(zwriteThreshold)			\
+	X(coronaZtest)				\
 	X(bYCbCrFilter)				\
 	X(lumaScale)				\
 	X(lumaOffset)				\
@@ -1177,6 +1208,8 @@ installMenu(void)
 		static const char *colFilterStr[] = { "None", "PS2", "PC", "Mobile", "III", "VC", "VCS" };
 		static const char *lightningStr[] = { "Sky only", "Sky and objects" };
 		static const char *shadStr[] = { "Default", "PS2", "PC" };
+		static const char *radStr[] = { "PS2", "Shader" };
+		static const char *coronaStr[] = { "-", "default (PS2)", "Force (PC)" };
 		e = DebugMenuAddVar("SkyGFX", "Config", &currentConfig, setConfig, 1, 0, numConfigs-1, nil);
 		DebugMenuEntrySetWrap(e, true);
 		DebugMenuAddCmd("SkyGFX", "Reload Inis", reloadAllInis);
@@ -1203,6 +1236,8 @@ installMenu(void)
 		menu.colorFilter = DebugMenuAddVar("SkyGFX", "Colour filter", &config->colorFilter, resetValues, 1, COLORFILTER_NONE, COLORFILTER_MOBILE, colFilterStr);
 		DebugMenuEntrySetWrap(menu.colorFilter, true);
 		menu.doRadiosity = DebugMenuAddVarBool32("SkyGFX", "Radiosity", &config->doRadiosity, resetValues);
+		menu.radiosity = DebugMenuAddVar("SkyGFX", "Radiosity type", &config->radiosity, nil, 1, 0, 1, radStr);
+		DebugMenuEntrySetWrap(menu.radiosity, true);
 		if(iCanHasNeoDrops){
 			menu.neoWaterDrops = DebugMenuAddVarBool32("SkyGFX", "Neo Water drops", &config->neoWaterDrops, nil);
 			menu.neoBloodDrops = DebugMenuAddVarBool32("SkyGFX", "Neo-style Blood drops", &config->neoBloodDrops, nil);
@@ -1221,6 +1256,8 @@ installMenu(void)
 		menu.fixGrassPlacement = DebugMenuAddVarBool32("SkyGFX|Misc", "Fix Grass Placement", &config->fixGrassPlacement, nil);
 		menu.lightningIlluminatesWorld = DebugMenuAddVar("SkyGFX|Misc", "Lightning illuminates", &config->lightningIlluminatesWorld, nil, 1, 0, 1, lightningStr);
 		DebugMenuEntrySetWrap(menu.lightningIlluminatesWorld, true);
+		menu.coronaZtest = DebugMenuAddVar("SkyGFX|Misc", "Corona Z test", &config->coronaZtest, resetValues, 1, -1, 1, coronaStr);
+		DebugMenuEntrySetWrap(menu.coronaZtest, true);
 
 		menu.dualPassDefault = DebugMenuAddVarBool32("SkyGFX|Advanced", "Dual-pass Default", &config->dualPassDefault, nil);
 		menu.dualPassBuilding = DebugMenuAddVarBool32("SkyGFX|Advanced", "Dual-pass Buildings", &config->dualPassBuilding, nil);
@@ -1243,6 +1280,8 @@ installMenu(void)
 		menu.cbScale      = DebugMenuAddVar("SkyGFX|ScreenFX", "Cb scale", &config->cbScale, resetValues, 0.004f, 0.0f, 10.0f);
 		menu.cbOffset     = DebugMenuAddVar("SkyGFX|ScreenFX", "Cb offset", &config->cbOffset, resetValues, 0.004f, -1.0f, 1.0f);
 		menu.crScale      = DebugMenuAddVar("SkyGFX|ScreenFX", "Cr scale", &config->crScale, resetValues, 0.004f, 0.0f, 10.0f);
+		menu.crOffset     = DebugMenuAddVar("SkyGFX|ScreenFX", "Cr offset", &config->crOffset, resetValues, 0.004f, -1.0f, 1.0f);
+
 		menu.crOffset     = DebugMenuAddVar("SkyGFX|ScreenFX", "Cr offset", &config->crOffset, resetValues, 0.004f, -1.0f, 1.0f);
 
 //#ifdef DEBUG
@@ -1351,10 +1390,38 @@ InjectDelayedPatches()
 		InjectHook(0x742FE0, 0x743085, PATCH_JUMP);
 	}
 
+
+	if(fixShadows){
+		// Remove 0.06 z-offset from shadows, PS2 doesn't do it
+		static float shadowoffset = 0.0f;
+		Patch(0x709B2D + 2, &shadowoffset);
+		Patch(0x709B8C + 2, &shadowoffset);
+		Patch(0x709BC5 + 2, &shadowoffset);
+		Patch(0x709BF4 + 2, &shadowoffset);
+		Patch(0x709C91 + 2, &shadowoffset);
+
+		Patch(0x709E9C + 2, &shadowoffset);
+		Patch(0x709EBA + 2, &shadowoffset);
+		Patch(0x709ED5 + 2, &shadowoffset);
+
+		Patch(0x70B21F + 2, &shadowoffset);
+		Patch(0x70B371 + 2, &shadowoffset);
+		Patch(0x70B4CF + 2, &shadowoffset);
+		Patch(0x70B633 + 2, &shadowoffset);
+
+		Patch(0x7085A7 + 2, &shadowoffset);
+
+		// Change z-hack multiplier from 2.0 to 256.0 as on PS2
+		*(float*)0x8CD4F0 = 256.0f;
+	}
+
 	if(privateHooks){
 		// PS2 splash
 		static const char *loadsc0 = "loadsc0";
 		Patch(0x5901BD + 1, loadsc0);
+
+		// nvidia is not the way it's meant to be played
+		Nop(0x748AA8, 0x748AE7-0x748AA8);
 
 	//	// lens flare for police cars
 	//	Patch<uint8>(0x6AB9E6 + 1, 2);
@@ -1401,9 +1468,6 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		defaultColourTopVOffset = CPostEffects::m_colourTopVOffset;
 		defaultColourBottomVOffset = CPostEffects::m_colourBottomVOffset;
 
-		// nvidia is not the way it's meant to be played
-		Nop(0x748AA8, 0x748AE7-0x748AA8);
-
 		// windowed - not working yet
 //		Nop(0x7462FF, 2);
 //		Nop(0x745B55, 2);
@@ -1411,12 +1475,6 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 
 		// moon mask
 		InjectHook(0x713C4C, renderMoonMask, PATCH_JUMP);
-
-		// disable forced ztest on coronas. PS2 doesn't do it
-		Nop(0x6FB17C, 3);
-		// for reference: to get ztest on sun corona:
-		// (works badly however because lens flare isn't LOS tested)
-		// Patch<uint8>(0x6FC705 + 1, 0);
 
 		IsAlreadyRunning = (int(*)())(*(int*)(0x74872D+1) + 0x74872D + 5);
 		InjectHook(0x74872D, InjectDelayedPatches);
@@ -1481,7 +1539,7 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		InterceptCall(&PipelinePluginAttach, myPluginAttach, 0x53D903);
 	//	InjectHook(0x53D903, myPluginAttach);
 
-		// projobj placement. Not really broken but whatever
+		// procobj placement. Not really broken but whatever
 		InjectHook(0x5A3C7D, ps2srand);
 		InjectHook(0x5A3DFB, ps2srand);
 		InjectHook(0x5A3C75, ps2rand);
@@ -1508,7 +1566,6 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		Patch<float*>(0x73290A+2, &multipassMultiplier);
 
 		// Get rid of the annoying dotproduct check in visibility renderCBs
-		// Does it make any sense to compare the dot product against a distance?
 		Nop(0x733313, 2);	// VehicleHiDetailCB
 		Nop(0x73405A, 2);	// VehicleHiDetailAlphaCB
 		Nop(0x733403, 2);	// TrainHiDetailCB
@@ -1541,30 +1598,6 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		Nop(0x553CD1, 5);
 		Nop(0x553CEC, 5);	// begin update
 		//Nop(0x553CB8, 5);	// render LODs
-
-
-		// Remove 0.06 z-offset from shadows, PS2 doesn't do it
-		static float shadowoffset = 0.0f;
-		Patch(0x709B2D + 2, &shadowoffset);
-		Patch(0x709B8C + 2, &shadowoffset);
-		Patch(0x709BC5 + 2, &shadowoffset);
-		Patch(0x709BF4 + 2, &shadowoffset);
-		Patch(0x709C91 + 2, &shadowoffset);
-
-		Patch(0x709E9C + 2, &shadowoffset);
-		Patch(0x709EBA + 2, &shadowoffset);
-		Patch(0x709ED5 + 2, &shadowoffset);
-
-		Patch(0x70B21F + 2, &shadowoffset);
-		Patch(0x70B371 + 2, &shadowoffset);
-		Patch(0x70B4CF + 2, &shadowoffset);
-		Patch(0x70B633 + 2, &shadowoffset);
-
-		Patch(0x7085A7 + 2, &shadowoffset);
-
-		// Change z-hack multiplier from 2.0 to 256.0 as on PS2
-		*(float*)0x8CD4F0 = 256.0f;
-
 
 		// Fix mirrors
 		Patch(0x726516 + 6, 216.1f);
