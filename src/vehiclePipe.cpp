@@ -26,6 +26,7 @@ enum {
 void *vehiclePipeVS, *ps2CarFxVS;
 void *ps2EnvSpecFxPS;	// also used by the building pipeline
 void *specCarFxVS, *specCarFxPS;
+void *envCarVS, *envCarPS;
 void *xboxCarVS;
 void *leedsCarFxVS;
 void *mobileVehiclePipeVS, *mobileVehiclePipePS;
@@ -1234,6 +1235,136 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_mobile(RwResEntry *repEntry, void *
 }
 
 void
+CCustomCarEnvMapPipeline__CustomPipeRenderCB_Env(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
+{
+	RxD3D9ResEntryHeader *resEntryHeader;
+	RxD3D9InstanceData *instancedData;
+	RpAtomic *atomic;
+	RwInt32	numMeshes;
+	RwBool noFx;
+	CustomEnvMapPipeMaterialData *envData;
+	CustomSpecMapPipeMaterialData *specData;
+	RpMaterial *material;
+	RwUInt32 materialFlags;
+	RwBool hasEnv1, hasEnv2, hasSpec, hasAlpha;
+	struct {
+		float fresnel;
+		float power;
+		float lightmult;
+	} fxParams;
+	struct {
+		float ambient;
+		float diffuse;
+		float specular;
+		float reflection;
+	} surfProps;
+	RwV3d eye;
+	RwMatrix lightmat;
+	float transform[16];
+
+	atomic = (RpAtomic*)object;
+
+	_rwD3D9EnableClippingIfNeeded(object, type);
+
+	pipeGetComposedTransformMatrix(atomic, transform);
+	RwD3D9SetVertexShaderConstant(0, transform, 4);
+	pipeGetWorldMatrix(transform);
+	RwD3D9SetVertexShaderConstant(30, transform, 4);
+	eye = RwFrameGetLTM(RwCameraGetFrame((RwCamera*)RWSRCGLOBAL(curCamera)))->pos;
+	RwD3D9SetVertexShaderConstant(34, &eye, 1);
+	RwMatrixInvert(&lightmat, RwFrameGetLTM(RpAtomicGetFrame(atomic)));
+	if(flags & rpGEOMETRYLIGHT)
+		uploadLights(&lightmat);
+	else
+		uploadNoLights();
+
+	resEntryHeader = (RxD3D9ResEntryHeader *)(repEntry + 1);
+	instancedData = (RxD3D9InstanceData *)(resEntryHeader + 1);
+	if(resEntryHeader->indexBuffer != NULL)
+		RwD3D9SetIndices(resEntryHeader->indexBuffer);
+	_rwD3D9SetStreams(resEntryHeader->vertexStream,resEntryHeader->useOffsets);
+	RwD3D9SetVertexDeclaration(resEntryHeader->vertexDeclaration);
+	numMeshes = resEntryHeader->numMeshes;
+
+	int alphafunc;
+	int src, dst;
+	int fog;
+	RwRenderStateGet(rwRENDERSTATEALPHATESTFUNCTION, &alphafunc);
+	RwRenderStateGet(rwRENDERSTATESRCBLEND, &src);
+	RwRenderStateGet(rwRENDERSTATEDESTBLEND, &dst);
+	RwRenderStateGet(rwRENDERSTATEFOGCOLOR, &fog);
+
+	noFx = CVisibilityPlugins__GetAtomicId(atomic) & 0x6000;
+	fxParams.fresnel = 0.3f;
+	fxParams.power = 10.0f;
+	fxParams.lightmult = CCustomCarEnvMapPipeline__m_EnvMapLightingMult;
+	RwD3D9SetVertexShaderConstant(21, &fxParams, 1);
+
+	pipeSetTexture(reflectionTex, 1);
+	pipeSetTexture(CarPipe::reflectionMask, 2);
+
+	for(; numMeshes--; instancedData++){
+		material = instancedData->material;
+
+		if(instancedData->material->color.alpha == 0)
+			continue;
+
+		pipeSetTexture(material->texture, 0);
+
+		hasAlpha = instancedData->vertexAlpha || instancedData->material->color.alpha != 255;
+		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)hasAlpha);
+
+		envData = *GETENVMAP(material);
+		specData = *GETSPECMAP(material);
+
+		surfProps.reflection = 0.0f;
+		surfProps.specular = 0.0f;
+		if(!noFx){
+			materialFlags = *(RwUInt32*)&material->surfaceProps.specular;
+			hasEnv1 = !!(materialFlags & 1);
+			hasEnv2 = !!(materialFlags & 2);
+			hasSpec = !!(materialFlags & 4) && !renderingWheel;
+			if(RpMatFXMaterialGetEffects(material) != rpMATFXEFFECTENVMAP){
+				hasEnv1 = false;
+				hasEnv2 = false;
+				hasSpec = false;
+			}
+
+			if(hasEnv1 || hasEnv2){
+				surfProps.reflection = envData->GetShininess();
+				surfProps.reflection *= 15.0f * config->neoShininessMult;
+			}
+
+			if(hasSpec){
+				surfProps.specular = specData->specularity;
+				surfProps.specular *= 3.0f * config->neoSpecularityMult;
+			}
+		}
+
+		pipeUploadMatCol(flags, material, REG_matCol);
+		surfProps.ambient = material->surfaceProps.ambient;
+		surfProps.diffuse = material->surfaceProps.diffuse;
+		if(surfProps.ambient > 0.1f && surfProps.ambient < 0.8f)
+			surfProps.ambient = max(surfProps.ambient, 0.8f);
+		RwD3D9SetVertexShaderConstant(REG_surfProps, &surfProps, 1);
+		RwD3D9SetVertexShaderConstant(21, &fxParams, 1);
+
+		RwD3D9SetVertexShader(envCarVS);
+		RwD3D9SetPixelShader(envCarPS);
+
+		D3D9RenderDual(config->dualPassVehicle, resEntryHeader, instancedData);
+	}
+	RwD3D9SetVertexShader(NULL);
+	RwD3D9SetPixelShader(NULL);
+	RwD3D9SetTexture(NULL, 1);
+	RwD3D9SetTexture(NULL, 2);
+	RwD3D9SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_DISABLE);
+	RwD3D9SetTextureStageState(1, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
+	RwD3D9SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, 1);
+	RwD3D9SetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_DISABLE);
+}
+
+void
 CCustomCarEnvMapPipeline__CustomPipeRenderCB_Switch(RwResEntry *repEntry, void *object, RwUInt8 type, RwUInt32 flags)
 {
 	switch(config->vehiclePipe){
@@ -1261,6 +1392,10 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Switch(RwResEntry *repEntry, void *
 		/* Need hooked building pipe for sphere maps */
 		if(iCanHasbuildingPipe)
 			CCustomCarEnvMapPipeline__CustomPipeRenderCB_mobile(repEntry, object, type, flags);
+		break;
+	case CAR_ENV:
+		if(iCanHasbuildingPipe && iCanHasNeoCar)
+			CCustomCarEnvMapPipeline__CustomPipeRenderCB_Env(repEntry, object, type, flags);
 		break;
 	}
 	fixSAMP();

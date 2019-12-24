@@ -4,7 +4,7 @@ workspace "skygfx"
    
 	defines { "rsc_CompanyName=\"aap\"" }
 	defines { "rsc_LegalCopyright=\"\""} 
-	defines { "rsc_FileVersion=\"4.0.0.0\"", "rsc_ProductVersion=\"4.0.0.0\"" }
+	defines { "rsc_FileVersion=\"4.1.0.0\"", "rsc_ProductVersion=\"4.1.0.0\"" }
 	defines { "rsc_InternalName=\"%{prj.name}\"", "rsc_ProductName=\"%{prj.name}\"", "rsc_OriginalFilename=\"%{prj.name}.dll\"" }
 	defines { "rsc_FileDescription=\"https://github.com/aap\"" }
 	defines { "rsc_UpdateUrl=\"https://github.com/aap/skygfx\"" }

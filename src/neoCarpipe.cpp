@@ -301,6 +301,7 @@ CarPipe::DiffusePass(RxD3D9ResEntryHeader *header, RpAtomic *atomic)
 
 	RwD3D9SetTexture(reflectionTex, 1);
 	RwD3D9SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_LERP);
+//	RwD3D9SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
 	RwD3D9SetTextureStageState(1, D3DTSS_COLORARG2, D3DTA_CURRENT);
 	RwD3D9SetTextureStageState(1, D3DTSS_COLORARG1, D3DTA_TEXTURE);
 	RwD3D9SetTextureStageState(1, D3DTSS_COLORARG0, D3DTA_SPECULAR);
@@ -356,7 +357,7 @@ CarPipe::DiffusePass(RxD3D9ResEntryHeader *header, RpAtomic *atomic)
 		RwD3D9SetVertexShaderConstant(LOC_surfProps, &surfprops, 1);
 
 		float reflProps[4];
-		reflProps[0] = hasEnv && !noRefl ? envData->shininess/255.0f * 8.0f * config->neoShininessMult : 0.0f;
+		reflProps[0] = hasEnv && !noRefl ? envData->GetShininess() * 8.0f * config->neoShininessMult : 0.0f;
 		reflProps[1] = fresnel.Get();
 		reflProps[3] = power.Get();
 		RwD3D9SetVertexShaderConstant(LOC_reflProps, (void*)reflProps, 1);

@@ -390,7 +390,7 @@ RwRGBAReal spheremapfog;
 void
 RenderSphereReflections(void)
 {
-	if(iCanHasbuildingPipe && config->vehiclePipe == CAR_MOBILE){
+	if(iCanHasbuildingPipe && (config->vehiclePipe == CAR_MOBILE || config->vehiclePipe == CAR_ENV)){
 		MakeEnvmapRasters();
 
 		RwCamera *cam = Scene.camera;
@@ -408,10 +408,22 @@ RenderSphereReflections(void)
 		RwCameraSetFarClipPlane(cam, sphereRadius);
 		RwCameraSetFogDistance(cam, sphereRadius*0.75f);
 
-		RwRGBA color = { skyTopRed, skyTopGreen, skyTopBlue, 255 };
-		if(color.red < 64) color.red = 64;
-		if(color.green < 64) color.green = 64;
-		if(color.blue < 64) color.blue = 64;
+		RwRGBA color;
+		if(config->vehiclePipe == CAR_ENV){
+			// like Neo
+			static RwRGBA skyBot = { skyBotRed, skyBotGreen, skyBotBlue, 255 };
+			color = skyBot;
+			// blend a bit of white into the sky color, otherwise it tends to be very blue
+			color.red = color.red*0.6f + 255*0.4f;
+			color.green = color.green*0.6f + 255*0.4f;
+			color.blue = color.blue*0.6f + 255*0.4f;
+		}else{
+			static RwRGBA skyTop = { skyTopRed, skyTopGreen, skyTopBlue, 255 };
+			color = skyTop;
+			if(color.red < 64) color.red = 64;
+			if(color.green < 64) color.green = 64;
+			if(color.blue < 64) color.blue = 64;
+		}
 		RwCameraClear(cam, &color, rwCAMERACLEARIMAGE | rwCAMERACLEARZ);
 		RwRGBARealFromRwRGBA(&spheremapfog, &color);
 

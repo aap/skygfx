@@ -46,6 +46,7 @@ enum CarPipeline
 	CAR_NEO,
 	CAR_LCS,
 	CAR_VCS,
+	CAR_ENV,
 
 	NUMCARPIPES
 };
@@ -283,6 +284,7 @@ extern void *simplePS;
 extern void *vehiclePipeVS, *ps2CarFxVS;
 extern void *ps2EnvSpecFxPS;	// also used by the building pipeline
 extern void *specCarFxVS, *specCarFxPS;
+extern void *envCarVS, *envCarPS;
 extern void *xboxCarVS;
 extern void *leedsCarFxVS;
 extern void *mobileVehiclePipeVS, *mobileVehiclePipePS;
@@ -300,6 +302,7 @@ void CreateShaders(void);
 void RwToD3DMatrix(void *d3d, RwMatrix *rw);
 void MakeProjectionMatrix(void *d3d, RwCamera *cam, float nbias = 0.0f, float fbias = 0.0f);
 void pipeGetComposedTransformMatrix(RpAtomic *atomic, float *out);
+void pipeGetWorldMatrix(float *out);
 void pipeGetCameraTransformMatrix(float *out);
 void pipeGetLeedsEnvMapMatrix(RpAtomic *atomic, float *out);
 void pipeUploadMatCol(int flags, RpMaterial *m, int loc);

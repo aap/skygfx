@@ -132,6 +132,13 @@ pipeGetCameraTransformMatrix(float *out)
 	memcpy(out, &combined, 64);
 }
 
+// Have to call the above before!
+void
+pipeGetWorldMatrix(float *out)
+{
+	memcpy(out, &pipeWorldMat, 64);
+}
+
 void
 pipeGetLeedsEnvMapMatrix(RpAtomic *atomic, float *out)
 {
@@ -289,6 +296,8 @@ CreateShaders(void)
 	makeVS(IDR_LEEDSCARFXVS, &leedsCarFxVS);
 	makeVS(IDR_MOBILEVEHICLEVS, &mobileVehiclePipeVS);
 	makePS(IDR_MOBILEVEHICLEPS, &mobileVehiclePipePS);
+	makeVS(IDR_ENVCARVS, &envCarVS);
+	makePS(IDR_ENVCARPS, &envCarPS);
 
 	// building
 	makeVS(IDR_PS2BUILDINGVS, &ps2BuildingVS);

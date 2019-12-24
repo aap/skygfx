@@ -920,6 +920,7 @@ readIni(int n)
 		{"LCS",     CAR_LCS},
 		{"VCS",     CAR_VCS},
 		{"Mobile",  CAR_MOBILE},
+		{"Env",  CAR_ENV},
 		{"",       -1},
 	};
 	c->vehiclePipe = StrAssoc::get(vehPipeMap, cfg.get("SkyGfx", "vehiclePipe", "").c_str());
@@ -1204,7 +1205,7 @@ installMenu(void)
 	if(DebugMenuLoad()){
 		static const char *ps2pcStr[] = { "PS2", "PC" };
 		static const char *buildPipeStr[] = { "PS2", "Xbox", "Mobile" };
-		static const char *vehPipeStr[] = { "PS2", "PC", "Xbox", "Spec", "Mobile", "Neo", "LCS", "VCS" };
+		static const char *vehPipeStr[] = { "PS2", "PC", "Xbox", "Spec", "Mobile", "Neo", "LCS", "VCS", "Env" };
 		static const char *colFilterStr[] = { "None", "PS2", "PC", "Mobile", "III", "VC", "VCS" };
 		static const char *lightningStr[] = { "Sky only", "Sky and objects" };
 		static const char *shadStr[] = { "Default", "PS2", "PC" };
