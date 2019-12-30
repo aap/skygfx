@@ -1,3 +1,10 @@
+GTA_SA_DIR = "C:/Users/aap/games/gtasa"
+GTA_SA_EXE = "gta_sa.exe"
+RWSDK_DIR = os.getenv("RWSDK36")
+DXSDK_DIR = "%DXSDK_DIR%"
+FXC_DIR = "/Utilities/bin/x86/fxc.exe"
+PLUGIN_DIR = "/plugins/skygfx.dll" -- rename this to skygfx.asi if you want..
+
 workspace "skygfx"
 	configurations { "Release", "Debug" }
 	location "build"
@@ -19,11 +26,11 @@ workspace "skygfx"
 	includedirs { "resources" }
 	includedirs { "shaders" }
 	includedirs { "src" }
-	includedirs { os.getenv("RWSDK36") }
+	includedirs { RWSDK_DIR }
    
 	prebuildcommands {
-		"for /R \"../shaders/ps/\" %%f in (*.hlsl) do \"%DXSDK_DIR%/Utilities/bin/x86/fxc.exe\" /T ps_2_0 /nologo /E main /Fo ../resources/cso/%%~nf.cso %%f",
-		"for /R \"../shaders/vs/\" %%f in (*.hlsl) do \"%DXSDK_DIR%/Utilities/bin/x86/fxc.exe\" /T vs_2_0 /nologo /E main /Fo ../resources/cso/%%~nf.cso %%f",
+		"for /R \"../shaders/ps/\" %%f in (*.hlsl) do \"" .. DXSDK_DIR .. FXC_DIR .. "\" /T ps_2_0 /nologo /E main /Fo ../resources/cso/%%~nf.cso %%f",
+		"for /R \"../shaders/vs/\" %%f in (*.hlsl) do \"" .. DXSDK_DIR .. FXC_DIR .. "\" /T vs_2_0 /nologo /E main /Fo ../resources/cso/%%~nf.cso %%f",
 	}
       
 project "skygfx"
@@ -39,14 +46,14 @@ project "skygfx"
 		defines { "DEBUG" }
 		symbols "On"
 		flags { "StaticRuntime" }
-		debugdir "C:/Users/aap/games/gtasa"
-		debugcommand "C:/Users/aap/games/gtasa/gta_sa.exe"
-		postbuildcommands "copy /y \"$(TargetPath)\" \"C:\\Users\\aap\\games\\gtasa\\plugins\\skygfx.dll\""
+		debugdir(GTA_SA_DIR)
+		debugcommand(GTA_SA_DIR .. GTA_SA_EXE)
+		postbuildcommands { "copy /y \"$(TargetPath)\" \"" .. GTA_SA_DIR .. PLUGIN_DIR .. "\"" }
 
 	filter "configurations:Release"
 		defines { "NDEBUG" }
 		optimize "On"
 		flags { "StaticRuntime" }
-		debugdir "C:/Users/aap/games/gtasa"
-		debugcommand "C:/Users/aap/games/gtasa/gta_sa.exe"
-		postbuildcommands "copy /y \"$(TargetPath)\" \"C:\\Users\\aap\\games\\gtasa\\plugins\\skygfx.dll\""
+		debugdir(GTA_SA_DIR)
+		debugcommand(GTA_SA_DIR .. GTA_SA_EXE)
+		postbuildcommands { "copy /y \"$(TargetPath)\" \"" .. GTA_SA_DIR .. PLUGIN_DIR .. "\"" }
