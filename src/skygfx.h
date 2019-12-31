@@ -105,6 +105,11 @@ struct Config {
 
 	int radiosity;
 	int coronaZtest;
+
+	float envShininessMult;
+	float envSpecularityMult;
+	float envPower;
+	float envFresnel;
 };
 extern int numConfigs;
 extern int currentConfig;
@@ -114,6 +119,10 @@ void resetValues(void);
 void refreshIni(void);
 void reloadAllInis(void);
 void setConfig(void);
+
+struct Hooks
+{
+};
 
 extern bool iCanHasbuildingPipe;
 extern int explicitBuildingPipe;
@@ -168,6 +177,7 @@ struct CPostEffects
 	static void SetFilterMainColour_PS2(RwRaster *raster, RwRGBA color);
 	static void (*Initialise_orig)(void);
 	static void Initialise(void);
+	static bool Initialise_skygfx(void*);
 	static void ImmediateModeRenderStatesStore(void);
 	static void ImmediateModeRenderStatesSet(void);
 	static void ImmediateModeRenderStatesReStore(void);
@@ -273,6 +283,7 @@ void D3D9Render(RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instan
 void D3D9RenderDual(int dual, RxD3D9ResEntryHeader *resEntryHeader, RxD3D9InstanceData *instancedData);
 
 void fixSAMP(void);
+extern HMODULE UG_mod;
 
 extern RwInt32 pdsOffset;
 
@@ -307,8 +318,11 @@ void pipeGetCameraTransformMatrix(float *out);
 void pipeGetLeedsEnvMapMatrix(RpAtomic *atomic, float *out);
 void pipeUploadMatCol(int flags, RpMaterial *m, int loc);
 void pipeUploadZero(int loc);
+void pipeUploadZeroPS(int loc);
 void pipeUploadLightColor(RpLight *light, int loc);
+void pipeUploadLightColorPS(RpLight *light, int loc);
 void pipeUploadLightDirection(RpLight *light, int loc);
+void pipeUploadLightDirectionPS(RpLight *light, int loc);
 void pipeUploadLightDirectionLocal(RpLight *light, RwMatrix *m, int loc);
 void pipeUploadLightDirectionInv(RpLight *light, int loc);
 inline void pipeSetTexture(RwTexture *t, int n) { RwD3D9SetTexture(t ? t : gpWhiteTexture, n); };

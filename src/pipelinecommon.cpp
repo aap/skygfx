@@ -199,6 +199,13 @@ pipeUploadZero(int loc)
 }
 
 void
+pipeUploadZeroPS(int loc)
+{
+	static float z[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	RwD3D9SetPixelShaderConstant(loc, (void*)z, 1);
+}
+
+void
 pipeUploadLightColor(RpLight *light, int loc)
 {
 	float c[4];
@@ -210,6 +217,20 @@ pipeUploadLightColor(RpLight *light, int loc)
 		RwD3D9SetVertexShaderConstant(loc, (void*)c, 1);
 	}else
 		pipeUploadZero(loc);
+}
+
+void
+pipeUploadLightColorPS(RpLight *light, int loc)
+{
+	float c[4];
+	if(RpLightGetFlags(light) & rpLIGHTLIGHTATOMICS){
+		c[0] = light->color.red;
+		c[1] = light->color.green;
+		c[2] = light->color.blue;
+		c[3] = 1.0f;
+		RwD3D9SetPixelShaderConstant(loc, (void*)c, 1);
+	}else
+		pipeUploadZeroPS(loc);
 }
 
 void
@@ -225,6 +246,21 @@ pipeUploadLightDirection(RpLight *light, int loc)
 		RwD3D9SetVertexShaderConstant(loc, (void*)c, 1);
 	}else
 		pipeUploadZero(loc);
+}
+
+void
+pipeUploadLightDirectionPS(RpLight *light, int loc)
+{
+	float c[4];
+	if(RpLightGetFlags(light) & rpLIGHTLIGHTATOMICS){
+		RwV3d *at = RwMatrixGetAt(RwFrameGetLTM(RpLightGetFrame(light)));
+		c[0] = at->x;
+		c[1] = at->y;
+		c[2] = at->z;
+		c[3] = 1.0f;
+		RwD3D9SetPixelShaderConstant(loc, (void*)c, 1);
+	}else
+		pipeUploadZeroPS(loc);
 }
 
 void

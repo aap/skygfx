@@ -109,10 +109,15 @@ WRAPPER void CEntity::GetBoundCentre(CVector *v) { EAXJMP(0x534290); }
 WRAPPER bool CEntity::GetIsOnScreen_orig(void) { EAXJMP(0x534540); }
 
 // TODO: FLAify this?
-CBaseModelInfo **CModelInfo__ms_modelInfoPtrs = (CBaseModelInfo**)0xA9B0C8;
+CBaseModelInfo **CModelInfo__ms_modelInfoPtrs;// = (CBaseModelInfo**)0xA9B0C8;
 CBaseModelInfo*
 GetModelInfo(CEntity *e)
 {
+	static bool init;
+	if(!init){
+		CModelInfo__ms_modelInfoPtrs = *(CBaseModelInfo***)(0x4C5960 + 3);
+		init = true;
+	}
 	return CModelInfo__ms_modelInfoPtrs[e->m_nModelIndex];
 }
 

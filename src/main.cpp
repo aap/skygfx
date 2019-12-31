@@ -24,6 +24,9 @@ bool iCanHasSunGlare = true;
 bool privateHooks;
 
 int fixingSAMP;
+HMODULE UG_mod;
+typedef bool(*UG_EventHook)(void* pData);
+void (*UG_RegisterEventCallback)(const char *type, UG_EventHook hook);
 
 int numConfigs;
 int currentConfig = 0;
@@ -407,11 +410,23 @@ clamp(float f, float max)
 RwRGBAReal &AmbientLightColourForFrame_PedsCarsAndObjects = *(RwRGBAReal*)0xC886C4;
 RwRGBAReal &DirectionalLightColourForFrame = *(RwRGBAReal*)0xC886B4;
 
+uint8 *ambRed = (uint8*)0xB7C3C8;
+uint8 *ambGreen = (uint8*)0xB7C310;
+uint8 *ambBlue = (uint8*)0xB7C258;
 
 void (*SetLightsWithTimeOfDayColour_orig)(RpWorld*);
 void
 SetLightsWithTimeOfDayColour(RpWorld *world)
 {
+	if(GetAsyncKeyState(VK_F5) & 0x8000){
+		memset(ambRed, 0xFF, 184);
+		memset(ambGreen, 0xFF, 184);
+		memset(ambBlue, 0xFF, 184);
+	}else{
+		memset(ambRed, 0, 184);
+		memset(ambGreen, 0, 184);
+		memset(ambBlue, 0, 184);
+	}
 	SetLightsWithTimeOfDayColour_orig(world);
 return;
 
@@ -717,20 +732,30 @@ void RenderReflectionMap_leeds(void);
 void RenderReflectionScene(void);
 void DrawDebugEnvMap(void);
 
-void
-RenderScene_hook(void)
+bool
+RenderScene_before(void*)
 {
 	// Do this because far and fog plane are set AFTER calling BeingUpdate in Idle()
 	RwCameraEndUpdate(Scene.camera);
 	RwCameraBeginUpdate(Scene.camera);
-
-	RenderScene();
-
+	return true;
+}
+bool
+RenderScene_after(void*)
+{
 	if(config->vehiclePipe == CAR_NEO)
 		CarPipe::RenderEnvTex();
 	else if(config->vehiclePipe == CAR_LCS || config->vehiclePipe == CAR_VCS)
 		RenderReflectionMap_leeds();
 	DrawDebugEnvMap();
+	return true;
+}
+void
+RenderScene_hook(void)
+{
+	RenderScene_before(nil);
+	RenderScene();
+	RenderScene_after(nil);
 }
 
 int (*PipelinePluginAttach)(void);
@@ -745,8 +770,12 @@ void
 InitialiseGame_hook(void)
 {
 	ONCE;
-//	_controlfp(_PC_53,_MCW_PC);	// no use, reset somewhere else
-	InterceptCall(&RenderScene_A, RenderScene_hook, 0x53EABF);
+	if(!UG_RegisterEventCallback)
+		InterceptCall(&RenderScene_A, RenderScene_hook, 0x53EABF);
+	else{
+		UG_RegisterEventCallback("EVENT_BEFORE_RENDERSCENE", RenderScene_before);
+		UG_RegisterEventCallback("EVENT_AFTER_RENDERSCENE", RenderScene_after);
+	}
 void envmaphooks(void);
 envmaphooks();
 	neoInit();
@@ -933,6 +962,10 @@ readIni(int n)
 	c->leedsShininessMult = readfloat(cfg.get("SkyGfx", "leedsShininessMult", ""), 1.0);
 	c->neoShininessMult = readfloat(cfg.get("SkyGfx", "neoShininessMult", ""), 1.0);
 	c->neoSpecularityMult = readfloat(cfg.get("SkyGfx", "neoSpecularityMult", ""), 1.0);
+	c->envShininessMult = readfloat(cfg.get("SkyGfx", "envShininessMult", ""), 1.0);
+	c->envSpecularityMult = readfloat(cfg.get("SkyGfx", "envSpecularityMult", ""), 1.0);
+	c->envPower = readfloat(cfg.get("SkyGfx", "envPower", ""), 20.0);
+	c->envFresnel = readfloat(cfg.get("SkyGfx", "envFresnel", ""), 0.7);
 	c->envMapSize = readint(cfg.get("SkyGfx", "envMapSize", ""), 256);
 	int i = 1;
 	while(i < c->envMapSize) i *= 2;
@@ -964,7 +997,7 @@ readIni(int n)
 	disableClouds = readint(cfg.get("SkyGfx", "disableClouds", ""), 0);
 	disableGamma = readint(cfg.get("SkyGfx", "disableGamma", ""), 0);
 	transparentLockon = readint(cfg.get("SkyGfx", "transparentLockon", ""), 0);
-	fixShadows = readint(cfg.get("SkyGfx", "fixShadows", ""), 1);
+	fixShadows = readint(cfg.get("SkyGfx", "fixShadows", ""), 0);
 	c->lightningIlluminatesWorld = readint(cfg.get("SkyGfx", "lightningIlluminatesWorld", ""), 0);
 
 	static StrAssoc colorFilterMap[] = {
@@ -1104,6 +1137,10 @@ afterStreamIni(void)
 	X(leedsShininessMult)				\
 	X(neoShininessMult)				\
 	X(neoSpecularityMult)			\
+	X(envShininessMult)				\
+	X(envSpecularityMult)			\
+	X(envPower)			\
+	X(envFresnel)			\
 	X(doglare)						\
 	X(fixGrassPlacement)			\
 	X(grassAddAmbient)			\
@@ -1254,6 +1291,10 @@ installMenu(void)
 		menu.leedsShininessMult = DebugMenuAddVar("SkyGFX|Misc", "Leeds Car Shininess", &config->leedsShininessMult, nil, 0.1f, 0.0f, 10.0f);
 		menu.neoShininessMult = DebugMenuAddVar("SkyGFX|Misc", "Neo Car Shininess", &config->neoShininessMult, nil, 0.1f, 0.0f, 10.0f);
 		menu.neoSpecularityMult = DebugMenuAddVar("SkyGFX|Misc", "Neo Car Specularity", &config->neoSpecularityMult, nil, 0.1f, 0.0f, 10.0f);
+		menu.envShininessMult = DebugMenuAddVar("SkyGFX|Misc", "Env Car Shininess", &config->envShininessMult, nil, 0.1f, 0.0f, 10.0f);
+		menu.envSpecularityMult = DebugMenuAddVar("SkyGFX|Misc", "Env Car Specularity", &config->envSpecularityMult, nil, 0.1f, 0.0f, 10.0f);
+		menu.envPower = DebugMenuAddVar("SkyGFX|Misc", "Env Car Power", &config->envPower, nil, 1.0f, 0.0f, 2000.0f);
+		menu.envFresnel = DebugMenuAddVar("SkyGFX|Misc", "Env Car Fresnel", &config->envFresnel, nil, 0.1f, 0.0f, 10.0f);
 		menu.fixGrassPlacement = DebugMenuAddVarBool32("SkyGFX|Misc", "Fix Grass Placement", &config->fixGrassPlacement, nil);
 		menu.lightningIlluminatesWorld = DebugMenuAddVar("SkyGFX|Misc", "Lightning illuminates", &config->lightningIlluminatesWorld, nil, 1, 0, 1, lightningStr);
 		DebugMenuEntrySetWrap(menu.lightningIlluminatesWorld, true);
@@ -1311,7 +1352,14 @@ InjectDelayedPatches()
 	// only load one ini for now, others are loaded later by readInis()
 
 	fixingSAMP = ModuleList().Get(L"samp") || ModuleList().Get(L"SAMPGraphicRestore");
+	UG_mod = ModuleList().Get(L"Underground_Core");
+	if(UG_mod)
+		UG_RegisterEventCallback = (void (*)(const char*, UG_EventHook))GetProcAddress(UG_mod, "RegisterEventCallback");
 
+	if(UG_RegisterEventCallback)
+		UG_RegisterEventCallback("EVENT_INITPOSTEFFECTS", CPostEffects::Initialise_skygfx);
+	else
+		InterceptCall(&CPostEffects::Initialise_orig, CPostEffects::Initialise, 0x5BD779);
 	InterceptCall(&InitialiseGame, InitialiseGame_hook, 0x748CFB);
 
 	// Stop timecycle from converting colour filter alphas
@@ -1509,7 +1557,6 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		*(void**)0xA9AD78 = (void*)TagRenderCB;	/* This is the (unused) material pipeline of player tags */
 
 		// postfx
-		InterceptCall(&CPostEffects::Initialise_orig, CPostEffects::Initialise, 0x5BD779);
 		InjectHook(0x704D1E, CPostEffects::ColourFilter_switch);
 		InjectHook(0x704D5D, CPostEffects::Radiosity);
 		InjectHook(0x704FB3, CPostEffects::Radiosity);
@@ -1582,13 +1629,13 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		Nop(0x6E716B, 6);
 		Nop(0x6E7176, 6);
 
-		// Hook Skin Pipe so we can easily cull peds
+		// Hook Skpin Pipe so we can easily cull peds
 		// TODO: do this with other pipelines too
 		// No longer needed
 //		__rwSkinD3D9AtomicAllInOneNode_orig = nodeD3D9SkinAtomicAllInOneCSL->nodeMethods.nodeBody;
 //		nodeD3D9SkinAtomicAllInOneCSL->nodeMethods.nodeBody = __rwSkinD3D9AtomicAllInOneNode_hook;
 
-		InterceptCall(&SetLightsWithTimeOfDayColour_orig, SetLightsWithTimeOfDayColour, 0x53E997);
+//		InterceptCall(&SetLightsWithTimeOfDayColour_orig, SetLightsWithTimeOfDayColour, 0x53E997);
 
 
 		// Camera planes in CRenderer::RenderEverythingBarRoads

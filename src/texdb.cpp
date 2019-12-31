@@ -177,7 +177,7 @@ TexDBPluginAttach(void)
  * we have to hook it and set the name together with the TXD */
 
 static int txdslot;
-char *txdnames[5000];
+char *txdnames[65500];	//[5000]; UG needs a lot
 char currentTxdName[32];
 
 static RwTexture *(*TxdStoreFindCB)(char *name);

@@ -1251,12 +1251,13 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Env(RwResEntry *repEntry, void *obj
 		float fresnel;
 		float power;
 		float lightmult;
+		float shininess;
 	} fxParams;
 	struct {
 		float ambient;
 		float diffuse;
 		float specular;
-		float reflection;
+		float prelight;
 	} surfProps;
 	RwV3d eye;
 	RwMatrix lightmat;
@@ -1272,6 +1273,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Env(RwResEntry *repEntry, void *obj
 	RwD3D9SetVertexShaderConstant(30, transform, 4);
 	eye = RwFrameGetLTM(RwCameraGetFrame((RwCamera*)RWSRCGLOBAL(curCamera)))->pos;
 	RwD3D9SetVertexShaderConstant(34, &eye, 1);
+RwD3D9SetPixelShaderConstant(2, &eye, 1);
 	RwMatrixInvert(&lightmat, RwFrameGetLTM(RpAtomicGetFrame(atomic)));
 	if(flags & rpGEOMETRYLIGHT)
 		uploadLights(&lightmat);
@@ -1294,14 +1296,35 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Env(RwResEntry *repEntry, void *obj
 	RwRenderStateGet(rwRENDERSTATEDESTBLEND, &dst);
 	RwRenderStateGet(rwRENDERSTATEFOGCOLOR, &fog);
 
-	noFx = CVisibilityPlugins__GetAtomicId(atomic) & 0x6000;
-	fxParams.fresnel = 0.3f;
-	fxParams.power = 10.0f;
+	noFx = CVisibilityPlugins__GetAtomicId(atomic) & 0x6000 || !(flags & rpGEOMETRYLIGHT);
+	fxParams.fresnel = config->envFresnel;
+	fxParams.power = config->envPower;
 	fxParams.lightmult = CCustomCarEnvMapPipeline__m_EnvMapLightingMult;
-	RwD3D9SetVertexShaderConstant(21, &fxParams, 1);
+
+	surfProps.prelight = flags & rpGEOMETRYPRELIT ? 1.0f : 0.0f;
 
 	pipeSetTexture(reflectionTex, 1);
 	pipeSetTexture(CarPipe::reflectionMask, 2);
+
+// spectest
+RwMatrix specmat;
+RwV3d specdir;
+CCustomCarEnvMapPipeline__SetupSpec(atomic, &specmat, &specdir);
+RwD3D9SetVertexShaderConstant(40, &specmat, 3);
+//specdir = RwFrameGetMatrix(RpLightGetFrame(pDirect))->at;
+//RwD3D9SetPixelShaderConstant(3, &specdir, 1);
+
+pipeUploadLightColorPS(pDirect, REG_directCol);
+pipeUploadLightDirectionPS(pDirect, REG_directDir);
+for(int i = 0; i < 6; i++)
+	if(i < NumExtraDirLightsInWorld && RpLightGetType(pExtraDirectionals[i]) == rpLIGHTDIRECTIONAL){
+		pipeUploadLightColorPS(pExtraDirectionals[i], REG_directCol+i+1);
+		pipeUploadLightDirectionPS(pExtraDirectionals[i], REG_directDir+i+1);
+	}else{
+		pipeUploadZeroPS(REG_directCol+i+1);
+		pipeUploadZeroPS(REG_directDir+i+1);
+	}
+
 
 	for(; numMeshes--; instancedData++){
 		material = instancedData->material;
@@ -1317,7 +1340,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Env(RwResEntry *repEntry, void *obj
 		envData = *GETENVMAP(material);
 		specData = *GETSPECMAP(material);
 
-		surfProps.reflection = 0.0f;
+		fxParams.shininess = 0.0f;
 		surfProps.specular = 0.0f;
 		if(!noFx){
 			materialFlags = *(RwUInt32*)&material->surfaceProps.specular;
@@ -1331,13 +1354,16 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Env(RwResEntry *repEntry, void *obj
 			}
 
 			if(hasEnv1 || hasEnv2){
-				surfProps.reflection = envData->GetShininess();
-				surfProps.reflection *= 15.0f * config->neoShininessMult;
+				fxParams.shininess = envData->GetShininess();
+				// Don't let this get too high because strong reflections make the vehicle darker
+//				float l = min(CCustomCarEnvMapPipeline__m_EnvMapLightingMult, 0.5f);
+//				fxParams.shininess *= 15.0f * l * config->envShininessMult;
+				fxParams.shininess *= 8.0f * config->envShininessMult;
 			}
 
 			if(hasSpec){
 				surfProps.specular = specData->specularity;
-				surfProps.specular *= 3.0f * config->neoSpecularityMult;
+				surfProps.specular *= 3.0f * config->envSpecularityMult;
 			}
 		}
 
@@ -1348,6 +1374,8 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Env(RwResEntry *repEntry, void *obj
 			surfProps.ambient = max(surfProps.ambient, 0.8f);
 		RwD3D9SetVertexShaderConstant(REG_surfProps, &surfProps, 1);
 		RwD3D9SetVertexShaderConstant(21, &fxParams, 1);
+RwD3D9SetPixelShaderConstant(0, &surfProps, 1);
+RwD3D9SetPixelShaderConstant(1, &fxParams, 1);
 
 		RwD3D9SetVertexShader(envCarVS);
 		RwD3D9SetPixelShader(envCarPS);
@@ -1381,7 +1409,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Switch(RwResEntry *repEntry, void *
 		CCustomCarEnvMapPipeline__CustomPipeRenderCB_Specular(repEntry, object, type, flags);
 		break;
 	case CAR_NEO:
-		if(iCanHasNeoCar)
+		if(iCanHasNeoCar && !UG_mod)
 			CarPipe::RenderCallback(repEntry, object, type, flags);
 		break;
 	case CAR_LCS:
@@ -1456,4 +1484,5 @@ hookVehiclePipe(void)
 			DebugMenuAddVar("SkyGFX", "envmap tweak 2", &envmap2tweak, nil, 0.1f, 0.0f, 10.0f);
 		}
 	}
+
 }

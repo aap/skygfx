@@ -1248,7 +1248,8 @@ CPostEffects::ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 		break;
 	case COLORFILTER_MOBILE:
 		// this effects ignores alphas
-		CPostEffects::ColourFilter_Mobile(rgb1, rgb2);
+		if(!UG_mod)
+			CPostEffects::ColourFilter_Mobile(rgb1, rgb2);
 		break;
 	case COLORFILTER_III:
 		// this effects expects PC alphas
@@ -1363,6 +1364,12 @@ void
 CPostEffects::Initialise(void)
 {
 	Initialise_orig();
+	Initialise_skygfx(nil);
+}
+
+bool
+CPostEffects::Initialise_skygfx(void*)
+{
 	InjectHook(0x7FB824, Im2dSetPixelShader_hook);
 	InjectHook(0x7FB885, Im2DColorModulationHook);
 	InjectHook(0x7FB8A6, Im2DAlphaModulationHook);
@@ -1370,8 +1377,8 @@ CPostEffects::Initialise(void)
 	CreateShaders();
 
 	grainRaster = RwRasterCreate(64, 64, 32, rwRASTERTYPETEXTURE | rwRASTERFORMAT8888);
+	return true;
 }
-
 
 
 // Colorcycle stuff, partly taken from NTAuthority...at least originally
@@ -1496,16 +1503,6 @@ Colorcycle::Update(GradeColorset *colorset)
 		colorset->Interpolate(colorset, &tunnelset, 1.0f-CWeather__InTunnelness, CWeather__InTunnelness);
 	}
 
-}
-
-void
-interpolateColorcycle(Grade *red, Grade *green, Grade *blue)
-{
-	GradeColorset cset;
-	Colorcycle::Update(&cset);
-	*red = cset.red;
-	*green = cset.green;
-	*blue = cset.blue;
 }
 
 void

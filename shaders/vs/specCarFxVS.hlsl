@@ -51,12 +51,5 @@ main(VS_INPUT IN)
 	OUT.Speccolor.rgb = spec*3 * float3(0.75, 0.75, 0.75)*specularity*lightmult;
 	OUT.Speccolor.a = 1.0;
 
-	/* to simulate ps2 specdot:
-		OUT.Speccolor.r = spec;
-		OUT.Speccolor.g = specularity;
-		OUT.Speccolor.b = lightmult;
-		OUT.Speccolor.a = 0.0;
-	*/
-
 	return OUT;
 }
