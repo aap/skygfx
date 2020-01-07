@@ -108,7 +108,6 @@ public:
 WRAPPER void CEntity::GetBoundCentre(CVector *v) { EAXJMP(0x534290); }
 WRAPPER bool CEntity::GetIsOnScreen_orig(void) { EAXJMP(0x534540); }
 
-// TODO: FLAify this?
 CBaseModelInfo **CModelInfo__ms_modelInfoPtrs;// = (CBaseModelInfo**)0xA9B0C8;
 CBaseModelInfo*
 GetModelInfo(CEntity *e)
@@ -413,17 +412,19 @@ RenderSphereReflections(void)
 		RwCameraSetFarClipPlane(cam, sphereRadius);
 		RwCameraSetFogDistance(cam, sphereRadius*0.75f);
 
+		RwRGBA skyBot = { skyBotRed, skyBotGreen, skyBotBlue, 255 };
+		RwRGBA skyTop = { skyTopRed, skyTopGreen, skyTopBlue, 255 };
 		RwRGBA color;
 		if(config->vehiclePipe == CAR_ENV){
-			// like Neo
-			static RwRGBA skyBot = { skyBotRed, skyBotGreen, skyBotBlue, 255 };
-			color = skyBot;
+			// more like Neo
+		//	color = skyBot;
+			color = skyTop;
 			// blend a bit of white into the sky color, otherwise it tends to be very blue
-			color.red = color.red*0.6f + 255*0.4f;
-			color.green = color.green*0.6f + 255*0.4f;
-			color.blue = color.blue*0.6f + 255*0.4f;
+			float f = 0.7f;
+			color.red = color.red*f + 255*(1.0f - f);
+			color.green = color.green*f + 255*(1.0f - f);
+			color.blue = color.blue*f + 255*(1.0f - f);
 		}else{
-			static RwRGBA skyTop = { skyTopRed, skyTopGreen, skyTopBlue, 255 };
 			color = skyTop;
 			if(color.red < 64) color.red = 64;
 			if(color.green < 64) color.green = 64;

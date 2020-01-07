@@ -1613,6 +1613,10 @@ DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		static float multipassMultiplier = 1000.0f;	// default 45.0
 		Patch<float*>(0x73290A+2, &multipassMultiplier);
 
+		// increase env mat pool
+		// better do it in a limit adjuster
+		//Patch(0x5DA08D + 1, 0x4000);
+
 		// Get rid of the annoying dotproduct check in visibility renderCBs
 		Nop(0x733313, 2);	// VehicleHiDetailCB
 		Nop(0x73405A, 2);	// VehicleHiDetailAlphaCB

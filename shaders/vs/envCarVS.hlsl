@@ -9,9 +9,6 @@ float4		fxParams	: register(c21);
 float4x4	world		: register(c30);
 float3		eye		: register(c34);
 
-// spec test
-float3x3	specmat		: register(c40);
-
 #define fresnel		(fxParams.x)
 //#define power		(fxParams.y)
 //#define lightmult	(fxParams.z)

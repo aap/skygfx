@@ -1273,7 +1273,7 @@ CCustomCarEnvMapPipeline__CustomPipeRenderCB_Env(RwResEntry *repEntry, void *obj
 	RwD3D9SetVertexShaderConstant(30, transform, 4);
 	eye = RwFrameGetLTM(RwCameraGetFrame((RwCamera*)RWSRCGLOBAL(curCamera)))->pos;
 	RwD3D9SetVertexShaderConstant(34, &eye, 1);
-RwD3D9SetPixelShaderConstant(2, &eye, 1);
+	RwD3D9SetPixelShaderConstant(2, &eye, 1);
 	RwMatrixInvert(&lightmat, RwFrameGetLTM(RpAtomicGetFrame(atomic)));
 	if(flags & rpGEOMETRYLIGHT)
 		uploadLights(&lightmat);
@@ -1306,24 +1306,17 @@ RwD3D9SetPixelShaderConstant(2, &eye, 1);
 	pipeSetTexture(reflectionTex, 1);
 	pipeSetTexture(CarPipe::reflectionMask, 2);
 
-// spectest
-RwMatrix specmat;
-RwV3d specdir;
-CCustomCarEnvMapPipeline__SetupSpec(atomic, &specmat, &specdir);
-RwD3D9SetVertexShaderConstant(40, &specmat, 3);
-//specdir = RwFrameGetMatrix(RpLightGetFrame(pDirect))->at;
-//RwD3D9SetPixelShaderConstant(3, &specdir, 1);
-
-pipeUploadLightColorPS(pDirect, REG_directCol);
-pipeUploadLightDirectionPS(pDirect, REG_directDir);
-for(int i = 0; i < 6; i++)
-	if(i < NumExtraDirLightsInWorld && RpLightGetType(pExtraDirectionals[i]) == rpLIGHTDIRECTIONAL){
-		pipeUploadLightColorPS(pExtraDirectionals[i], REG_directCol+i+1);
-		pipeUploadLightDirectionPS(pExtraDirectionals[i], REG_directDir+i+1);
-	}else{
-		pipeUploadZeroPS(REG_directCol+i+1);
-		pipeUploadZeroPS(REG_directDir+i+1);
-	}
+	// Per pixel lights
+	pipeUploadLightColorPS(pDirect, REG_directCol);
+	pipeUploadLightDirectionPS(pDirect, REG_directDir);
+	for(int i = 0; i < 6; i++)
+		if(i < NumExtraDirLightsInWorld && RpLightGetType(pExtraDirectionals[i]) == rpLIGHTDIRECTIONAL){
+			pipeUploadLightColorPS(pExtraDirectionals[i], REG_directCol+i+1);
+			pipeUploadLightDirectionPS(pExtraDirectionals[i], REG_directDir+i+1);
+		}else{
+			pipeUploadZeroPS(REG_directCol+i+1);
+			pipeUploadZeroPS(REG_directDir+i+1);
+		}
 
 
 	for(; numMeshes--; instancedData++){
@@ -1374,8 +1367,8 @@ for(int i = 0; i < 6; i++)
 			surfProps.ambient = max(surfProps.ambient, 0.8f);
 		RwD3D9SetVertexShaderConstant(REG_surfProps, &surfProps, 1);
 		RwD3D9SetVertexShaderConstant(21, &fxParams, 1);
-RwD3D9SetPixelShaderConstant(0, &surfProps, 1);
-RwD3D9SetPixelShaderConstant(1, &fxParams, 1);
+		RwD3D9SetPixelShaderConstant(0, &surfProps, 1);
+		RwD3D9SetPixelShaderConstant(1, &fxParams, 1);
 
 		RwD3D9SetVertexShader(envCarVS);
 		RwD3D9SetPixelShader(envCarPS);
