@@ -20,8 +20,8 @@ main(PS_INPUT IN) : COLOR
 
 	float4 c = tex2D(tex, uv);
 
-	c = saturate(c*2.0 - float4(1,1,1,1)*limit);
-	c.a = intensity*passes;
+	c = saturate(c*2.0 - float4(1,1,1,1)*limit) * intensity*passes;
+	c.a = 1.0;
 
 	return c;
 }

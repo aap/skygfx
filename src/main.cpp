@@ -1235,6 +1235,19 @@ changeEnvMapSize(void)
 //	Patch(0x726570 + 6, mirrorVal);
 //}
 
+/*
+WRAPPER void CTimeCycle__Initialise(bool) { EAXJMP(0x5BBAC0); }
+
+void
+LoadTimecycle(const char *filename)
+{
+	static char timecyc[256];
+	strncpy(timecyc, filename, 256);
+	Patch(0x5BBAD9 + 1, timecyc);
+	CTimeCycle__Initialise(false);
+}
+*/
+
 void
 installMenu(void)
 {
@@ -1325,6 +1338,20 @@ installMenu(void)
 		menu.crOffset     = DebugMenuAddVar("SkyGFX|ScreenFX", "Cr offset", &config->crOffset, resetValues, 0.004f, -1.0f, 1.0f);
 
 		menu.crOffset     = DebugMenuAddVar("SkyGFX|ScreenFX", "Cr offset", &config->crOffset, resetValues, 0.004f, -1.0f, 1.0f);
+
+/*
+		DebugMenuAddVarBool32("SkyGFX", "Timecycle usePC", &config->usePCTimecyc, nil);
+		DebugMenuAddCmd("SkyGFX", "Timecycle PostFX Alpha *1", [](){
+				Nop(0x5BBF6F, 2);
+				Nop(0x5BBF83, 2);
+			});
+		DebugMenuAddCmd("SkyGFX", "Timecycle PostFX Alpha *2", [](){
+				Patch<uint16>(0x5BBF6F, 0xC0DC);
+				Patch<uint16>(0x5BBF83, 0xC0DC);
+			});
+		DebugMenuAddCmd("SkyGFX", "Load PS2 timecyc.dat", [](){ LoadTimecycle("timecyc.dat"); });
+		DebugMenuAddCmd("SkyGFX", "Load PS2 timecyc_pc.dat", [](){ LoadTimecycle("timecyc_pc.dat"); });
+*/
 
 //#ifdef DEBUG
 //		DebugMenuAddVar("Debug", "Mirror Z", &mirrorVal, fixMirrors, 0.05f, 200.0f, 250.0f);

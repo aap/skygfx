@@ -634,7 +634,7 @@ CPostEffects::Radiosity_shader(int intensityLimit, int filterPasses, int renderP
 	RwD3D9SetPixelShaderConstant(1, params, 1);
 
 	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)!m_bRadiosityDebug);
-	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDSRCALPHA);
+	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
 	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
 	overrideIm2dPixelShader = radiosityPS;
 	RwIm2DRenderIndexedPrimitive(rwPRIMTYPETRILIST, colorfilterVerts, 4, colorfilterIndices, 6);
@@ -1227,10 +1227,24 @@ CPostEffects::ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 			keystate = false;
 	}
 
-	// Get Alphas into PS2 range always
+	RwRGBA rgb1pc = rgb1;
+	RwRGBA rgb2pc = rgb2;
+
 	if(config->usePCTimecyc){
+		// Gotta fix alpha for effects that assume PS2 alpha range
 		rgb1.alpha /= 2;
 		rgb2.alpha /= 2;
+	}else{
+		// Gotta fix alpha for effects that assume PC alpha range
+		// clamping this is important!
+		if(rgb1pc.alpha >= 128)
+			rgb1pc.alpha = 255;
+		else
+			rgb1pc.alpha *= 2;
+		if(rgb2pc.alpha >= 128)
+			rgb2pc.alpha = 255;
+		else
+			rgb2pc.alpha *= 2;
 	}
 
 #ifdef VCS
@@ -1242,9 +1256,7 @@ CPostEffects::ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 		break;
 	case COLORFILTER_PC:
 		// this effects expects PC alphas
-		rgb1.alpha *= 2;
-		rgb2.alpha *= 2;
-		CPostEffects::ColourFilter(rgb1, rgb2);
+		CPostEffects::ColourFilter(rgb1pc, rgb2pc);
 		break;
 	case COLORFILTER_MOBILE:
 		// this effects ignores alphas
@@ -1253,9 +1265,7 @@ CPostEffects::ColourFilter_switch(RwRGBA rgb1, RwRGBA rgb2)
 		break;
 	case COLORFILTER_III:
 		// this effects expects PC alphas
-		rgb1.alpha *= 2;
-		rgb2.alpha *= 2;
-		CPostEffects::ColourFilter_Generic(rgb1, rgb2, iiiTrailsPS);
+		CPostEffects::ColourFilter_Generic(rgb1pc, rgb2pc, iiiTrailsPS);
 		break;
 	case COLORFILTER_VC:
 		// this effects ignores alphas
