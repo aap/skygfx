@@ -203,7 +203,10 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_PS2(RwResEntry *repEntry, void *ob
 		int effect = RpMatFXMaterialGetEffects(material);
 		if(effect == rpMATFXEFFECTUVTRANSFORM){
 			RpMatFXMaterialGetUVTransformMatrices(material, &m1, &m2);
-			RwD3D9SetVertexShaderConstant(REG_texmat, m1, 4);
+			if(m1)
+				RwD3D9SetVertexShaderConstant(REG_texmat, m1, 4);
+			else
+				RwD3D9SetVertexShaderConstant(REG_texmat, &ident, 4);
 		}else
 			RwD3D9SetVertexShaderConstant(REG_texmat, &ident, 4);
 
@@ -327,7 +330,10 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_Xbox(RwResEntry *repEntry, void *o
 		int effect = RpMatFXMaterialGetEffects(material);
 		if(effect == rpMATFXEFFECTUVTRANSFORM){
 			RpMatFXMaterialGetUVTransformMatrices(material, &m1, &m2);
-			RwD3D9SetVertexShaderConstant(REG_texmat, m1, 4);
+			if(m1)
+				RwD3D9SetVertexShaderConstant(REG_texmat, m1, 4);
+			else
+				RwD3D9SetVertexShaderConstant(REG_texmat, &ident, 4);
 		}else
 			RwD3D9SetVertexShaderConstant(REG_texmat, &ident, 4);
 
@@ -439,7 +445,10 @@ CCustomBuildingDNPipeline__CustomPipeRenderCB_Sphere(RwResEntry *repEntry, void 
 		int effect = RpMatFXMaterialGetEffects(material);
 		if(effect == rpMATFXEFFECTUVTRANSFORM){
 			RpMatFXMaterialGetUVTransformMatrices(material, &m1, &m2);
-			RwD3D9SetVertexShaderConstant(REG_texmat, m1, 4);
+			if(m1)
+				RwD3D9SetVertexShaderConstant(REG_texmat, m1, 4);
+			else
+				RwD3D9SetVertexShaderConstant(REG_texmat, &ident, 4);
 		}else
 			RwD3D9SetVertexShaderConstant(REG_texmat, &ident, 4);
 

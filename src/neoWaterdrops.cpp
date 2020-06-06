@@ -285,7 +285,7 @@ hookWaterDrops()
 	//injector::MakeCALL(0x5E37AF, f2, true); // "prt_splash"
 	//injector::MakeCALL(0x5E3782, f2, true); // "prt_splash"
 	injector::MakeCALL(0x49FEEE, f2, true); // "prt_boatsplash"
-	injector::MakeCALL(0x49F01F, f2, true); // "prt_blood"
+	//injector::MakeCALL(0x49F01F, f2, true); // "prt_blood"
 	injector::MakeCALL(0x49EC92, f2, true); // "prt_blood"
 
 	//chainsaw
