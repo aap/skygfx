@@ -655,7 +655,10 @@ struct PointLight
 	char pad;
 };
 
-PointLight *pointLights = (PointLight*)0xC3F0E0;
+PointLight *&pointLights = *(PointLight**)(0x700985 + 2); //0xC3F0E0, read through the code in case the array was moved
+
+// Lets limit adjusters know that arrays moved by them are fine
+extern "C" __declspec(dllexport) int SkyGfx_FollowsMovedArrays(void) { return 1; }
 
 WRAPPER void
 CSprite__RenderBufferedOneXLUSprite_Rotate_Aspect_orig(float x, float y, float z, float a4, float a5, RwUInt8 r, RwUInt8 g, RwUInt8 b, RwInt16 f, int a10, float a11, RwUInt8 alpha) { EAXJMP(0x70E780); }

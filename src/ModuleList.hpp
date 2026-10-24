@@ -3,6 +3,7 @@
 #include <vector>
 #include <algorithm>
 #include <cassert>
+#include <string>
 
 // Stores a list of loaded modules with their names, WITHOUT extension
 class ModuleList

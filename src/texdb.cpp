@@ -1,6 +1,7 @@
 #include "skygfx.h"
 
 #include <map>
+#include <string>
 
 
 static TexInfo faketexinfo;
